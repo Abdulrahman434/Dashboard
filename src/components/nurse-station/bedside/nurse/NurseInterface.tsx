@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   X, ClipboardList, Stethoscope, User, Heart, DollarSign,
   FlaskConical, Image as ImageIcon, Baby, LogOut, Activity,
-  Hash, DoorOpen, Clock, Plus, Bed, CreditCard, ExternalLink,
+  Hash, DoorOpen, Clock, Plus, Bed, ExternalLink,
 } from "lucide-react";
 import { useTheme } from "../ThemeContext";
 import { useLocale } from "../i18n";
@@ -16,7 +16,6 @@ import { ImagingTab } from "./tabs/ImagingTab";
 import { BabyCameraTab } from "./tabs/BabyCameraTab";
 import { DischargePlanTab } from "./tabs/DischargePlanTab";
 import { ObservationsTab } from "./tabs/ObservationsTab";
-import { NfcTab } from "./tabs/NfcTab";
 
 interface TabDef {
   key: SectionKey;
@@ -35,7 +34,6 @@ const TABS: TabDef[] = [
   { key: "baby", label: "Baby Camera", icon: Baby, hasVisibility: true },
   { key: "discharge", label: "Discharge Plan", icon: LogOut, hasVisibility: true },
   { key: "observations", label: "Observations", icon: Activity, hasVisibility: true },
-  { key: "nfc", label: "Update Nurse Info", icon: CreditCard, hasVisibility: false },
 ];
 
 interface NurseInterfaceProps {
@@ -62,7 +60,6 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
       case "baby": return <BabyCameraTab role={role} />;
       case "discharge": return <DischargePlanTab role={role} />;
       case "observations": return <ObservationsTab role={role} />;
-      case "nfc": return <NfcTab />;
       default: return null;
     }
   };
@@ -72,7 +69,7 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
       className="absolute inset-0 z-[900] flex flex-col"
       style={{ backgroundColor: "#F4F6F8" }}
     >
-      {/* ── Header ── */}
+      {/* â”€â”€ Header â”€â”€ */}
       <div
         className="flex items-center justify-between px-8 py-4 shrink-0"
         style={{ backgroundColor: t.primary }}
@@ -104,7 +101,7 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         </button>
       </div>
 
-      {/* ── Patient Summary Bar ── */}
+      {/* â”€â”€ Patient Summary Bar â”€â”€ */}
       <div
         className="flex items-center px-8 py-4 shrink-0"
         style={{ backgroundColor: "#fff", borderBottom: `1px solid ${t.borderDefault}` }}
@@ -118,7 +115,7 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
               icon: <User size={15} /> 
             },
             { label: "Room", value: patient.room, icon: <DoorOpen size={15} /> },
-            { label: "Bed", value: patient.bed || "—", icon: <Bed size={15} /> },
+            { label: "Bed", value: patient.bed || "â€”", icon: <Bed size={15} /> },
           ].map((item, i) => (
             <div key={i} className="flex relative items-center justify-center">
               {i > 0 && (
@@ -145,7 +142,7 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         )}
       </div>
 
-      {/* ── Tab Bar ── */}
+      {/* â”€â”€ Tab Bar â”€â”€ */}
       <div
         className="flex items-center gap-1 px-6 shrink-0 overflow-x-auto"
         style={{ backgroundColor: "#fff", borderBottom: `1px solid ${t.borderDefault}`, padding: "0 24px" }}
@@ -180,14 +177,14 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         })}
       </div>
 
-      {/* ── Tab Content ── */}
+      {/* â”€â”€ Tab Content â”€â”€ */}
       <div className="flex-1 overflow-y-auto p-8" style={{ backgroundColor: "#F4F6F8" }}>
         <div className="mx-auto" style={{ maxWidth: 1100 }}>
           {renderTab()}
         </div>
       </div>
 
-      {/* ── Footer Link ── */}
+      {/* â”€â”€ Footer Link â”€â”€ */}
       {role === "nurse" && (
         <div className="flex justify-end px-8 pb-4 shrink-0">
           <a
