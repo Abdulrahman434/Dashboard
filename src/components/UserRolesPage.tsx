@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { UserCircle, Plus, Trash2, X, Edit2, Search, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import { SingleSelectDropdown } from './UnifiedDropdown';
+import { useNurseStations } from '../hooks/useNurseStations';
 
 interface Permission {
   id: string;
@@ -17,6 +19,7 @@ interface Role {
   name: string;
   assignedUsers: number;
   permissions: string[]; // Array of permission IDs
+  nurseStationId?: string; // Scopes a nurse role to ONE Nurse Station ward
 }
 
 const PERMISSION_MODULES: PermissionModule[] = [
@@ -215,12 +218,16 @@ export function UserRolesPage() {
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  
+
+  // Nurse Stations — sourced from the same store as the sidebar + Manage tab
+  const { stations } = useNurseStations();
+
   // Panel form state
   const [roleName, setRoleName] = useState('');
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedModules, setExpandedModules] = useState<string[]>([]);
+  const [nurseStationId, setNurseStationId] = useState('');
 
   const handleAddRole = () => {
     setEditingRole(null);
@@ -228,6 +235,7 @@ export function UserRolesPage() {
     setSelectedPermissions([]);
     setSearchQuery('');
     setExpandedModules([]);
+    setNurseStationId('');
     setIsPanelOpen(true);
   };
 
@@ -237,6 +245,7 @@ export function UserRolesPage() {
     setSelectedPermissions(role.permissions);
     setSearchQuery('');
     setExpandedModules([]);
+    setNurseStationId(role.nurseStationId ?? '');
     setIsPanelOpen(true);
   };
 
@@ -247,7 +256,7 @@ export function UserRolesPage() {
       // Update existing role
       setRoles(roles.map(role =>
         role.id === editingRole.id
-          ? { ...role, name: roleName, permissions: selectedPermissions }
+          ? { ...role, name: roleName, permissions: selectedPermissions, nurseStationId: nurseStationId || undefined }
           : role
       ));
     } else {
@@ -256,7 +265,8 @@ export function UserRolesPage() {
         id: `role-${Date.now()}`,
         name: roleName,
         assignedUsers: 0,
-        permissions: selectedPermissions
+        permissions: selectedPermissions,
+        nurseStationId: nurseStationId || undefined
       };
       setRoles([...roles, newRole]);
     }
@@ -265,6 +275,7 @@ export function UserRolesPage() {
     setEditingRole(null);
     setRoleName('');
     setSelectedPermissions([]);
+    setNurseStationId('');
   };
 
   const handleDeleteRole = (id: string) => {
@@ -456,6 +467,9 @@ export function UserRolesPage() {
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
                     Permissions Count
                   </th>
+                  <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
+                    Nurse Station
+                  </th>
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif] w-32">
                     Actions
                   </th>
@@ -485,6 +499,11 @@ export function UserRolesPage() {
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-medium bg-[#4EBEE3]/10 text-[#4EBEE3] font-['Poppins',sans-serif]">
                         {role.permissions.length} permission{role.permissions.length !== 1 ? 's' : ''}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[14px] text-[#0f1729] font-['Poppins',sans-serif]">
+                        {stations.find(s => s.id === role.nurseStationId)?.name ?? '—'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -566,6 +585,26 @@ export function UserRolesPage() {
                         placeholder="e.g., Administrator, Nurse, Doctor"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3] focus:border-transparent font-['Poppins',sans-serif] text-[14px]"
                       />
+                    </div>
+
+                    {/* Nurse Station — scope a nurse role to ONE station */}
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-1.5">
+                        Nurse Station
+                      </label>
+                      <SingleSelectDropdown
+                        options={[
+                          { value: '', label: 'None (not scoped to a station)' },
+                          ...stations.map((s) => ({ value: s.id, label: s.name })),
+                        ]}
+                        value={nurseStationId}
+                        onChange={setNurseStationId}
+                        placeholder={stations.length ? 'Select a nurse station' : 'No stations created yet'}
+                        disabled={stations.length === 0}
+                      />
+                      <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-1">
+                        Scope this role to a single Nurse Station ward (optional).
+                      </p>
                     </div>
 
                     {/* Search + Select All */}

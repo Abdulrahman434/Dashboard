@@ -44,7 +44,7 @@ import { UpdatePasswordModal } from './UpdatePasswordModal';
 import { UpdateTerminalPasswordModal } from './UpdateTerminalPasswordModal';
 import TemplatesPage from './TemplatesPage';
 import IdentitySettingsPage from './IdentitySettingsPage';
-import NurseStationPage from './nurse-station/NurseStationPage';
+import NurseStationSection from './nurse-station/NurseStationSection';
 import { MultiSelectDropdown } from './UnifiedDropdown';
 
 interface DashboardProps {
@@ -100,6 +100,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   };
 
   const renderContent = () => {
+    // Nurse Station is a top-level section with Overview/Manage sub-tabs.
+    // Sidebar station entries navigate to `ns:<stationId>` to focus a station
+    // inside the Manage tab.
+    if (activeItem.startsWith('ns:')) {
+      const stationId = activeItem.slice(3);
+      return <NurseStationSection initialTab="manage" focusStationId={stationId} onNavigate={handleNavigation} />;
+    }
+
     switch (activeItem) {
       case 'dashboard':
         return <DashboardHome onNavigate={handleNavigation} />;
@@ -185,13 +193,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         return <CareInnPage filters={navigationState} />;
       case 'caresign':
         return <EmptyState title="CareSign" />;
-      case 'nurse-station':
-        return <NurseStationPage />;
       case 'android-tv':
         return <EmptyState title="Android TV" />;
       case 'bacnet-integration':
         return <EmptyState title="Bacnet Integration" />;
-      
+
+      // Nurse Station - Top-level section (Overview + Manage sub-tabs)
+      case 'nurse-station':
+        return <NurseStationSection initialTab="overview" onNavigate={handleNavigation} />;
+      case 'nurse-station-manage':
+        return <NurseStationSection initialTab="manage" onNavigate={handleNavigation} />;
+
       // Feedback Manager - Main
       case 'feedback-manager':
         return <EmptyState title="Feedback Manager" />;

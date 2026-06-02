@@ -86,6 +86,7 @@ import {
 } from 'lucide-react';
 import { Fingerprint } from 'lucide-react';
 import imgCareInnLogo from "figma:asset/1527704e7ade377192f897bbb5d87c3293623da3.png";
+import { useNurseStations } from '../hooks/useNurseStations';
 
 interface CollapsibleSidebarProps {
   activeItem: string;
@@ -169,9 +170,17 @@ const navigationItems: MenuItem[] = [
     subItems: [
       { id: 'careinn', label: 'CareInn15', icon: Tablet },
       { id: 'caresign', label: 'CareSign', icon: MonitorIcon },
-      { id: 'nurse-station', label: 'Nurse Station', icon: Stethoscope },
       { id: 'android-tv', label: 'Android TV', icon: Smartphone },
       { id: 'bacnet-integration', label: 'Bacnet Integration', icon: Database }
+    ]
+  },
+  {
+    id: 'nurse-station-section',
+    label: 'Nurse Station',
+    icon: Stethoscope,
+    subItems: [
+      { id: 'nurse-station', label: 'Overview', icon: LayoutGrid },
+      { id: 'nurse-station-manage', label: 'Manage', icon: Settings2 }
     ]
   },
   { 
@@ -244,6 +253,20 @@ export default function CollapsibleSidebar({ activeItem, onItemClick, onLogout, 
   const itemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Live Nurse Station list — created stations appear as nested entries under
+  // the Nurse Station section (single source: nurseStationService store).
+  const { stations } = useNurseStations();
+  const navItems: MenuItem[] = navigationItems.map((item) => {
+    if (item.id !== 'nurse-station-section') return item;
+    return {
+      ...item,
+      subItems: [
+        ...(item.subItems || []),
+        ...stations.map((s) => ({ id: `ns:${s.id}`, label: s.name, icon: Stethoscope })),
+      ],
+    };
+  });
 
   const toggleExpanded = (itemId: string) => {
     setExpandedItems(prev => 
@@ -381,7 +404,7 @@ export default function CollapsibleSidebar({ activeItem, onItemClick, onLogout, 
 
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto px-[12px] pt-[24px] space-y-[4px]">
-          {navigationItems.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeItem === item.id;
             const isExpanded = expandedItems.includes(item.id);
@@ -711,7 +734,7 @@ export default function CollapsibleSidebar({ activeItem, onItemClick, onLogout, 
 
         {/* Flyout Menu Portal - Rendered at document level */}
         {isCollapsed && hoveredItem && flyoutPosition && (() => {
-          const item = navigationItems.find(nav => nav.id === hoveredItem);
+          const item = navItems.find(nav => nav.id === hoveredItem);
           if (!item || !item.subItems) return null;
           
           const Icon = item.icon;
