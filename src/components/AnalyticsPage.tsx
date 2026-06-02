@@ -4,7 +4,7 @@ import { SingleSelectDropdown } from './UnifiedDropdown';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
-import hospitalLogo from 'figma:asset/abf1b838f823d0e3fc1538666416859d4578cd84.png';
+import hospitalLogo from '../assets/DallahLogo.png';
 import {
   TrendingUp,
   Download,

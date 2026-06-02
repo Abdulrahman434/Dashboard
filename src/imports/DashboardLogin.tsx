@@ -33,7 +33,7 @@ export default function DashboardLogin({ onLogin }: DashboardLoginProps) {
           <img 
             alt="Healthcare Redefined" 
             className="w-full h-full object-cover pointer-events-none" 
-            src="https://careinn.com/CareInnDashboard/LoginPic.jpg" 
+            src="../assets/Dallah-Hospital1.jpg" 
           />
         </div>
       </div>

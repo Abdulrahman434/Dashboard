@@ -42,8 +42,8 @@ import {
   HeadphonesIcon,
   Sparkles
 } from 'lucide-react';
-import welcomeCardBg from 'figma:asset/9f307baa43454259684292ff315517715b08023f.png';
-import hospitalLogo from 'figma:asset/e12a3a251eb94c15608dabc0eea2fba556939a4d.png';
+import welcomeCardBg from '../assets/Dallah-Hospital1.jpg';
+import hospitalLogo from '../assets/DallahLogo.png';
 import CareInnPattern from '../imports/CareInnPattern11-76-5550';
 import UpdateWallpaperModal from '../imports/Container-110-233';
 import MultiSelectDropdown from './MultiSelectDropdown';
@@ -230,10 +230,10 @@ export default function HomePage({ onNavigate }: HomePageProps = {}) {
               {/* Hospital Name */}
               <div className="flex-1">
                 <h2 className="text-[22px] font-semibold text-[#16274D] font-['Poppins',sans-serif] mb-1">
-                  Saint Louis Hospital (SLH)
+                  Dallah Hospital
                 </h2>
                 <p className="text-[14px] text-[#6B7280] font-['Poppins',sans-serif]">
-                  Jounieh - Lebanon
+                  Riyadh, Saudi Arabia
                 </p>
               </div>
 

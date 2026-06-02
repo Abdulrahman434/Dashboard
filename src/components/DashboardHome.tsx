@@ -52,8 +52,8 @@ import {
   Play
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import hospitalLogo from 'figma:asset/e12a3a251eb94c15608dabc0eea2fba556939a4d.png';
-const welcomeCardBg = 'https://careinn.com/CareInnDashboard/CoverPic.webp';
+import hospitalLogo from '../assets/DallahLogo.png';
+const welcomeCardBg = '../assets/Dallah-Hospital1.jpg';
 import { BarChartAnimated, PieChartAnimated, LineChartAnimated } from './DashboardCharts';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
@@ -83,8 +83,8 @@ const MetricTooltip = ({ text, iconColor = '#637381' }: { text: string, iconColo
 
 // Sample hospital data - replace with real data
 const hospitalInfo = {
-  name: 'Saint Louis Hospital (SLH)',
-  location: 'Jounieh - Lebanon',
+  name: 'Dallah Hospital',
+  location: 'Riyadh, Saudi Arabia',
   totalTerminals: 30,
   appVersion: '3.2.1',
   lastLogin: 'Dec 7, 2025 at 9:42 AM'

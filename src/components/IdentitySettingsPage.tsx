@@ -18,8 +18,8 @@ interface IdentitySettings {
 const defaultSettings: IdentitySettings = {
   logo: null,
   logoName: '',
-  hospitalName: 'Saint Louis Hospital',
-  hospitalShortName: 'SLH',
+  hospitalName: 'Dallah Hospital',
+  hospitalShortName: 'Dallah',
   hospitalImage: null,
   hospitalImageName: '',
   primaryColor: '#4EBEE3',

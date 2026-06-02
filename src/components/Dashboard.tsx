@@ -44,6 +44,7 @@ import { UpdatePasswordModal } from './UpdatePasswordModal';
 import { UpdateTerminalPasswordModal } from './UpdateTerminalPasswordModal';
 import TemplatesPage from './TemplatesPage';
 import IdentitySettingsPage from './IdentitySettingsPage';
+import NurseStationPage from './nurse-station/NurseStationPage';
 import { MultiSelectDropdown } from './UnifiedDropdown';
 
 interface DashboardProps {
@@ -185,7 +186,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       case 'caresign':
         return <EmptyState title="CareSign" />;
       case 'nurse-station':
-        return <EmptyState title="Nurse Station" />;
+        return <NurseStationPage />;
       case 'android-tv':
         return <EmptyState title="Android TV" />;
       case 'bacnet-integration':
