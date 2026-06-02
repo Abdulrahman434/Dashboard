@@ -12,6 +12,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import BedsidePatientModal from './BedsidePatientModal';
 import { useNurseStations } from '../../hooks/useNurseStations';
 import {
   nurseStationService,
@@ -22,7 +23,7 @@ import {
 interface NurseStationManagePageProps {
   /** When set (from the sidebar station entry or a table row), show that station. */
   focusStationId?: string | null;
-  /** Navigate to another sidebar route — used to open a station's own entry. */
+  /** Navigate to another sidebar route â€” used to open a station's own entry. */
   onNavigate?: (item: string) => void;
 }
 
@@ -66,7 +67,7 @@ export default function NurseStationManagePage({
     setDeleteTarget(null);
   };
 
-  // ---- Station page (its own navigation tab — no back button) ------------
+  // ---- Station page (its own navigation tab â€” no back button) ------------
   if (selectedStation) {
     return <StationDetail station={selectedStation} />;
   }
@@ -153,7 +154,7 @@ export default function NurseStationManagePage({
                           <span className="text-[12px] text-[#6B7280] font-['Poppins',sans-serif]">
                             {[s.building && `Bldg ${s.building}`, s.floor && `Floor ${s.floor}`]
                               .filter(Boolean)
-                              .join(' · ')}
+                              .join(' Â· ')}
                           </span>
                         )}
                       </div>
@@ -345,12 +346,20 @@ function StationFormModal({
 }
 
 /* ========================================================================= */
-/* Station detail — assign devices + manual rooms                             */
+/* Station detail â€” assign devices + manual rooms                             */
 /* ========================================================================= */
 function StationDetail({ station }: { station: Station }) {
   const [isDevicePickerOpen, setIsDevicePickerOpen] = useState(false);
   const [isManualRoomOpen, setIsManualRoomOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<number | null>(null);
+  const [openRoom, setOpenRoom] = useState<{ mrn: string; room: string; bed: string } | null>(null);
+
+  // MRN comes from the Device Manager device backing a room (single source of truth).
+  const deviceMrnById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const d of nurseStationService.listDevices()) map[d.deviceId] = d.mrn;
+    return map;
+  }, []);
 
   const assignedDeviceIds = new Set(
     station.rooms.filter((r) => r.source === 'device' && r.deviceId).map((r) => r.deviceId!),
@@ -368,8 +377,8 @@ function StationDetail({ station }: { station: Station }) {
             {station.name}
           </h1>
           <p className="text-[14px] text-[#6B7280] font-['Poppins',sans-serif]">
-            {station.rooms.length} room{station.rooms.length !== 1 ? 's' : ''} ·{' '}
-            {station.rooms.filter((r) => r.source === 'device').length} from devices ·{' '}
+            {station.rooms.length} room{station.rooms.length !== 1 ? 's' : ''} Â·{' '}
+            {station.rooms.filter((r) => r.source === 'device').length} from devices Â·{' '}
             {station.rooms.filter((r) => r.source === 'manual').length} manual
           </p>
         </div>
@@ -391,7 +400,7 @@ function StationDetail({ station }: { station: Station }) {
         </div>
       </div>
 
-      {/* Rooms table */}
+      {/* Rooms — click a card to open the bedside patient screen */}
       {station.rooms.length === 0 ? (
         <div className="bg-white rounded-xl border border-[#4EBEE3]/30 shadow-sm p-12 flex flex-col items-center justify-center">
           <div className="bg-[#4EBEE3]/10 rounded-full p-6 mb-4">
@@ -405,70 +414,83 @@ function StationDetail({ station }: { station: Station }) {
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  {['Room', 'Bed', 'Floor', 'Building', 'POC', 'Source', 'Device ID', ''].map(
-                    (h) => (
-                      <th
-                        key={h}
-                        className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]"
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {station.rooms.map((r, i) => (
-                  <tr key={i} className="border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 text-[14px] text-[#0f1729] font-['Poppins',sans-serif] font-medium">
-                      {r.roomNumber}
-                    </td>
-                    <td className="px-6 py-4 text-[14px] text-[#0f1729] font-['Poppins',sans-serif]">
-                      {r.bed}
-                    </td>
-                    <td className="px-6 py-4 text-[14px] text-[#0f1729] font-['Poppins',sans-serif]">
-                      {r.floor}
-                    </td>
-                    <td className="px-6 py-4 text-[14px] text-[#0f1729] font-['Poppins',sans-serif]">
-                      {r.building}
-                    </td>
-                    <td className="px-6 py-4 text-[14px] text-[#0f1729] font-['Poppins',sans-serif]">
-                      {r.poc}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-medium font-['Poppins',sans-serif] ${
-                          r.source === 'device'
-                            ? 'bg-[#4EBEE3]/10 text-[#4EBEE3]'
-                            : 'bg-gray-100 text-[#16274D]'
-                        }`}
-                      >
-                        {r.source === 'device' ? 'Device' : 'Manual'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-[13px] text-[#6B7280] font-['Poppins',sans-serif]">
-                      {r.deviceId || '—'}
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => setRemoveTarget(i)}
-                        className="text-red-500 hover:text-red-700 transition-colors p-2 rounded-lg hover:bg-red-50"
-                        title="Remove room"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {station.rooms.map((r, i) => {
+            const mrn = r.source === 'device' ? deviceMrnById[r.deviceId || ''] || '' : '';
+            return (
+              <button
+                key={i}
+                onClick={() => setOpenRoom({ mrn, room: r.roomNumber, bed: r.bed })}
+                className="group relative text-left bg-white rounded-xl border border-gray-200 hover:border-[#4EBEE3] hover:shadow-md transition-all p-5"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-[#4EBEE3]/10 shrink-0">
+                      <DoorOpen size={18} className="text-[#4EBEE3]" />
+                    </div>
+                    <div>
+                      <div className="text-[16px] font-semibold text-[#16274D] font-['Poppins',sans-serif] leading-tight">
+                        Room {r.roomNumber}
+                      </div>
+                      <div className="text-[12px] text-[#6B7280] font-['Poppins',sans-serif]">
+                        Bed {r.bed || '—'}
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium font-['Poppins',sans-serif] ${
+                      r.source === 'device' ? 'bg-[#4EBEE3]/10 text-[#4EBEE3]' : 'bg-gray-100 text-[#16274D]'
+                    }`}
+                  >
+                    {r.source === 'device' ? 'Device' : 'Manual'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-[12px] font-['Poppins',sans-serif] mb-4">
+                  <div>
+                    <div className="text-[#6B7280]">Building</div>
+                    <div className="text-[#16274D] font-medium">{r.building || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[#6B7280]">Floor</div>
+                    <div className="text-[#16274D] font-medium">{r.floor || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[#6B7280]">POC</div>
+                    <div className="text-[#16274D] font-medium">{r.poc || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[#6B7280]">MRN</div>
+                    <div className="text-[#16274D] font-medium">{mrn || '—'}</div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                  <span className="text-[12px] text-[#4EBEE3] font-medium font-['Poppins',sans-serif] group-hover:underline">
+                    Open patient screen →
+                  </span>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRemoveTarget(i);
+                    }}
+                    className="text-red-500 hover:text-red-700 transition-colors p-1.5 rounded-lg hover:bg-red-50 cursor-pointer"
+                    title="Remove room"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
+      )}
+
+      {openRoom && (
+        <BedsidePatientModal
+          mrn={openRoom.mrn}
+          room={openRoom.room}
+          bed={openRoom.bed}
+          onClose={() => setOpenRoom(null)}
+        />
       )}
 
       {isDevicePickerOpen && (
@@ -500,7 +522,7 @@ function StationDetail({ station }: { station: Station }) {
 }
 
 /* ========================================================================= */
-/* Way 1 — Device picker (reads the Device Manager single source of truth)    */
+/* Way 1 â€” Device picker (reads the Device Manager single source of truth)    */
 /* ========================================================================= */
 function DevicePickerModal({
   station,
@@ -589,7 +611,7 @@ function DevicePickerModal({
                 Pick from Device Manager
               </h2>
               <p className="text-[12px] text-gray-500 font-['Poppins',sans-serif]">
-                {picked.size} selected · single source of truth: Device Manager
+                {picked.size} selected Â· single source of truth: Device Manager
               </p>
             </div>
           </div>
@@ -661,7 +683,7 @@ function DevicePickerModal({
                         {d.deviceId}
                       </div>
                       <div className="text-[12px] text-[#6B7280] truncate">
-                        Room {d.roomNo} · Bed {d.bedNo} · Bldg {d.building} · Floor {d.floor} · POC{' '}
+                        Room {d.roomNo} Â· Bed {d.bedNo} Â· Bldg {d.building} Â· Floor {d.floor} Â· POC{' '}
                         {d.poc}
                       </div>
                     </div>
@@ -704,7 +726,7 @@ function DevicePickerModal({
 }
 
 /* ========================================================================= */
-/* Way 2 — Manual room (fields IN ORDER: Room, Bed, Floor, Building, POC, NS)  */
+/* Way 2 â€” Manual room (fields IN ORDER: Room, Bed, Floor, Building, POC, NS)  */
 /* ========================================================================= */
 function ManualRoomModal({ station, onClose }: { station: Station; onClose: () => void }) {
   const [roomNumber, setRoomNumber] = useState('');
@@ -751,7 +773,7 @@ function ManualRoomModal({ station, onClose }: { station: Station; onClose: () =
           </button>
         </div>
 
-        {/* Body — field order is fixed: Room, Bed, Floor, Building, POC, Nurse Station */}
+        {/* Body â€” field order is fixed: Room, Bed, Floor, Building, POC, Nurse Station */}
         <div className="px-6 py-5 space-y-4">
           <Field label="Room Number" required>
             <input
