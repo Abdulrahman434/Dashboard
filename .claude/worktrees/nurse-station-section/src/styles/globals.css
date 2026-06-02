@@ -1,0 +1,417 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 16px;
+  --background: #ffffff;
+  --foreground: #212121;
+  --card: #ffffff;
+  --card-foreground: #212121;
+  --popover: #ffffff;
+  --popover-foreground: #212121;
+  --primary: #030213;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f5;
+  --secondary-foreground: #030213;
+  --muted: #ececf0;
+  --muted-foreground: #717182;
+  --accent: #e9ebef;
+  --accent-foreground: #030213;
+  --destructive: #d4183d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --input-background: #f3f3f5;
+  --switch-background: #cbced4;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --ring: #b5b5b5;
+  --chart-1: #e89f3c;
+  --chart-2: #5eb5d4;
+  --chart-3: #3d5a80;
+  --chart-4: #e9d985;
+  --chart-5: #e5b366;
+  --radius: 0.625rem;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #212121;
+  --sidebar-primary: #030213;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #f5f5f5;
+  --sidebar-accent-foreground: #303030;
+  --sidebar-border: #ebebeb;
+  --sidebar-ring: #b5b5b5;
+}
+
+.dark {
+  --background: #212121;
+  --foreground: #fafafa;
+  --card: #212121;
+  --card-foreground: #fafafa;
+  --popover: #212121;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #303030;
+  --secondary: #3d3d3d;
+  --secondary-foreground: #fafafa;
+  --muted: #3d3d3d;
+  --muted-foreground: #b5b5b5;
+  --accent: #3d3d3d;
+  --accent-foreground: #fafafa;
+  --destructive: #9b3952;
+  --destructive-foreground: #e08989;
+  --border: #3d3d3d;
+  --input: #3d3d3d;
+  --ring: #6b6b6b;
+  --font-weight-medium: 500;
+  --font-weight-normal: 400;
+  --chart-1: #5a5fc7;
+  --chart-2: #81d4a6;
+  --chart-3: #e5b366;
+  --chart-4: #c87ba0;
+  --chart-5: #da6e56;
+  --sidebar: #303030;
+  --sidebar-foreground: #fafafa;
+  --sidebar-primary: #5a5fc7;
+  --sidebar-primary-foreground: #fafafa;
+  --sidebar-accent: #3d3d3d;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #3d3d3d;
+  --sidebar-ring: #6b6b6b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    font-size: 16px !important;
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    overflow-x: hidden;
+    /* Removed zoom/transform - causes text distortion. Use actual font-sizes instead. */
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100vh;
+  }
+}
+
+/**
+ * Base typography. This is not applied to elements which have an ancestor with a Tailwind text class.
+ */
+@layer base {
+  :where(:not(:has([class*=' text-']), :not(:has([class^='text-'])))) {
+    h1 {
+      font-size: var(--text-2xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h2 {
+      font-size: var(--text-xl);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h3 {
+      font-size: var(--text-lg);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    h4 {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    p {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+
+    label {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    button {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-medium);
+      line-height: 1.5;
+    }
+
+    input {
+      font-size: var(--text-base);
+      font-weight: var(--font-weight-normal);
+      line-height: 1.5;
+    }
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Baloo+Bhaijaan+2:wght@400;500;600;700;800&display=swap');
+
+html {
+  font-size: var(--font-size);
+  font-family: 'Poppins', sans-serif;
+}
+
+body {
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Apply Baloo Bhaijaan 2 font to all Arabic text */
+*[lang="ar"],
+*[dir="rtl"],
+input[dir="rtl"],
+textarea[dir="rtl"] {
+  font-family: 'Baloo Bhaijaan 2', 'Poppins', sans-serif !important;
+}
+
+/* Fix for cropped text in labels and headings - ensure proper line-height */
+label,
+h1, h2, h3, h4, h5, h6 {
+  line-height: 1.5 !important;
+}
+
+/* Ensure all text elements have proper vertical spacing to prevent cropping */
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hide platform-injected asset preload divs - aggressive selector */
+body > div[class^="css-"],
+body > div[class*=" css-"] {
+  display: none !important;
+  visibility: hidden !important;
+  position: absolute !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Keep our app root visible */
+body > div#root,
+body > div[data-name],
+body > div.relative {
+  display: block !important;
+  visibility: visible !important;
+  position: relative !important;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Custom Scrollbar Styles */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 6px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
+
+/* Responsive Page Container Utility */
+.page-container {
+  padding: 1.5rem; /* 24px for mobile */
+}
+
+@media (min-width: 768px) {
+  .page-container {
+    padding: 2rem; /* 32px for tablets and up */
+  }
+}
+
+@media (min-width: 1440px) {
+  .page-container {
+    padding: 2rem; /* Keep 32px for large screens */
+  }
+}
+
+/* Custom Checkbox Styles - CareInn Blue */
+input[type="checkbox"] {
+  accent-color: #4EBEE3;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+input[type="checkbox"]:checked {
+  background-color: #4EBEE3 !important;
+  border-color: #4EBEE3 !important;
+  background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='%23FFFFFF' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e") !important;
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(78, 190, 227, 0.2) !important;
+  border-color: #4EBEE3 !important;
+}
+
+/* Print Styles for PDF Export - Clean Print View */
+@media print {
+  /* Page setup - LANDSCAPE for full-width charts */
+  @page {
+    size: A4 landscape;
+    margin: 1cm 1.5cm;
+  }
+
+  /* Ensure colors and backgrounds print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide elements marked as no-print */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Hide sidebar and app navigation during print */
+  aside,
+  nav,
+  .sidebar {
+    display: none !important;
+  }
+
+  /* Make main content full-width for printing */
+  main {
+    margin-left: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure print content is visible and full-width */
+  .print-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  /* Reset body and html for clean print */
+  html,
+  body {
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  /* Remove shadows for cleaner print */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Make sure charts and content are visible */
+  .recharts-wrapper,
+  .recharts-surface {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Keep sections together */
+  .grid {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  /* Adjust font sizes for better landscape readability */
+  body {
+    font-size: 9pt;
+  }
+
+  h2 {
+    font-size: 14pt;
+  }
+
+  h3 {
+    font-size: 11pt;
+  }
+
+  /* Ensure all content is visible (remove scroll containers) */
+  .overflow-auto,
+  .overflow-hidden,
+  .overflow-y-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+}
