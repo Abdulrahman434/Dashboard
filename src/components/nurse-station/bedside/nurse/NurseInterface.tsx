@@ -3,7 +3,7 @@ import {
   X, ClipboardList, Stethoscope, User, Heart, DollarSign,
   FlaskConical, Image as ImageIcon, Baby, LogOut, Activity,
   Hash, DoorOpen, Clock, Plus, Bed, ExternalLink,
-  Crown, Gem, BedDouble,
+  Crown, Gem, BedDouble, BookOpen,
 } from "lucide-react";
 import { useTheme } from "../ThemeContext";
 import { useLocale } from "../i18n";
@@ -17,6 +17,7 @@ import { ImagingTab } from "./tabs/ImagingTab";
 import { BabyCameraTab } from "./tabs/BabyCameraTab";
 import { DischargePlanTab } from "./tabs/DischargePlanTab";
 import { ObservationsTab } from "./tabs/ObservationsTab";
+import { EducationTab } from "./tabs/EducationTab";
 
 interface TabDef {
   key: SectionKey;
@@ -35,6 +36,7 @@ const TABS: TabDef[] = [
   { key: "baby", label: "Baby Camera", icon: Baby, hasVisibility: true },
   { key: "discharge", label: "Discharge Plan", icon: LogOut, hasVisibility: true },
   { key: "observations", label: "Observations", icon: Activity, hasVisibility: true },
+  { key: "education", label: "Education", icon: BookOpen, hasVisibility: true },
 ];
 
 interface NurseInterfaceProps {
@@ -71,6 +73,7 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
       case "baby": return <BabyCameraTab role={role} />;
       case "discharge": return <DischargePlanTab role={role} />;
       case "observations": return <ObservationsTab role={role} />;
+      case "education": return <EducationTab role={role} />;
       default: return null;
     }
   };

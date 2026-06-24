@@ -173,7 +173,8 @@ export type SectionKey =
   | "baby"
   | "discharge"
   | "observations"
-  | "nfc";
+  | "nfc"
+  | "education";
 
 /* ═══════════════════════════════════════════════════════════════
  * STORE STATE
@@ -218,6 +219,9 @@ export interface NurseStoreState {
 
   /** Clinical observations */
   observations: ClinicalObservation[];
+
+  /** Education material assignments for this patient */
+  educationAssignments: { materialId: string; visible: boolean }[];
 
   /** Whether to show the "Nurse View" shortcut button on CareMe */
   nurseViewShortcutVisible: boolean;
@@ -279,6 +283,7 @@ function createDefaultState(): NurseStoreState {
       discharge: true,
       observations: true,
       nfc: false, // Not a patient-facing CareMe slide
+      education: true,
     },
 
     patient: {
@@ -359,6 +364,8 @@ function createDefaultState(): NurseStoreState {
       { id: "dp-5", labelKey: "care.discharge.finalCheckup", done: false, minutes: 25 },
       { id: "dp-6", labelKey: "care.discharge.confirm", done: false, minutes: 10 },
     ],
+
+    educationAssignments: [],
 
     observations: [
       {
@@ -765,6 +772,26 @@ const nurseStore = (() => {
 
     setNurseViewShortcutVisible: (visible: boolean) => {
       state = { ...state, nurseViewShortcutVisible: visible };
+      notify();
+    },
+
+    // ── Education Assignments ──
+    assignEducationMaterial: (materialId: string) => {
+      if (state.educationAssignments.find(a => a.materialId === materialId)) return;
+      state = { ...state, educationAssignments: [...state.educationAssignments, { materialId, visible: true }] };
+      notify();
+    },
+    removeEducationMaterial: (materialId: string) => {
+      state = { ...state, educationAssignments: state.educationAssignments.filter(a => a.materialId !== materialId) };
+      notify();
+    },
+    toggleEducationVisibility: (materialId: string) => {
+      state = {
+        ...state,
+        educationAssignments: state.educationAssignments.map(a =>
+          a.materialId === materialId ? { ...a, visible: !a.visible } : a
+        ),
+      };
       notify();
     },
   };

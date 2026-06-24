@@ -47,6 +47,7 @@ import IdentitySettingsPage from './IdentitySettingsPage';
 import NurseStationManagePage from './nurse-station/NurseStationManagePage';
 import NurseStationWardView from './nurse-station/NurseStationWardView';
 import StaffListPage from './StaffListPage';
+import EducationMaterialsPage from './EducationMaterialsPage';
 import { MultiSelectDropdown } from './UnifiedDropdown';
 import { nurseStationService } from '../services/nurseStationService';
 
@@ -213,6 +214,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       // Nurse Station - Staff List
       case 'staff-list':
         return <StaffListPage />;
+
+      // Nurse Station - Education Materials
+      case 'education-materials':
+        return <EducationMaterialsPage />;
 
       // Nurse Station - Manage table (no tabs; wards are separate ns: routes)
       case 'nurse-station-manage':

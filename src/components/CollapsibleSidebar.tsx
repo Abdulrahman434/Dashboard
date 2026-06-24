@@ -180,6 +180,7 @@ const navigationItems: MenuItem[] = [
     icon: Stethoscope,
     subItems: [
       { id: 'staff-list', label: 'Staff List', icon: Users2 },
+      { id: 'education-materials', label: 'Education Materials', icon: BookOpen },
       { id: 'nurse-station-manage', label: 'Manage', icon: Settings2 }
     ]
   },
