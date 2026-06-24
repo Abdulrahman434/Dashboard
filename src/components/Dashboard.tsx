@@ -44,8 +44,11 @@ import { UpdatePasswordModal } from './UpdatePasswordModal';
 import { UpdateTerminalPasswordModal } from './UpdateTerminalPasswordModal';
 import TemplatesPage from './TemplatesPage';
 import IdentitySettingsPage from './IdentitySettingsPage';
-import NurseStationSection from './nurse-station/NurseStationSection';
+import NurseStationManagePage from './nurse-station/NurseStationManagePage';
+import NurseStationWardView from './nurse-station/NurseStationWardView';
+import StaffListPage from './StaffListPage';
 import { MultiSelectDropdown } from './UnifiedDropdown';
+import { nurseStationService } from '../services/nurseStationService';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -100,12 +103,21 @@ export default function Dashboard({ onLogout }: DashboardProps) {
   };
 
   const renderContent = () => {
-    // Nurse Station is a top-level section with Overview/Manage sub-tabs.
-    // Sidebar station entries navigate to `ns:<stationId>` to focus a station
-    // inside the Manage tab.
+    // Nurse Station routing — three distinct views, no tabs:
+    // ns-manage:<id>  →  station detail (rooms / devices) reached from the Manage table
+    // ns:<id>         →  ward view (room grid + patients) reached from sidebar ward entries
+    if (activeItem.startsWith('ns-manage:')) {
+      const stationId = activeItem.slice(10);
+      return <NurseStationManagePage focusStationId={stationId} onNavigate={handleNavigation} />;
+    }
     if (activeItem.startsWith('ns:')) {
       const stationId = activeItem.slice(3);
-      return <NurseStationSection initialTab="manage" focusStationId={stationId} onNavigate={handleNavigation} />;
+      return (
+        <NurseStationWardView
+          focusStationId={stationId}
+          onManageClick={() => handleNavigation(`ns-manage:${stationId}`)}
+        />
+      );
     }
 
     switch (activeItem) {
@@ -198,11 +210,13 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       case 'bacnet-integration':
         return <EmptyState title="Bacnet Integration" />;
 
-      // Nurse Station - Top-level section (Overview + Manage sub-tabs)
-      case 'nurse-station':
-        return <NurseStationSection initialTab="overview" onNavigate={handleNavigation} />;
+      // Nurse Station - Staff List
+      case 'staff-list':
+        return <StaffListPage />;
+
+      // Nurse Station - Manage table (no tabs; wards are separate ns: routes)
       case 'nurse-station-manage':
-        return <NurseStationSection initialTab="manage" onNavigate={handleNavigation} />;
+        return <NurseStationManagePage onNavigate={handleNavigation} />;
 
       // Feedback Manager - Main
       case 'feedback-manager':
@@ -306,7 +320,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
           </button>
 
           <h1 className="text-[20px] md:text-[24px] font-semibold text-[#16274D] font-['Poppins',sans-serif]">
-            CareInn — System Management Portal
+            {activeItem.startsWith('ns-manage:')
+              ? (nurseStationService.get(activeItem.slice(10))?.name || 'Ward')
+              : activeItem.startsWith('ns:')
+              ? (nurseStationService.get(activeItem.slice(3))?.name || 'Ward')
+              : 'CareInn — System Management Portal'}
           </h1>
           
           <div className="flex items-center gap-2 md:gap-3">

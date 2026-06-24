@@ -79,6 +79,8 @@ export interface PatientProfile {
   emergencyContact: string;
   emergencyName: string;
   extension: string;
+  roomType?: string;
+  stationId?: string;
 }
 
 export interface CareTeamMember {
@@ -234,6 +236,36 @@ import imgNura from "@/assets/a7907a91bbdb1ced8824b3333ece109b3cd92b62.png";
 import imgOmar from "@/assets/2318867853acb678569427c88b9e543e22bd46b6.png";
 import imgBabyCam from "@/assets/68ba9ba13c5aa1cc7d2af5bee7bc955298b612dd.png";
 
+const getTodayISO = () => new Date().toISOString().split("T")[0];
+
+const getTodayDMY = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
+const getShiftedISO = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+};
+
+const getShiftedFormatted = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' };
+  return d.toLocaleDateString('en-GB', options); // e.g. "2 Jun 2026"
+};
+
+const getShiftedShortFormatted = (days: number) => {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const options: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' };
+  return d.toLocaleDateString('en-GB', options); // e.g. "2 Jun"
+};
+
 function createDefaultState(): NurseStoreState {
   return {
     sectionVisibility: {
@@ -259,12 +291,13 @@ function createDefaultState(): NurseStoreState {
       bed:           "",
       sex:           "",
       dob:           "",
-      admissionDate: "10 Mar 2026",
-      dischargeDate: "12 Mar 2026",
+      admissionDate: getShiftedFormatted(0),
+      dischargeDate: getShiftedFormatted(2),
       contact: "050 123 4567",
       emergencyContact: "055 987 6543",
       emergencyName: "Ahmed Saleh",
       extension: "4217",
+      roomType: "Single",
     },
 
     careTeam: [
@@ -282,36 +315,36 @@ function createDefaultState(): NurseStoreState {
     painScore: 5,
 
     carePlan: [
-      { id: "cp-1", labelKey: "care.plan.initialAssessment", done: true, timeKey: "care.plan.done", day: 1, date: "2026-03-10" },
-      { id: "cp-2", labelKey: "care.plan.bloodWork", done: true, timeKey: "care.plan.done", day: 1, date: "2026-03-10" },
-      { id: "cp-3", labelKey: "care.plan.medicationRound", done: false, active: true, minutes: 45, day: 1, date: "2026-03-10" },
-      { id: "cp-4", labelKey: "care.plan.checkup", done: false, minutes: 15, day: 2, date: "2026-03-11" },
-      { id: "cp-5", labelKey: "care.plan.physicalTherapy", done: false, minutes: 30, day: 3, date: "2026-03-12" },
-      { id: "cp-6", labelKey: "care.plan.doctorReview", done: false, minutes: 10, day: 4, date: "2026-03-13" },
+      { id: "cp-1", labelKey: "care.plan.initialAssessment", done: true, timeKey: "care.plan.done", day: 1, date: getShiftedISO(0) },
+      { id: "cp-2", labelKey: "care.plan.bloodWork", done: true, timeKey: "care.plan.done", day: 1, date: getShiftedISO(0) },
+      { id: "cp-3", labelKey: "care.plan.medicationRound", done: false, active: true, minutes: 45, day: 1, date: getShiftedISO(0) },
+      { id: "cp-4", labelKey: "care.plan.checkup", done: false, minutes: 15, day: 2, date: getShiftedISO(1) },
+      { id: "cp-5", labelKey: "care.plan.physicalTherapy", done: false, minutes: 30, day: 3, date: getShiftedISO(2) },
+      { id: "cp-6", labelKey: "care.plan.doctorReview", done: false, minutes: 10, day: 4, date: getShiftedISO(3) },
     ],
     carePlanMode: "daily",
-    carePlanSelectedDate: "2026-03-10",
+    carePlanSelectedDate: getTodayISO(),
 
     financial: [
-      { id: "fin-1", category: "Room & Board", description: "Private Room — 7 nights", amount: 35000, covered: 31500, date: "5–12 Mar" },
-      { id: "fin-2", category: "Medications", description: "IV Antibiotics, Pain Management", amount: 8200, covered: 7380, date: "5–12 Mar" },
-      { id: "fin-3", category: "Lab Tests", description: "CBC, BMP, Urinalysis, Blood Culture", amount: 4500, covered: 4050, date: "5–11 Mar" },
-      { id: "fin-4", category: "Imaging", description: "Obstetric Ultrasound, Chest X-Ray", amount: 6000, covered: 5400, date: "5–9 Mar" },
-      { id: "fin-5", category: "Procedures", description: "IV Insertion, Catheterization", amount: 3200, covered: 2880, date: "5 Mar" },
-      { id: "fin-6", category: "Physician Fees", description: "Attending + Consulting physicians", amount: 12000, covered: 10800, date: "5–12 Mar" },
+      { id: "fin-1", category: "Room & Board", description: "Private Room — 7 nights", amount: 35000, covered: 31500, date: `${getShiftedShortFormatted(-7)}–${getShiftedShortFormatted(0)}` },
+      { id: "fin-2", category: "Medications", description: "IV Antibiotics, Pain Management", amount: 8200, covered: 7380, date: `${getShiftedShortFormatted(-7)}–${getShiftedShortFormatted(0)}` },
+      { id: "fin-3", category: "Lab Tests", description: "CBC, BMP, Urinalysis, Blood Culture", amount: 4500, covered: 4050, date: `${getShiftedShortFormatted(-7)}–${getShiftedShortFormatted(-1)}` },
+      { id: "fin-4", category: "Imaging", description: "Obstetric Ultrasound, Chest X-Ray", amount: 6000, covered: 5400, date: `${getShiftedShortFormatted(-7)}–${getShiftedShortFormatted(-3)}` },
+      { id: "fin-5", category: "Procedures", description: "IV Insertion, Catheterization", amount: 3200, covered: 2880, date: getShiftedShortFormatted(-7) },
+      { id: "fin-6", category: "Physician Fees", description: "Attending + Consulting physicians", amount: 12000, covered: 10800, date: `${getShiftedShortFormatted(-7)}–${getShiftedShortFormatted(0)}` },
     ],
 
     labResults: [
-      { id: "lab-1", labelKey: "care.labs.cbc", value: "Normal range", status: "normal", date: "10 Mar", summaryKey: "care.labs.cbcSummary", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
-      { id: "lab-2", labelKey: "care.labs.hemoglobin", value: "11.2 g/dL", status: "low", date: "10 Mar", summaryKey: "care.labs.hgbSummary", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
-      { id: "lab-3", labelKey: "care.labs.glucose", value: "98 mg/dL", status: "normal", date: "11 Mar", summaryKey: "care.labs.normalRange", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
-      { id: "lab-4", labelKey: "care.labs.potassium", value: "4.1 mmol/L", status: "normal", date: "11 Mar", summaryKey: "care.labs.normalRange", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
+      { id: "lab-1", labelKey: "care.labs.cbc", value: "Normal range", status: "normal", date: getShiftedShortFormatted(0), summaryKey: "care.labs.cbcSummary", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
+      { id: "lab-2", labelKey: "care.labs.hemoglobin", value: "11.2 g/dL", status: "low", date: getShiftedShortFormatted(0), summaryKey: "care.labs.hgbSummary", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
+      { id: "lab-3", labelKey: "care.labs.glucose", value: "98 mg/dL", status: "normal", date: getShiftedShortFormatted(-1), summaryKey: "care.labs.normalRange", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
+      { id: "lab-4", labelKey: "care.labs.potassium", value: "4.1 mmol/L", status: "normal", date: getShiftedShortFormatted(-1), summaryKey: "care.labs.normalRange", pdfUrl: "/reports/lab-report-cbc.html", visible: true },
     ],
 
     imagingResults: [
-      { id: "img-1", labelKey: "care.imaging.ultrasound", date: "09 Mar", summaryKey: "care.imaging.summary", type: "Obstetric", pdfUrl: "/reports/obstetric-ultrasound.html", visible: true },
-      { id: "img-2", labelKey: "care.imaging.xray", date: "05 Mar", summaryKey: "care.imaging.xraySummary", type: "Chest", pdfUrl: "/reports/chest-xray.html", visible: true },
-      { id: "img-3", labelKey: "care.imaging.doppler", date: "12 Mar", summaryKey: "care.imaging.dopplerSummary", type: "Ultrasound", pdfUrl: "/reports/venous-doppler.html", visible: true },
+      { id: "img-1", labelKey: "care.imaging.ultrasound", date: getShiftedShortFormatted(-1), summaryKey: "care.imaging.summary", type: "Obstetric", pdfUrl: "/reports/obstetric-ultrasound.html", visible: true },
+      { id: "img-2", labelKey: "care.imaging.xray", date: getShiftedShortFormatted(-5), summaryKey: "care.imaging.xraySummary", type: "Chest", pdfUrl: "/reports/chest-xray.html", visible: true },
+      { id: "img-3", labelKey: "care.imaging.doppler", date: getShiftedShortFormatted(0), summaryKey: "care.imaging.dopplerSummary", type: "Ultrasound", pdfUrl: "/reports/venous-doppler.html", visible: true },
     ],
 
     babyCameras: [
@@ -359,8 +392,55 @@ function loadCachedState(): Partial<NurseStoreState> {
   try {
     const raw = localStorage.getItem(NURSE_STORE_CACHE_KEY);
     if (!raw) return {};
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw) as Partial<NurseStoreState>;
+    if (parsed) {
+      parsed.carePlanSelectedDate = new Date().toISOString().split("T")[0];
+    }
+    return parsed;
   } catch { return {}; }
+}
+
+function syncRoomTypeOverride(patient: PatientProfile) {
+  if (patient.roomType && patient.room && patient.stationId) {
+    const key = `${patient.stationId}_${patient.room}`;
+    try {
+      const overrides = JSON.parse(localStorage.getItem("careinn_room_type_overrides") || "{}");
+      if (overrides[key] !== patient.roomType) {
+        overrides[key] = patient.roomType;
+        localStorage.setItem("careinn_room_type_overrides", JSON.stringify(overrides));
+        window.dispatchEvent(new Event("storage"));
+      }
+    } catch {}
+  }
+}
+
+function syncManualRoomOccupancy(patient: PatientProfile) {
+  if (patient.room && patient.stationId && patient.stationId !== "reference") {
+    const key = `${patient.stationId}_${patient.room}`;
+    try {
+      const occupancies = JSON.parse(localStorage.getItem("careinn_manual_room_occupancy") || "{}");
+      if (patient.mrn) {
+        occupancies[key] = {
+          mrn: patient.mrn,
+          gender: patient.sex || "Female",
+          doa: patient.admissionDate || getTodayDMY(),
+          age: patient.age ? (patient.age.endsWith("y") ? patient.age : `${patient.age}y`) : "43y",
+          name: patient.name || "",
+          nameAr: patient.nameAr || "",
+          contact: patient.contact || "",
+          emergencyName: patient.emergencyName || "",
+          emergencyContact: patient.emergencyContact || "",
+          extension: patient.extension || "",
+          dischargeDate: patient.dischargeDate || "",
+          bed: patient.bed || "1",
+        };
+      } else {
+        delete occupancies[key];
+      }
+      localStorage.setItem("careinn_manual_room_occupancy", JSON.stringify(occupancies));
+      window.dispatchEvent(new Event("storage"));
+    } catch {}
+  }
 }
 
 const nurseStore = (() => {
@@ -403,6 +483,7 @@ const nurseStore = (() => {
         nextPatient.nameKey = "";
       }
       state = { ...state, patient: nextPatient };
+      syncRoomTypeOverride(nextPatient);
       notify();
     },
 
@@ -490,6 +571,8 @@ const nurseStore = (() => {
         nextPatient.nameKey = "";
       }
       state = { ...state, patient: nextPatient };
+      syncRoomTypeOverride(nextPatient);
+      syncManualRoomOccupancy(nextPatient);
       notify();
     },
 

@@ -3,6 +3,7 @@ import {
   X, ClipboardList, Stethoscope, User, Heart, DollarSign,
   FlaskConical, Image as ImageIcon, Baby, LogOut, Activity,
   Hash, DoorOpen, Clock, Plus, Bed, ExternalLink,
+  Crown, Gem, BedDouble,
 } from "lucide-react";
 import { useTheme } from "../ThemeContext";
 import { useLocale } from "../i18n";
@@ -41,11 +42,21 @@ interface NurseInterfaceProps {
   onClose: () => void;
 }
 
+const getRoomTypeIcon = (type: string) => {
+  const t = (type || "").toLowerCase();
+  if (t.includes("royal")) return <Crown size={15} />;
+  if (t.includes("vip")) return <Gem size={15} />;
+  return <BedDouble size={15} />;
+};
+
 export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
   const { theme: t } = useTheme();
   const { t: tr } = useLocale();
   const store = useNurseStore();
   const [activeTab, setActiveTab] = useState<SectionKey>("profile");
+  const [showRoomTypeDropdown, setShowRoomTypeDropdown] = useState(false);
+  const [isEditingOther, setIsEditingOther] = useState(false);
+  const [customTypeDraft, setCustomTypeDraft] = useState("");
 
   const patient = store.patient;
 
@@ -69,7 +80,7 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
       className="absolute inset-0 z-[900] flex flex-col"
       style={{ backgroundColor: "#F4F6F8" }}
     >
-      {/* â”€â”€ Header â”€â”€ */}
+      {/* ── Header ── */}
       <div
         className="flex items-center justify-between px-8 py-4 shrink-0"
         style={{ backgroundColor: t.primary }}
@@ -101,12 +112,12 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         </button>
       </div>
 
-      {/* â”€â”€ Patient Summary Bar â”€â”€ */}
+      {/* ── Patient Summary Bar ── */}
       <div
         className="flex items-center px-8 py-4 shrink-0"
         style={{ backgroundColor: "#fff", borderBottom: `1px solid ${t.borderDefault}` }}
       >
-        <div className="flex-1 grid grid-cols-4 gap-0">
+        <div className="flex-1 grid grid-cols-5 gap-0">
           {[
             { label: "MRN", value: patient.mrn, icon: <Hash size={15} /> },
             { 
@@ -115,7 +126,7 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
               icon: <User size={15} /> 
             },
             { label: "Room", value: patient.room, icon: <DoorOpen size={15} /> },
-            { label: "Bed", value: patient.bed || "â€”", icon: <Bed size={15} /> },
+            { label: "Bed", value: patient.bed || "—", icon: <Bed size={15} /> },
           ].map((item, i) => (
             <div key={i} className="flex relative items-center justify-center">
               {i > 0 && (
@@ -130,6 +141,93 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
               </div>
             </div>
           ))}
+
+          {/* 5th Column: Room Type dropdown */}
+          <div className="flex relative items-center justify-center">
+            <div className="absolute inset-inline-start-0 top-1/2 -translate-y-1/2 w-[1.5px] h-10"
+              style={{ backgroundColor: t.borderDefault, opacity: 0.6 }} />
+            <div className="flex flex-col items-center relative">
+              <span className="flex items-center gap-1.5 mb-1" style={{ fontSize: "12px", fontWeight: 600, color: t.textMuted }}>
+                <span style={{ color: t.primary }}>{getRoomTypeIcon(patient.roomType || "Single")}</span> Room Type
+              </span>
+              
+              {isEditingOther ? (
+                <div className="flex items-center gap-1 mt-0.5" style={{ zIndex: 100 }}>
+                  <input
+                    type="text"
+                    value={customTypeDraft}
+                    onChange={(e) => setCustomTypeDraft(e.target.value)}
+                    placeholder="Type custom type..."
+                    className="px-2 py-0.5 text-[13px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#09ADEA] font-semibold text-[#1C1B1F]"
+                    style={{ width: "120px" }}
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => {
+                      if (customTypeDraft.trim()) {
+                        nurseActions.updatePatient({ roomType: customTypeDraft.trim() });
+                      }
+                      setIsEditingOther(false);
+                    }}
+                    className="p-1 rounded bg-[#01C874] text-white hover:bg-[#00AC64] transition-colors cursor-pointer flex items-center justify-center"
+                    title="Save custom type"
+                  >
+                    <Plus size={12} strokeWidth={3} />
+                  </button>
+                  <button
+                    onClick={() => setIsEditingOther(false)}
+                    className="p-1 rounded bg-[#DF4354] text-white hover:bg-[#c93545] transition-colors cursor-pointer flex items-center justify-center"
+                    title="Cancel"
+                  >
+                    <X size={12} strokeWidth={3} />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <button
+                    onClick={() => setShowRoomTypeDropdown(!showRoomTypeDropdown)}
+                    className="flex items-center gap-1.5 mt-0.5 px-3 py-1 rounded-lg border border-gray-200 hover:border-gray-300 bg-white transition-all cursor-pointer font-bold text-[#1C1B1F] text-[15px]"
+                  >
+                    <span>{patient.roomType || "Single"}</span>
+                    <span className="text-gray-400 text-[10px]">▼</span>
+                  </button>
+
+                  {showRoomTypeDropdown && (
+                    <>
+                      {/* Invisible backdrop to dismiss dropdown */}
+                      <div className="fixed inset-0 z-40" onClick={() => setShowRoomTypeDropdown(false)} />
+                      
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 z-50">
+                        {[
+                          { value: "Single", label: "Single", icon: <BedDouble size={14} className="text-blue-500" /> },
+                          { value: "Royal", label: "Royal", icon: <Crown size={14} className="text-purple-500" /> },
+                          { value: "VIP", label: "VIP", icon: <Gem size={14} className="text-teal-500" /> },
+                          { value: "other", label: "Other (type)...", icon: <Plus size={14} className="text-gray-500" /> }
+                        ].map((opt) => (
+                          <button
+                            key={opt.value}
+                            onClick={() => {
+                              if (opt.value === "other") {
+                                setCustomTypeDraft("");
+                                setIsEditingOther(true);
+                              } else {
+                                nurseActions.updatePatient({ roomType: opt.value });
+                              }
+                              setShowRoomTypeDropdown(false);
+                            }}
+                            className="w-full px-3 py-2 text-[13px] text-left hover:bg-gray-50 flex items-center gap-2.5 cursor-pointer font-semibold text-gray-700"
+                          >
+                            {opt.icon}
+                            <span>{opt.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         {role === "nurse" && (
           <button

@@ -7,7 +7,10 @@ import { useTheme } from "../../ThemeContext";
 import { useLocale } from "../../i18n";
 import { useNurseStore, nurseActions, type ClinicalObservation, type DoctorNote } from "../../NurseDataStore";
 
-function fmtFull(d: Date) {
+function fmtFull(dateInput: any) {
+  if (!dateInput) return "";
+  const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
   return `${d.toLocaleDateString([], { day: "2-digit", month: "short", year: "numeric" })} • ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 function painColor(n: number) {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import PillTabs from '../PillTabs';
 import NurseStationPage from './NurseStationPage';
 import NurseStationManagePage from './NurseStationManagePage';
+import NurseStationWardView from './NurseStationWardView';
 
 export type NurseStationTab = 'overview' | 'manage';
 
@@ -14,12 +15,6 @@ interface NurseStationSectionProps {
   onNavigate?: (item: string) => void;
 }
 
-/**
- * Top-level Nurse Station section. Two sub-tabs / nested views:
- *   - Overview = the existing ward-grid view (unchanged behavior).
- *   - Manage   = Nurse Station Ward CRUD.
- * Default opens Overview.
- */
 export default function NurseStationSection({
   initialTab = 'overview',
   focusStationId,
@@ -27,25 +22,42 @@ export default function NurseStationSection({
 }: NurseStationSectionProps) {
   const [activeTab, setActiveTab] = useState<NurseStationTab>(initialTab);
 
-  // Respond to sidebar navigation that targets a specific sub-tab/station.
+  // Sync tab when sidebar navigation changes the target station or initial tab
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab, focusStationId]);
 
-  // A focused station is its OWN navigation tab (reached from the sidebar entry
-  // or a Manage-table row). No Overview/Manage pills, no back button.
+  // Focused station page: always show tabs so the user can switch between Ward View and Manage
   if (focusStationId) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full bg-gray-50">
+        <div className="bg-white border-b border-gray-200">
+          <PillTabs
+            tabs={[
+              { id: 'overview', label: 'Overview' },
+              { id: 'manage', label: 'Manage' },
+            ]}
+            activeTab={activeTab}
+            onChange={(tabId) => setActiveTab(tabId as NurseStationTab)}
+          />
+        </div>
         <div className="flex-1 overflow-auto">
-          <NurseStationManagePage focusStationId={focusStationId} onNavigate={onNavigate} />
+          {activeTab === 'overview' ? (
+            <NurseStationWardView
+              focusStationId={focusStationId}
+              onManageClick={() => setActiveTab('manage')}
+            />
+          ) : (
+            <NurseStationManagePage focusStationId={focusStationId} onNavigate={onNavigate} />
+          )}
         </div>
       </div>
     );
   }
 
+  // General Nurse Station tabs page
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white">
       <div className="bg-white border-b border-gray-200">
         <PillTabs
           tabs={[

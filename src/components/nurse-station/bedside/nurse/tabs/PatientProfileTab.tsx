@@ -24,12 +24,13 @@ export function PatientProfileTab({ role }: { role: "nurse" | "doctor" }) {
   };
 
   const fields = [
-    { key: "name", label: "Full Name (English)", span: 1, disabled: true },
-    { key: "nameAr", label: "Full Name (Arabic)", span: 1, disabled: true },
+    { key: "name", label: "Full Name (English)", span: 1 },
+    { key: "nameAr", label: "Full Name (Arabic)", span: 1 },
     { key: "age", label: "Age" },
     { key: "mrn", label: "MRN" },
     { key: "room", label: "Room" },
     { key: "bed", label: "Bed" },
+    { key: "sex", label: "Gender" },
     { key: "extension", label: "Extension" },
     { key: "admissionDate", label: "Admission Date" },
     { key: "dischargeDate", label: "Expected Discharge" },
@@ -62,21 +63,40 @@ export function PatientProfileTab({ role }: { role: "nurse" | "doctor" }) {
               {f.label}
             </label>
             {editing ? (
-              <input
-                value={draft[f.key]}
-                onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
-                disabled={(f as any).disabled}
-                className="w-full outline-none transition-all"
-                style={{
-                  padding: "10px 14px", borderRadius: 12, fontSize: "15px", fontWeight: 600,
-                  color: (f as any).disabled ? t.textDisabled : t.textHeading, 
-                  border: `1.5px solid ${t.borderDefault}`, 
-                  backgroundColor: (f as any).disabled ? t.borderSubtle : t.surface,
-                  cursor: (f as any).disabled ? "not-allowed" : "text"
-                }}
-                onFocus={(e) => !(f as any).disabled && (e.target.style.borderColor = t.primary)}
-                onBlur={(e) => (e.target.style.borderColor = t.borderDefault)}
-              />
+              f.key === "sex" ? (
+                <select
+                  value={draft[f.key] || ""}
+                  onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                  className="w-full outline-none transition-all"
+                  style={{
+                    padding: "10px 14px", borderRadius: 12, fontSize: "15px", fontWeight: 600,
+                    color: t.textHeading, 
+                    border: `1.5px solid ${t.borderDefault}`, 
+                    backgroundColor: t.surface,
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="">Select Gender</option>
+                  <option value="Female">Female</option>
+                  <option value="Male">Male</option>
+                </select>
+              ) : (
+                <input
+                  value={draft[f.key] || ""}
+                  onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value })}
+                  disabled={(f as any).disabled}
+                  className="w-full outline-none transition-all"
+                  style={{
+                    padding: "10px 14px", borderRadius: 12, fontSize: "15px", fontWeight: 600,
+                    color: (f as any).disabled ? t.textDisabled : t.textHeading, 
+                    border: `1.5px solid ${t.borderDefault}`, 
+                    backgroundColor: (f as any).disabled ? t.borderSubtle : t.surface,
+                    cursor: (f as any).disabled ? "not-allowed" : "text"
+                  }}
+                  onFocus={(e) => !(f as any).disabled && (e.target.style.borderColor = t.primary)}
+                  onBlur={(e) => (e.target.style.borderColor = t.borderDefault)}
+                />
+              )
             ) : (
               <div
                 style={{

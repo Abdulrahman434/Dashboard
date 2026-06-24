@@ -143,7 +143,7 @@ export default function NurseStationManagePage({
                   <tr
                     key={s.id}
                     className="border-b border-gray-200 hover:bg-gray-50 transition-colors cursor-pointer"
-                    onClick={() => onNavigate?.(`ns:${s.id}`)}
+                    onClick={() => onNavigate?.(`ns-manage:${s.id}`)}
                   >
                     <td className="px-6 py-4">
                       <div className="flex flex-col">

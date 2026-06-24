@@ -179,7 +179,7 @@ const navigationItems: MenuItem[] = [
     label: 'Nurse Station',
     icon: Stethoscope,
     subItems: [
-      { id: 'nurse-station', label: 'Overview', icon: LayoutGrid },
+      { id: 'staff-list', label: 'Staff List', icon: Users2 },
       { id: 'nurse-station-manage', label: 'Manage', icon: Settings2 }
     ]
   },

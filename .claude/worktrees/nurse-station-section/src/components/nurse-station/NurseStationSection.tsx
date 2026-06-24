@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import PillTabs from '../PillTabs';
 import NurseStationPage from './NurseStationPage';
 import NurseStationManagePage from './NurseStationManagePage';
+import NurseStationWardView from './NurseStationWardView';
 
 export type NurseStationTab = 'overview' | 'manage';
 
@@ -14,38 +15,60 @@ interface NurseStationSectionProps {
   onNavigate?: (item: string) => void;
 }
 
-/**
- * Top-level Nurse Station section. Two sub-tabs / nested views:
- *   - Overview = the existing ward-grid view (unchanged behavior).
- *   - Manage   = Nurse Station Ward CRUD.
- * Default opens Overview.
- */
 export default function NurseStationSection({
   initialTab = 'overview',
   focusStationId,
   onNavigate,
 }: NurseStationSectionProps) {
-  const [activeTab, setActiveTab] = useState<NurseStationTab>(initialTab);
+  // If a specific station is focused, default its view to the card grid Overview tab
+  const [activeTab, setActiveTab] = useState<NurseStationTab>(
+    focusStationId ? 'overview' : initialTab
+  );
 
-  // Respond to sidebar navigation that targets a specific sub-tab/station.
+  // Sync tab state on sidebar navigation
   useEffect(() => {
-    setActiveTab(initialTab);
+    setActiveTab(focusStationId ? 'overview' : initialTab);
   }, [initialTab, focusStationId]);
 
-  // A focused station is its OWN navigation tab (reached from the sidebar entry
-  // or a Manage-table row). No Overview/Manage pills, no back button.
+  // A focused station page handling
   if (focusStationId) {
-    return (
-      <div className="flex flex-col h-full">
-        <div className="flex-1 overflow-auto">
-          <NurseStationManagePage focusStationId={focusStationId} onNavigate={onNavigate} />
+    if (activeTab === 'overview') {
+      return (
+        <div className="flex flex-col h-full bg-[#FAFAFA]">
+          <div className="flex-1 overflow-auto">
+            <NurseStationWardView
+              focusStationId={focusStationId}
+              onManageClick={() => setActiveTab('manage')}
+            />
+          </div>
         </div>
-      </div>
-    );
+      );
+    } else {
+      // In manage mode, we show the tabs at the top to let the user switch back to Overview,
+      // and display the CRUD table of rooms.
+      return (
+        <div className="flex flex-col h-full bg-gray-50">
+          <div className="bg-white border-b border-gray-200">
+            <PillTabs
+              tabs={[
+                { id: 'overview', label: 'Overview' },
+                { id: 'manage', label: 'Manage' },
+              ]}
+              activeTab={activeTab}
+              onChange={(tabId) => setActiveTab(tabId as NurseStationTab)}
+            />
+          </div>
+          <div className="flex-1 overflow-auto">
+            <NurseStationManagePage focusStationId={focusStationId} onNavigate={onNavigate} />
+          </div>
+        </div>
+      );
+    }
   }
 
+  // General Nurse Station tabs page
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-white">
       <div className="bg-white border-b border-gray-200">
         <PillTabs
           tabs={[

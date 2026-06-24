@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import NurseScreen from "./NurseScreen";
-import PatientDetailScreen from "./PatientDetailScreen";
+import { NurseInterface } from "./bedside/nurse/NurseInterface";
+import { nurseActions } from "./bedside/NurseDataStore";
 
 /* =========================================================================
    App router
@@ -16,15 +17,27 @@ export default function NurseStationPage() {
     // Only navigate when the room is actually occupied — empty states
     // (Available / Closed / Preparation) shouldn't open a profile.
     if (room.state === "occupied") {
+      const p = room.patient || {};
+      nurseActions.updatePatient({
+        mrn: p.mrn || "",
+        room: room.no || "",
+        age: p.age?.replace("y", "") || "43",
+        admissionDate: p.doa || "25/5/2025",
+        name: p.gender === "M" ? "Omar Saleh" : "Sara Saleh",
+        nameAr: p.gender === "M" ? "عمر صالح" : "سارة صالح",
+        bed: "1",
+        roomType: room.type || "Single",
+        stationId: "reference",
+      });
       setSelectedRoom(room);
     }
   };
 
   if (selectedRoom) {
     return (
-      <PatientDetailScreen
-        roomNo={selectedRoom.no}
-        onBack={() => setSelectedRoom(null)}
+      <NurseInterface
+        role="nurse"
+        onClose={() => setSelectedRoom(null)}
       />
     );
   }
