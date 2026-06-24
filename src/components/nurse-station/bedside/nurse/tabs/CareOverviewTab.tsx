@@ -238,7 +238,7 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
   const [staffPickerOpen, setStaffPickerOpen] = useState(false);
 
   // Build a set of names already in the care team (for "already in team" check)
-  const alreadyInTeam = new Set(store.careTeam.map((m) => tr(m.nameKey)));
+  const alreadyInTeam = new Set<string>(store.careTeam.map((m) => tr(m.nameKey)));
 
   const handlePickStaff = (member: StaffMember) => {
     nurseActions.addCareTeamMember({

@@ -204,7 +204,7 @@ export function EducationTab({ role }: { role: "nurse" | "doctor" }) {
   const specificMaterials = materials.filter((m) => m.scope === "Specific");
 
   // Build a set of already-assigned material IDs
-  const assignedIds = new Set(store.educationAssignments.map((a) => a.materialId));
+  const assignedIds = new Set<string>(store.educationAssignments.map((a) => a.materialId));
 
   // Helper: get visibility of a material (defaults to true if no assignment record)
   const getVisible = (materialId: string): boolean => {
