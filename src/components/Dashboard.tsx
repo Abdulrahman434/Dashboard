@@ -48,6 +48,7 @@ import NurseStationManagePage from './nurse-station/NurseStationManagePage';
 import NurseStationWardView from './nurse-station/NurseStationWardView';
 import StaffListPage from './StaffListPage';
 import EducationMaterialsPage from './EducationMaterialsPage';
+import DiningMenuPage from './DiningMenuPage';
 import { MultiSelectDropdown } from './UnifiedDropdown';
 import { nurseStationService } from '../services/nurseStationService';
 
@@ -134,7 +135,10 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         return <Dashboard2Page />;
       case 'shortcuts':
         return <ShortcutsPage />;
-      
+
+      case 'dining-menu':
+        return <DiningMenuPage />;
+
       // Site Configuration - Main
       case 'asset-manager':
         return <EmptyState title="Site Configuration" />;

@@ -42,13 +42,22 @@ const C = {
   ink2: "#343434",
 };
 
-const notifications = [
-  { room: "301A", tagBg: C.cardNavy, type: "HK Request",      time: "09:10", color: C.ink2,    rowBg: "transparent" },
-  { room: "302A", tagBg: C.cardNavy, type: "HK Request",      time: "09:15", color: C.ink2,    rowBg: "transparent" },
-  { room: "303A", tagBg: C.gray400,  type: "HK Request",      time: "09:15", color: C.gray400, rowBg: "transparent" },
-  { room: "312A", tagBg: C.gray400,  type: "HK Request",      time: "09:18", color: C.red,     rowBg: C.redBg },
-  { room: "301A", tagBg: C.cardNavy, type: "Discharge Order", time: "09:10", color: C.ink2,    rowBg: C.redBgStrong },
-];
+const NOTIFICATION_TYPES = ["HK Request", "Virtual Consultation Request"] as const;
+type NotifType = typeof NOTIFICATION_TYPES[number];
+
+function notifStyle(type: NotifType, index: number): { tagBg: string; color: string; rowBg: string } {
+  if (type === "Virtual Consultation Request") {
+    return { tagBg: C.vipBlue, color: C.vipBlue, rowBg: index % 3 === 0 ? "transparent" : "transparent" };
+  }
+  // HK Request
+  return {
+    tagBg: index % 3 === 0 ? C.cardNavy : C.gray400,
+    color: index % 5 === 3 ? C.red : C.ink2,
+    rowBg: index % 5 === 3 ? C.redBg : "transparent",
+  };
+}
+
+const MOCK_TIMES = ["09:10", "09:15", "09:18", "09:22", "09:30", "09:41", "09:55", "10:02", "10:17", "10:28"];
 
 interface ManualRoomInfo {
   mrn?: string;
@@ -428,35 +437,51 @@ export default function NurseStationWardView({
           </div>
 
           {/* Right Aside - Ward Overview Panel */}
-          <aside className="w-[260px] shrink-0 bg-white border border-gray-200 rounded-lg p-3 flex flex-col shadow-sm self-start font-['Poppins',sans-serif]">
-            <div
-              className="rounded-md text-center py-2 font-semibold text-white text-[13px] uppercase tracking-wider"
-              style={{ background: C.vipBlueLight }}
-            >
-              Ward Overview
-            </div>
-            <div className="mt-3 text-center font-bold text-[14px] text-[#1C1B1F]">Notification logs</div>
-            <div className="mt-2 space-y-1.5 flex-1 overflow-auto max-h-[400px]">
-              {notifications.map((n, i) => (
+          {(() => {
+            // Build notification entries from real room numbers
+            const roomNos = mappedRooms.map((r) => r.no);
+            const wardNotifications = roomNos.map((room, i) => {
+              const type: NotifType = NOTIFICATION_TYPES[i % NOTIFICATION_TYPES.length];
+              const style = notifStyle(type, i);
+              return { room, type, time: MOCK_TIMES[i % MOCK_TIMES.length], ...style };
+            });
+
+            return (
+              <aside className="w-[260px] shrink-0 bg-white border border-gray-200 rounded-lg p-3 flex flex-col shadow-sm self-start font-['Poppins',sans-serif]">
                 <div
-                  key={i}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded text-[11px] border border-transparent font-['Poppins',sans-serif]"
-                  style={{ background: n.rowBg }}
+                  className="rounded-md text-center py-2 font-semibold text-white text-[13px] uppercase tracking-wider"
+                  style={{ background: C.vipBlueLight }}
                 >
-                  <span
-                    className="px-1.5 py-0.5 rounded font-bold text-[9px] text-white shrink-0 font-sans"
-                    style={{ background: n.tagBg, minWidth: 38, textAlign: "center" }}
-                  >
-                    {n.room}
-                  </span>
-                  <span className="truncate font-semibold" style={{ color: n.color }}>
-                    {n.type}
-                  </span>
-                  <span className="ml-auto text-gray-400 shrink-0 font-normal font-sans">{n.time}</span>
+                  Ward Overview
                 </div>
-              ))}
-            </div>
-          </aside>
+                <div className="mt-3 text-center font-bold text-[14px] text-[#1C1B1F]">Notification logs</div>
+                {wardNotifications.length === 0 ? (
+                  <p className="mt-4 text-[12px] text-gray-400 text-center">No rooms configured</p>
+                ) : (
+                  <div className="mt-2 space-y-1.5 flex-1 overflow-auto max-h-[400px]">
+                    {wardNotifications.map((n, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded text-[11px] border border-transparent font-['Poppins',sans-serif]"
+                        style={{ background: n.rowBg }}
+                      >
+                        <span
+                          className="px-1.5 py-0.5 rounded font-bold text-[9px] text-white shrink-0 font-sans"
+                          style={{ background: n.tagBg, minWidth: 38, textAlign: "center" }}
+                        >
+                          {n.room}
+                        </span>
+                        <span className="truncate font-semibold" style={{ color: n.color }}>
+                          {n.type}
+                        </span>
+                        <span className="ml-auto text-gray-400 shrink-0 font-normal font-sans">{n.time}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </aside>
+            );
+          })()}
         </div>
       </div>
 

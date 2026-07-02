@@ -82,7 +82,8 @@ import {
   UserCircle,
   Grid3x3,
   TrendingUp,
-  Tablet
+  Tablet,
+  UtensilsCrossed
 } from 'lucide-react';
 import { Fingerprint } from 'lucide-react';
 import imgCareInnLogo from "figma:asset/1527704e7ade377192f897bbb5d87c3293623da3.png";
@@ -153,10 +154,15 @@ const navigationItems: MenuItem[] = [
       { id: 'patient-services', label: 'Patient Services', icon: Stethoscope }
     ]
   },
-  { 
-    id: 'shortcuts', 
-    label: 'Shortcuts', 
+  {
+    id: 'shortcuts',
+    label: 'Shortcuts',
     icon: Zap
+  },
+  {
+    id: 'dining-menu',
+    label: 'Dining Menu',
+    icon: UtensilsCrossed
   },
   { 
     id: 'channels', 
