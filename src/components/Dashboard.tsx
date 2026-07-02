@@ -48,7 +48,10 @@ import NurseStationManagePage from './nurse-station/NurseStationManagePage';
 import NurseStationWardView from './nurse-station/NurseStationWardView';
 import StaffListPage from './StaffListPage';
 import EducationMaterialsPage from './EducationMaterialsPage';
-import DiningMenuPage from './DiningMenuPage';
+import FoodLibraryPage from './food/FoodLibraryPage';
+import MenuSetsPage from './food/MenuSetsPage';
+import PatientKioskPage from './food/PatientKioskPage';
+import KitchenPage from './food/KitchenPage';
 import { MultiSelectDropdown } from './UnifiedDropdown';
 import { nurseStationService } from '../services/nurseStationService';
 
@@ -136,8 +139,17 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       case 'shortcuts':
         return <ShortcutsPage />;
 
-      case 'dining-menu':
-        return <DiningMenuPage />;
+      case 'food-library':
+        return <FoodLibraryPage onNavigate={handleNavigation} />;
+
+      case 'food-sets':
+        return <MenuSetsPage onNavigate={handleNavigation} />;
+
+      case 'food-kiosk':
+        return <PatientKioskPage onNavigate={handleNavigation} />;
+
+      case 'food-kitchen':
+        return <KitchenPage onNavigate={handleNavigation} />;
 
       // Site Configuration - Main
       case 'asset-manager':

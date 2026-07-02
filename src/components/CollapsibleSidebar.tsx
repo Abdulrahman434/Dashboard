@@ -83,7 +83,10 @@ import {
   Grid3x3,
   TrendingUp,
   Tablet,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Salad,
+  CalendarDays,
+  ChefHat
 } from 'lucide-react';
 import { Fingerprint } from 'lucide-react';
 import imgCareInnLogo from "figma:asset/1527704e7ade377192f897bbb5d87c3293623da3.png";
@@ -160,9 +163,15 @@ const navigationItems: MenuItem[] = [
     icon: Zap
   },
   {
-    id: 'dining-menu',
-    label: 'Dining Menu',
-    icon: UtensilsCrossed
+    id: 'food-management',
+    label: 'Food Management',
+    icon: UtensilsCrossed,
+    subItems: [
+      { id: 'food-library', label: 'Food Library', icon: Salad },
+      { id: 'food-sets', label: 'Menu Sets', icon: CalendarDays },
+      { id: 'food-kiosk', label: 'Patient Kiosk', icon: Tablet },
+      { id: 'food-kitchen', label: 'Kitchen', icon: ChefHat }
+    ]
   },
   { 
     id: 'channels', 
