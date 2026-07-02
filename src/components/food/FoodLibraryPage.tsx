@@ -19,6 +19,7 @@ import {
   PlugZap,
   Clock,
   X,
+  Check,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useFood, updateFood } from './foodStore';
@@ -50,6 +51,11 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
   const [dishIdx, setDishIdx] = useState<number | null>(null);
   const [form, setForm] = useState<any>(blankDish());
   const [importOpen, setImportOpen] = useState(false);
+  // Inline "add new" state for the dish form (section + allergen).
+  const [addingSection, setAddingSection] = useState(false);
+  const [newSection, setNewSection] = useState('');
+  const [addingAllergen, setAddingAllergen] = useState(false);
+  const [newAllergen, setNewAllergen] = useState('');
 
   // ---- navigation helpers --------------------------------------------------
 
@@ -61,6 +67,10 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
   const openDish = (i: number | null) => {
     setDishIdx(i);
     setForm(i != null ? { ...blankDish(), ...db.dishes[i] } : blankDish());
+    setAddingSection(false);
+    setNewSection('');
+    setAddingAllergen(false);
+    setNewAllergen('');
     setView('dish');
   };
 
@@ -73,6 +83,43 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
         ? f.allergens.filter((x: string) => x !== a)
         : [...f.allergens, a],
     }));
+
+  // Add a brand-new section from inside the dish form — saved to the shared
+  // library (db.sections) so it appears everywhere, then selected on this dish.
+  const commitSection = () => {
+    const name = (newSection || '').trim();
+    if (!name) {
+      toast('Enter a section name');
+      return;
+    }
+    const exists = db.sections.some((s: any) => s.en.toLowerCase() === name.toLowerCase());
+    if (!exists) updateFood((d: any) => d.sections.push({ en: name, ar: '', on: true }));
+    patchForm({ section: name });
+    setAddingSection(false);
+    setNewSection('');
+    toast(exists ? 'Section already exists — selected' : `Section “${name}” added to library`);
+  };
+
+  // Add a brand-new allergen from inside the dish form — saved to db.allergens
+  // (used by the safety check) and tagged on this dish.
+  const commitAllergen = () => {
+    const name = (newAllergen || '').trim();
+    if (!name) {
+      toast('Enter an allergen name');
+      return;
+    }
+    const exists = db.allergens.some((a: string) => a.toLowerCase() === name.toLowerCase());
+    if (!exists) updateFood((d: any) => d.allergens.push(name));
+    setForm((f: any) => ({
+      ...f,
+      allergens: f.allergens.some((x: string) => x.toLowerCase() === name.toLowerCase())
+        ? f.allergens
+        : [...f.allergens, name],
+    }));
+    setAddingAllergen(false);
+    setNewAllergen('');
+    toast(exists ? 'Allergen already exists — tagged' : `Allergen “${name}” added to library`);
+  };
 
   const saveDish = () => {
     const en = (form.en || '').trim();
@@ -305,6 +352,9 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
   const editing = dishIdx != null;
   const inputCls = 'w-full h-[38px] px-3 border border-[#d6dae6] rounded-[10px] outline-none focus:border-[#4EBEE3] transition-colors';
   const labelCls = 'block text-[13px] text-[#5d6678] mb-1.5';
+  const iconAdd = 'w-[38px] h-[38px] flex items-center justify-center rounded-[10px] border border-[#d6dae6] text-[#1d7da3] hover:bg-[#f7f8fb] hover:border-[#4EBEE3] cursor-pointer flex-shrink-0 transition-colors';
+  const iconConfirm = 'w-[38px] h-[38px] flex items-center justify-center rounded-[10px] border border-[#4EBEE3] bg-[#4EBEE3] text-white hover:bg-[#3da5ca] cursor-pointer flex-shrink-0 transition-colors';
+  const iconCancel = 'w-[38px] h-[38px] flex items-center justify-center rounded-[10px] border border-[#d6dae6] text-[#5d6678] hover:bg-[#f7f8fb] cursor-pointer flex-shrink-0 transition-colors';
 
   const viewDishForm = (
     <Card>
@@ -345,22 +395,112 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
           </div>
           <div>
             <label className={labelCls}>Section</label>
-            <SingleSelectDropdown
-              options={db.sections.map((s: any) => s.en)}
-              value={form.section}
-              onChange={(v: string) => patchForm({ section: v })}
-            />
+            {addingSection ? (
+              <div className="flex gap-2">
+                <input
+                  autoFocus
+                  className={inputCls}
+                  value={newSection}
+                  onChange={(e) => setNewSection(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitSection();
+                    if (e.key === 'Escape') {
+                      setAddingSection(false);
+                      setNewSection('');
+                    }
+                  }}
+                  placeholder="New section name"
+                />
+                <button type="button" onClick={commitSection} title="Add section" className={iconConfirm}>
+                  <Check size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingSection(false);
+                    setNewSection('');
+                  }}
+                  title="Cancel"
+                  className={iconCancel}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <SingleSelectDropdown
+                    options={db.sections.map((s: any) => s.en)}
+                    value={form.section}
+                    onChange={(v: string) => patchForm({ section: v })}
+                  />
+                </div>
+                <button type="button" onClick={() => setAddingSection(true)} title="Add new section" className={iconAdd}>
+                  <Plus size={16} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="mt-4">
           <label className={labelCls}>Allergens</label>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             {db.allergens.map((a: string) => (
               <Chip key={a} on={form.allergens.includes(a)} onClick={() => toggleFormAllergen(a)}>
                 {a}
               </Chip>
             ))}
+            {addingAllergen ? (
+              <span className="inline-flex items-center gap-1 pl-3 pr-1 py-1 rounded-[20px] border border-[#4EBEE3] bg-white">
+                <input
+                  autoFocus
+                  value={newAllergen}
+                  onChange={(e) => setNewAllergen(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitAllergen();
+                    if (e.key === 'Escape') {
+                      setAddingAllergen(false);
+                      setNewAllergen('');
+                    }
+                  }}
+                  placeholder="New allergen"
+                  className="w-[110px] bg-transparent outline-none text-[13px] text-[#19233a]"
+                />
+                <button
+                  type="button"
+                  onClick={commitAllergen}
+                  title="Add allergen"
+                  className="w-6 h-6 flex items-center justify-center rounded-full bg-[#4EBEE3] text-white hover:bg-[#3da5ca] cursor-pointer flex-shrink-0"
+                >
+                  <Check size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingAllergen(false);
+                    setNewAllergen('');
+                  }}
+                  title="Cancel"
+                  className="w-6 h-6 flex items-center justify-center rounded-full text-[#5d6678] hover:bg-[#f7f8fb] cursor-pointer flex-shrink-0"
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAddingAllergen(true)}
+                title="Add new allergen"
+                className="inline-flex items-center gap-1 text-[13px] px-[13px] py-2 rounded-[20px] border border-dashed border-[#d6dae6] text-[#5d6678] hover:border-[#4EBEE3] hover:text-[#1d7da3] cursor-pointer transition-colors"
+              >
+                <Plus size={14} />
+                New
+              </button>
+            )}
+          </div>
+          <div className="text-[12px] text-[#9099ab] mt-2">
+            New sections and allergens are saved to the library and available everywhere.
           </div>
         </div>
 
