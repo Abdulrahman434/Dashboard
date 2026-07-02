@@ -1,0 +1,235 @@
+import { useSyncExternalStore } from 'react';
+
+/**
+ * foodStore — in-memory data + menu logic for the Food Management feature.
+ *
+ * This is a demo/prototype store (no Supabase): a single module-level `db`
+ * object with a tiny external-store subscription so any component can read it
+ * with useFood() and mutate it with updateFood(draft => { ... }). Because the
+ * whole thing is prototype data, updateFood deep-clones then applies an
+ * imperative mutator — keeping ports of the original logic simple.
+ */
+
+export const DAYS = ['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const;
+
+export const MEAL_SECTIONS: Record<string, string[]> = {
+  Breakfast: ['Cereals', 'Eggs', 'Baked breads', 'Dairy', 'Drinks'],
+  Lunch: ['Soup', 'Salad', 'Mains', 'Side orders', 'Dessert', 'Drinks'],
+  Dinner: ['Soup', 'Salad', 'Mains', 'Side orders', 'Dessert', 'Drinks'],
+};
+
+// Per-section selection rules (min/max picks, required, confirm-to-skip, served-to-all).
+export function rulesFor(section: string, diet: string): any {
+  const base =
+    ({
+      Cereals: { min: 0, max: 1 },
+      Eggs: { min: 0, max: 1 },
+      'Baked breads': { min: 0, max: 2 },
+      Dairy: { min: 0, max: 1 },
+      Soup: { min: 0, max: 1 },
+      Salad: { min: 0, max: 1, confirm: true },
+      Mains: { min: 2, max: 2, required: true },
+      'Side orders': { min: 0, max: 2 },
+      Dessert: { min: 0, max: 1 },
+      Drinks: { forAll: true },
+    } as any)[section] || { min: 0, max: 1 };
+  const r = { ...base };
+  if (diet === 'Soft diet' && section === 'Mains') {
+    r.min = 1;
+    r.max = 1;
+  }
+  return r;
+}
+
+function d(en: string, ar: string, section: string, allergens: string[]): any {
+  return { en, ar, section, allergens, on: true };
+}
+
+function SEED(): any {
+  return {
+    allergens: ['Milk', 'Egg', 'Gluten', 'Nuts', 'Fish', 'Shellfish', 'Soy', 'Sesame', 'Peanut'],
+    meals: ['Breakfast', 'Lunch', 'Dinner'],
+    win: { serviceDay: 'Tomorrow only', open: '4:00 PM', close: '8:00 PM', sameAll: true, autoDefault: true, allowEdit: true },
+    sections: [
+      { en: 'Cereals', ar: 'حبوب الإفطار', on: true },
+      { en: 'Eggs', ar: 'بيض', on: true },
+      { en: 'Baked breads', ar: 'مخبوزات', on: true },
+      { en: 'Dairy', ar: 'ألبان', on: true },
+      { en: 'Soup', ar: 'شوربة', on: true },
+      { en: 'Salad', ar: 'سلطة', on: true },
+      { en: 'Mains', ar: 'الأطباق الرئيسية', on: true },
+      { en: 'Side orders', ar: 'أطباق جانبية', on: true },
+      { en: 'Dessert', ar: 'حلويات', on: true },
+      { en: 'Drinks', ar: 'مشروبات', on: true },
+    ],
+    diets: [
+      { en: 'Regular', ar: 'عادي', his: '577365', reg: true, on: true },
+      { en: 'Diabetic', ar: 'سكري', his: '577365-DM', on: true },
+      { en: 'Low sodium', ar: 'قليل الصوديوم', his: '577365-LS', on: true },
+      { en: 'Low potassium', ar: 'قليل البوتاسيوم', his: '577365-LK', on: true },
+      { en: 'Soft diet', ar: 'طعام طري', his: '577365-SOFT', on: true },
+      { en: 'Chemotherapy', ar: 'علاج كيماوي', his: '577365-CH', on: true },
+      { en: 'Kids', ar: 'أطفال', his: '577365-KD', on: true },
+      { en: 'OB / maternity', ar: 'ولادة', his: '577365-OB', on: true },
+    ],
+    dishes: [
+      d('Cornflakes', 'رقائق الذرة', 'Cereals', ['Gluten']),
+      d('Bran flakes', 'رقائق النخالة', 'Cereals', ['Gluten']),
+      d('Muesli', 'موسلي', 'Cereals', ['Gluten', 'Nuts']),
+      d('Rice krispies', 'رقائق الأرز', 'Cereals', ['Gluten']),
+      d('Boiled eggs', 'بيض مسلوق', 'Eggs', ['Egg']),
+      d('Scrambled eggs', 'بيض مخفوق', 'Eggs', ['Egg', 'Milk']),
+      d('Omelette', 'أومليت', 'Eggs', ['Egg']),
+      d('Arabic bread', 'خبز عربي', 'Baked breads', ['Gluten']),
+      d('Brown toast', 'توست أسمر', 'Baked breads', ['Gluten']),
+      d('Croissant', 'كرواسون', 'Baked breads', ['Gluten', 'Milk', 'Egg']),
+      d('Plain yogurt', 'زبادي سادة', 'Dairy', ['Milk']),
+      d('Labneh', 'لبنة', 'Dairy', ['Milk']),
+      d('Fruit yogurt', 'زبادي بالفواكه', 'Dairy', ['Milk']),
+      d('Lentil soup', 'شوربة عدس', 'Soup', []),
+      d('Vegetable soup', 'شوربة خضار', 'Soup', []),
+      d('Chicken soup', 'شوربة دجاج', 'Soup', []),
+      d('Garden salad', 'سلطة خضراء', 'Salad', []),
+      d('Tabbouleh', 'تبولة', 'Salad', ['Gluten']),
+      d('Fattoush', 'فتوش', 'Salad', ['Gluten']),
+      d('Greek salad', 'سلطة يونانية', 'Salad', ['Milk']),
+      d('Grilled chicken', 'دجاج مشوي', 'Mains', []),
+      d('Baked fish', 'سمك بالفرن', 'Mains', ['Fish']),
+      d('Beef stew', 'يخنة لحم', 'Mains', []),
+      d('Vegetable biryani', 'برياني خضار', 'Mains', []),
+      d('Steamed rice', 'أرز مطهو', 'Mains', []),
+      d('Grilled salmon', 'سلمون مشوي', 'Mains', ['Fish']),
+      d('Steamed vegetables', 'خضار مطهوة', 'Side orders', []),
+      d('Mashed potato', 'بطاطس مهروسة', 'Side orders', ['Milk']),
+      d('French fries', 'بطاطس مقلية', 'Side orders', []),
+      d('Sauteed greens', 'خضار سوتيه', 'Side orders', []),
+      d('Fruit salad', 'سلطة فواكه', 'Dessert', []),
+      d('Sugar-free jelly', 'جيلي خالٍ من السكر', 'Dessert', []),
+      d('Rice pudding', 'أرز بالحليب', 'Dessert', ['Milk']),
+      d('Chocolate cake', 'كيكة شوكولاتة', 'Dessert', ['Gluten', 'Egg', 'Milk']),
+      d('Water', 'ماء', 'Drinks', []),
+      d('Orange juice', 'عصير برتقال', 'Drinks', []),
+      d('Apple juice', 'عصير تفاح', 'Drinks', []),
+      d('Laban', 'لبن', 'Drinks', ['Milk']),
+      d('Arabic coffee', 'قهوة عربية', 'Drinks', []),
+    ],
+    sets: [
+      { id: 'standard', name: 'Standard week', status: 'Published', sub: 'All 8 diets · breakfast, lunch, dinner · live since 1 Jun', edited: '2d ago' },
+      { id: 'ramadan', name: 'Ramadan 2026', status: 'Draft', sub: '8 diets · suhoor and iftar · not published yet', edited: '5h ago' },
+      { id: 'eid', name: 'Eid special', status: 'Scheduled', sub: '8 diets · 3 meals · starts 16 Jun', edited: '1w ago' },
+    ],
+    patients: [
+      { name: 'Ahmed Al-Salem', room: '312', bed: 'A', diet: 'Low sodium', allergies: [] },
+      { name: 'Sara Hassan', room: '305', bed: 'B', diet: 'Diabetic', allergies: ['Nuts'] },
+      { name: 'Khalid Al-Otaibi', room: '210', bed: 'A', diet: 'Soft diet', allergies: ['Milk'] },
+      { name: 'Maryam Saleh', room: '418', bed: 'C', diet: 'Regular', allergies: ['Fish', 'Shellfish'] },
+    ],
+    orders: [
+      {
+        id: 'ORD-1042', name: 'Fatima Noor', room: '401', bed: 'A', diet: 'Diabetic', meal: 'Lunch', date: 'Today', time: '11:40', status: 'Submitted',
+        lines: [['Soup', 'Vegetable soup'], ['Mains', 'Grilled chicken'], ['Mains', 'Steamed rice'], ['Dessert', 'Sugar-free jelly'], ['Drinks', 'Water']],
+      },
+      {
+        id: 'ORD-1041', name: 'Omar Said', room: '208', bed: 'B', diet: 'Regular', meal: 'Lunch', date: 'Today', time: '11:22', status: 'Printed',
+        lines: [['Soup', 'Lentil soup'], ['Mains', 'Beef stew'], ['Mains', 'Vegetable biryani'], ['Side orders', 'French fries'], ['Drinks', 'Orange juice']],
+      },
+    ],
+  };
+}
+
+// Which dishes seed a section for a given diet (Diabetic desserts limited to sugar-free / fruit).
+function dishesSeed(db: any, sn: string, diet: string): string[] {
+  let l = db.dishes.filter((x: any) => x.section === sn && x.on);
+  if (diet === 'Diabetic' && sn === 'Dessert') l = l.filter((x: any) => /sugar|fruit/i.test(x.en));
+  return l.map((x: any) => x.en);
+}
+
+// Build the full menu tree: diet -> meal -> [ section config with per-day items + default ].
+export function buildMenu(db: any): any {
+  const m: any = {};
+  db.diets.forEach((dt: any) => {
+    m[dt.en] = {};
+    db.meals.forEach((meal: string) => {
+      m[dt.en][meal] = MEAL_SECTIONS[meal].map((sn) => {
+        const r = rulesFor(sn, dt.en);
+        const items = dishesSeed(db, sn, dt.en);
+        const days: any = {};
+        DAYS.forEach((dy) => {
+          days[dy] = { items: [...items], def: r.forAll ? null : items[0] || null };
+        });
+        return { sec: sn, min: r.min || 0, max: r.forAll ? null : r.max || 1, required: !!r.required, confirm: !!r.confirm, forAll: !!r.forAll, days };
+      });
+    });
+  });
+  return m;
+}
+
+export function initDB(): any {
+  const db = SEED();
+  db.menu = buildMenu(db);
+  return db;
+}
+
+// Flatten a diet/meal/day into concrete sections + their items + default for that day.
+export function resolve(db: any, diet: string, meal: string, day: string): any[] {
+  const base = db.menu[diet] && db.menu[diet][meal] ? db.menu[diet][meal] : db.menu['Regular'][meal];
+  return base.map((s: any) => {
+    const dd = s.days[day] || { items: [], def: null };
+    return { ...s, items: dd.items, def: dd.def };
+  });
+}
+
+export function ruleText(s: any): string {
+  if (s.forAll) return 'Served to everyone';
+  if (s.min >= 1 && s.max > 1) return 'Choose ' + s.max + ' · required';
+  if (s.min >= 1 && s.max === 1) return 'Choose one · required';
+  if (s.max > 1) return 'Choose up to ' + s.max;
+  if (s.confirm) return 'Choose one · confirm to skip';
+  return 'Choose one · optional';
+}
+
+// ---- external store --------------------------------------------------------
+
+let db: any = initDB();
+let nextOrder = 1043;
+const listeners = new Set<() => void>();
+
+function emit() {
+  listeners.forEach((l) => l());
+}
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => {
+    listeners.delete(cb);
+  };
+}
+
+function getSnapshot() {
+  return db;
+}
+
+/** Read the live db in a component (re-renders on change). */
+export function useFood(): any {
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+/** Mutate the db: receives a deep clone to mutate imperatively, then commits. */
+export function updateFood(fn: (draft: any) => void) {
+  const next = structuredClone(db);
+  fn(next);
+  db = next;
+  emit();
+}
+
+/** Reset all demo data back to the seed. */
+export function resetFood() {
+  db = initDB();
+  nextOrder = 1043;
+  emit();
+}
+
+/** Next order id (e.g. "ORD-1043"), auto-incrementing. */
+export function nextOrderId(): string {
+  return 'ORD-' + nextOrder++;
+}
