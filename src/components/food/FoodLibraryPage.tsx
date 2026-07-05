@@ -5,7 +5,6 @@ import {
   Stethoscope,
   AlertTriangle,
   Coffee,
-  Calendar,
   Info,
   Upload,
   Download,
@@ -251,13 +250,6 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
           'Meals',
           `${db.meals.length} types · breakfast, lunch, dinner`,
           () => openReflists('meals'),
-        )}
-        {libcard(
-          <Calendar size={20} />,
-          'Menu sets',
-          'Arrange the library into menus',
-          () => onNavigate('food-sets'),
-          true,
         )}
       </div>
       <Bar>
