@@ -18,27 +18,12 @@ export const MEAL_SECTIONS: Record<string, string[]> = {
   Dinner: ['Soup', 'Salad', 'Mains', 'Side orders', 'Dessert', 'Drinks'],
 };
 
-// Per-section selection rules (min/max picks, required, confirm-to-skip, served-to-all).
+// Per-section selection rules (min/max picks, served-to-all).
 export function rulesFor(section: string, diet: string): any {
-  const base =
-    ({
-      Cereals: { min: 0, max: 1 },
-      Eggs: { min: 0, max: 1 },
-      'Baked breads': { min: 0, max: 2 },
-      Dairy: { min: 0, max: 1 },
-      Soup: { min: 0, max: 1 },
-      Salad: { min: 0, max: 1, confirm: true },
-      Mains: { min: 2, max: 2, required: true },
-      'Side orders': { min: 0, max: 2 },
-      Dessert: { min: 0, max: 1 },
-      Drinks: { forAll: true },
-    } as any)[section] || { min: 0, max: 1 };
-  const r = { ...base };
-  if (diet === 'Soft diet' && section === 'Mains') {
-    r.min = 1;
-    r.max = 1;
+  if (section === 'Drinks') {
+    return { forAll: true };
   }
-  return r;
+  return { min: 1, max: 1 };
 }
 
 function d(en: string, ar: string, section: string, allergens: string[]): any {
@@ -114,9 +99,9 @@ function SEED(): any {
       d('Arabic coffee', 'قهوة عربية', 'Drinks', []),
     ],
     sets: [
-      { id: 'standard', name: 'Standard week', status: 'Published', sub: 'All 8 diets · breakfast, lunch, dinner · live since 1 Jun', edited: '2d ago' },
-      { id: 'ramadan', name: 'Ramadan 2026', status: 'Draft', sub: '8 diets · suhoor and iftar · not published yet', edited: '5h ago' },
-      { id: 'eid', name: 'Eid special', status: 'Scheduled', sub: '8 diets · 3 meals · starts 16 Jun', edited: '1w ago' },
+      { id: 'standard', name: 'Standard week', status: 'Published', sub: 'All 8 diets · breakfast, lunch, dinner · live since 1 Jun', edited: '2d ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '2026-06-01', activeTo: '' },
+      { id: 'ramadan', name: 'Ramadan 2026', status: 'Draft', sub: '8 diets · suhoor and iftar · not published yet', edited: '5h ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '', activeTo: '' },
+      { id: 'eid', name: 'Eid special', status: 'Scheduled', sub: '8 diets · 3 meals · starts 16 Jun', edited: '1w ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '2026-06-16', activeTo: '' },
     ],
     patients: [
       { name: 'Ahmed Al-Salem', room: '312', bed: 'A', diet: 'Low sodium', allergies: [] },
@@ -157,7 +142,7 @@ export function buildMenu(db: any): any {
         DAYS.forEach((dy) => {
           days[dy] = { items: [...items], def: r.forAll ? null : items[0] || null };
         });
-        return { sec: sn, min: r.min || 0, max: r.forAll ? null : r.max || 1, required: !!r.required, confirm: !!r.confirm, forAll: !!r.forAll, days };
+        return { sec: sn, min: r.min || 0, max: r.forAll ? null : r.max || 1, forAll: !!r.forAll, days };
       });
     });
   });
@@ -166,13 +151,28 @@ export function buildMenu(db: any): any {
 
 export function initDB(): any {
   const db = SEED();
-  db.menu = buildMenu(db);
+  db.sets.forEach((s: any) => {
+    // Each menu set owns its own independent menu tree — editing one set
+    // never touches another's dishes/rules, and a brand-new set truly starts
+    // fresh. Likewise, which diets/meals a set covers is per-set (a "Kids
+    // only" set might not need Chemotherapy), defaulting to everything.
+    s.menu = buildMenu(db);
+    s.diets = db.diets.map((dt: any) => dt.en);
+    s.meals = [...db.meals];
+  });
   return db;
 }
 
-// Flatten a diet/meal/day into concrete sections + their items + default for that day.
-export function resolve(db: any, diet: string, meal: string, day: string): any[] {
-  const base = db.menu[diet] && db.menu[diet][meal] ? db.menu[diet][meal] : db.menu['Regular'][meal];
+// The menu set patients actually order from / kitchen actually serves —
+// whichever set is Published, falling back to the first set if none are.
+export function getLiveSet(db: any): any {
+  return db.sets.find((s: any) => s.status === 'Published') || db.sets[0];
+}
+
+// Flatten a diet/meal/day into concrete sections + their items + default for
+// that day. `menu` is a single set's menu tree (e.g. `someSet.menu`), not db.
+export function resolve(menu: any, diet: string, meal: string, day: string): any[] {
+  const base = menu[diet] && menu[diet][meal] ? menu[diet][meal] : menu['Regular'][meal];
   return base.map((s: any) => {
     const dd = s.days[day] || { items: [], def: null };
     return { ...s, items: dd.items, def: dd.def };
@@ -184,7 +184,6 @@ export function ruleText(s: any): string {
   if (s.min >= 1 && s.max > 1) return 'Choose ' + s.max + ' · required';
   if (s.min >= 1 && s.max === 1) return 'Choose one · required';
   if (s.max > 1) return 'Choose up to ' + s.max;
-  if (s.confirm) return 'Choose one · confirm to skip';
   return 'Choose one · optional';
 }
 

@@ -86,7 +86,8 @@ import {
   UtensilsCrossed,
   Salad,
   CalendarDays,
-  ChefHat
+  ChefHat,
+  ListTree
 } from 'lucide-react';
 import { Fingerprint } from 'lucide-react';
 import imgCareInnLogo from "figma:asset/1527704e7ade377192f897bbb5d87c3293623da3.png";
@@ -167,7 +168,8 @@ const navigationItems: MenuItem[] = [
     label: 'Food Management',
     icon: UtensilsCrossed,
     subItems: [
-      { id: 'food-library', label: 'Food Library', icon: Salad },
+      { id: 'food-dishes', label: 'Menu Dishes', icon: Salad },
+      { id: 'food-reflists', label: 'Reference Lists', icon: ListTree },
       { id: 'food-sets', label: 'Menu Sets', icon: CalendarDays },
       { id: 'food-kiosk', label: 'Patient Kiosk', icon: Tablet },
       { id: 'food-kitchen', label: 'Kitchen', icon: ChefHat }

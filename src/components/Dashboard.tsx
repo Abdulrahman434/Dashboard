@@ -139,8 +139,11 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       case 'shortcuts':
         return <ShortcutsPage />;
 
-      case 'food-library':
-        return <FoodLibraryPage onNavigate={handleNavigation} />;
+      case 'food-dishes':
+        return <FoodLibraryPage onNavigate={handleNavigation} mode="dishes" />;
+
+      case 'food-reflists':
+        return <FoodLibraryPage onNavigate={handleNavigation} mode="reflists" />;
 
       case 'food-sets':
         return <MenuSetsPage onNavigate={handleNavigation} />;

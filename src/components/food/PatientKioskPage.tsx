@@ -10,7 +10,7 @@ import {
   Info,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, resolve, ruleText, DAYS, updateFood, nextOrderId } from './foodStore';
+import { useFood, resolve, ruleText, DAYS, updateFood, nextOrderId, getLiveSet } from './foodStore';
 import { cx, Btn, Badge, Chip, Card, CardHead, Bar, Note, FoodPage } from './foodAtoms';
 
 function initials(name: string) {
@@ -43,6 +43,10 @@ const freshContext = (): KioskState => ({
 
 export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: string) => void }) {
   const db: any = useFood();
+  // Patients order from whichever menu set is currently Published — not a
+  // fixed/global menu — so publishing a new set immediately changes what's
+  // offered here.
+  const activeMenu = getLiveSet(db).menu;
   const [kiosk, setKiosk] = useState<KioskState>(freshContext);
   const k = kiosk;
 
@@ -82,7 +86,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   // ---- kPick ----
   function kPick(sn: string, item: string) {
     const diet = curDiet(k);
-    const cfg = resolve(db, diet, k.meal, k.day);
+    const cfg = resolve(activeMenu, diet, k.meal, k.day);
     const sec: any = cfg.find((s: any) => s.sec === sn);
     let arr = k.sel[sn] ? [...k.sel[sn]] : [];
     if (arr.includes(item)) {
@@ -104,7 +108,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   function kAutoFill() {
     const p = db.patients[k.patientIdx];
     const diet = curDiet(k);
-    const cfg = resolve(db, diet, k.meal, k.day);
+    const cfg = resolve(activeMenu, diet, k.meal, k.day);
     setKiosk((kk) => {
       const sel = { ...kk.sel };
       cfg.forEach((sec: any) => {
@@ -129,7 +133,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   function kConfirm() {
     const p = db.patients[k.patientIdx];
     const diet = curDiet(k);
-    const cfg = resolve(db, diet, k.meal, k.day);
+    const cfg = resolve(activeMenu, diet, k.meal, k.day);
     const lines: { name: string; section: string }[] = [];
     cfg.forEach((sec: any) => {
       if (sec.forAll) return;
@@ -148,7 +152,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
     updateFood((d: any) => {
       d.orders.unshift({
         id: nextOrderId(),
-        name: p.name,
+        name: k.eater === 'Companion' ? 'Companion' : p.name,
         room: p.room,
         bed: p.bed,
         diet,
@@ -251,7 +255,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   const kioskOrder = () => {
     const p = db.patients[k.patientIdx];
     const diet = curDiet(k);
-    const cfg = resolve(db, diet, k.meal, k.day);
+    const cfg = resolve(activeMenu, diet, k.meal, k.day);
     const ready = cfg.every((s: any) =>
       s.forAll || !s.min ? true : (k.sel[s.sec] || []).length >= s.min,
     );
@@ -367,7 +371,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   const kioskReview = () => {
     const p = db.patients[k.patientIdx];
     const diet = curDiet(k);
-    const cfg = resolve(db, diet, k.meal, k.day);
+    const cfg = resolve(activeMenu, diet, k.meal, k.day);
     const lines: { name: string; section: string }[] = [];
     cfg.forEach((sec: any) => {
       if (sec.forAll) return;

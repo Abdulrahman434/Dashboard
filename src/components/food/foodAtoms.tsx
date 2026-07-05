@@ -230,44 +230,21 @@ export function Bar({ children, className }: any) {
 // Standard interactive list row.
 export const rowCls = 'flex items-center gap-3 px-5 py-[13px] border-t border-[#e7e9f0]';
 
-// ---- process tracker -------------------------------------------------------
+// ---- reset control ----------------------------------------------------------
+// The sidebar is the only navigation between food sections now — no in-page
+// step tracker duplicating it. Just a small, unobtrusive reset affordance.
 
-const STEPS: [string, string, string, string][] = [
-  ['lib', '1', 'Set up library', 'food-library'],
-  ['set', '2', 'Build menu set', 'food-sets'],
-  ['kiosk', '3', 'Patient orders', 'food-kiosk'],
-  ['kit', '4', 'Kitchen serves', 'food-kitchen'],
-];
-
-export function ProcessTracker({ current, onNavigate }: any) {
+export function ResetDemoLink() {
   return (
-    <div className="flex items-center gap-2 mb-[22px]">
-      <div className="flex gap-2 flex-1 min-w-0">
-        {STEPS.map((s) => {
-          const on = current === s[0];
-          return (
-            <button
-              key={s[0]}
-              onClick={() => onNavigate(s[3])}
-              className={cx(
-                'flex-1 flex items-center gap-2.5 px-3 py-[11px] rounded-[10px] border cursor-pointer min-w-0 text-left transition-colors',
-                on ? 'border-[#16274D] bg-[#16274D]' : 'border-[#e7e9f0] bg-white hover:bg-[#f7f8fb]',
-              )}
-            >
-              <span className={cx('w-6 h-6 rounded-full flex items-center justify-center font-semibold text-[12.5px] flex-shrink-0', on ? 'bg-[#4EBEE3] text-[#16274D]' : 'bg-[#eef1f7] text-[#16274D]')}>{s[1]}</span>
-              <span className={cx('text-[12.5px] font-medium truncate', on ? 'text-white' : 'text-[#5d6678]')}>{s[2]}</span>
-            </button>
-          );
-        })}
-      </div>
+    <div className="flex justify-end mb-3">
       <button
         onClick={() => {
           resetFood();
           toast('Demo data reset');
         }}
-        className="inline-flex items-center gap-1.5 text-[12.5px] text-[#5d6678] hover:text-[#16274D] px-2.5 py-2 cursor-pointer whitespace-nowrap"
+        className="inline-flex items-center gap-1.5 text-[12.5px] text-[#9099ab] hover:text-[#16274D] px-1 py-1 cursor-pointer whitespace-nowrap transition-colors"
       >
-        <RefreshCw size={14} />
+        <RefreshCw size={13} />
         Reset demo
       </button>
     </div>
@@ -276,25 +253,29 @@ export function ProcessTracker({ current, onNavigate }: any) {
 
 // ---- context bar (diet / meal / day selector) ------------------------------
 
-export function ContextBar({ withDay, ctx, onCtx, db }: any) {
+// `diets`/`meals` optionally scope the pickers to a menu set's own selection
+// (see MenuSetsPage step 2) — falling back to the full hospital-wide lists.
+export function ContextBar({ withDay, ctx, onCtx, db, diets, meals }: any) {
+  const dietOptions = diets || db.diets.map((x: any) => x.en);
+  const mealOptions = meals || db.meals;
   return (
     <div className="flex flex-wrap gap-3 items-center px-5 py-3 bg-[#f7f8fb] border-t border-[#e7e9f0]">
       <span className="text-[13px] text-[#5d6678]">Editing menu for</span>
       <div className="w-[160px]">
-        <SingleSelectDropdown options={db.diets.map((x: any) => x.en)} value={ctx.diet} onChange={(v: string) => onCtx('diet', v)} className="text-[12px]" />
+        <SingleSelectDropdown options={dietOptions} value={ctx.diet} onChange={(v: string) => onCtx('diet', v)} className="text-[12px]" />
       </div>
-      <MiniSeg options={db.meals} value={ctx.meal} onChange={(v: string) => onCtx('meal', v)} />
+      <MiniSeg options={mealOptions} value={ctx.meal} onChange={(v: string) => onCtx('meal', v)} />
       {withDay && <MiniSeg options={[...DAYS]} value={ctx.day} onChange={(v: string) => onCtx('day', v)} />}
     </div>
   );
 }
 
 // Page shell: centered content with process tracker on top.
-export function FoodPage({ current, onNavigate, narrow, children }: any) {
+export function FoodPage({ narrow, children }: any) {
   return (
     <div className="p-6 font-['Poppins',sans-serif]">
       <div className={cx('mx-auto w-full', narrow ? 'max-w-[760px]' : 'max-w-[1040px]')}>
-        <ProcessTracker current={current} onNavigate={onNavigate} />
+        <ResetDemoLink />
         {children}
       </div>
     </div>

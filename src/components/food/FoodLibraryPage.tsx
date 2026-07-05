@@ -1,16 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Salad,
-  LayoutGrid,
-  Stethoscope,
   AlertTriangle,
-  Coffee,
   Info,
   Upload,
   Download,
   Plus,
   Search,
-  Filter,
   ImagePlus,
   ShieldCheck,
   GripVertical,
@@ -38,30 +34,48 @@ import {
 } from './foodAtoms';
 import { SingleSelectDropdown } from '../UnifiedDropdown';
 
-type View = 'library' | 'dishes' | 'dish' | 'reflists';
+type View = 'dishes' | 'dish' | 'reflists';
 type RefTab = 'sections' | 'diets' | 'allergens' | 'meals';
+type Mode = 'dishes' | 'reflists';
 
 const blankDish = () => ({ en: '', ar: '', section: 'Mains', allergens: [] as string[], on: true });
 
-export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: string) => void }) {
+export default function FoodLibraryPage({
+  onNavigate,
+  mode,
+}: {
+  onNavigate: (route: string) => void;
+  mode: Mode;
+}) {
   const db = useFood();
-  const [view, setView] = useState<View>('library');
+  const [view, setView] = useState<View>(mode);
+  // Dashboard renders this same component instance for both sidebar entries
+  // ('food-dishes' / 'food-reflists') — React only swaps props on navigation,
+  // it doesn't remount. Re-sync the root view whenever the route's mode changes.
+  useEffect(() => {
+    setView(mode);
+  }, [mode]);
   const [tab, setTab] = useState<RefTab>('sections');
   const [dishIdx, setDishIdx] = useState<number | null>(null);
   const [form, setForm] = useState<any>(blankDish());
   const [importOpen, setImportOpen] = useState(false);
+  const [dishSearch, setDishSearch] = useState('');
   // Inline "add new" state for the dish form (section + allergen).
   const [addingSection, setAddingSection] = useState(false);
   const [newSection, setNewSection] = useState('');
   const [addingAllergen, setAddingAllergen] = useState(false);
   const [newAllergen, setNewAllergen] = useState('');
 
-  // ---- navigation helpers --------------------------------------------------
+  // Reference List Add Modal States
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addForm, setAddForm] = useState({
+    en: '',
+    ar: '',
+    code: '',
+    active: true,
+  });
 
-  const openReflists = (t: RefTab) => {
-    setTab(t);
-    setView('reflists');
-  };
+  // ---- navigation helpers --------------------------------------------------
 
   const openDish = (i: number | null) => {
     setDishIdx(i);
@@ -118,6 +132,52 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
     setAddingAllergen(false);
     setNewAllergen('');
     toast(exists ? 'Allergen already exists — tagged' : `Allergen “${name}” added to library`);
+  };
+
+  const handleSave = (keepOpen: boolean) => {
+    const enName = (addForm.en || '').trim();
+    if (!enName) {
+      toast.error('English name is required');
+      return;
+    }
+
+    let success = false;
+    updateFood((d: any) => {
+      if (tab === 'sections') {
+        const arName = (addForm.ar || '').trim();
+        const exists = d.sections.some((x: any) => x.en.toLowerCase() === enName.toLowerCase());
+        if (exists) return;
+        d.sections.push({ en: enName, ar: arName, on: addForm.active });
+        success = true;
+      } else if (tab === 'diets') {
+        const arName = (addForm.ar || '').trim();
+        const exists = d.diets.some((x: any) => x.en.toLowerCase() === enName.toLowerCase());
+        if (exists) return;
+        d.diets.push({ en: enName, ar: arName, his: (addForm.code || '').trim(), on: addForm.active });
+        success = true;
+      } else if (tab === 'allergens') {
+        const exists = d.allergens.some((x: string) => x.toLowerCase() === enName.toLowerCase());
+        if (exists) return;
+        d.allergens.push(enName);
+        success = true;
+      } else if (tab === 'meals') {
+        const exists = d.meals.some((x: string) => x.toLowerCase() === enName.toLowerCase());
+        if (exists) return;
+        d.meals.push(enName);
+        success = true;
+      }
+    });
+
+    if (success) {
+      toast.success(`${enName} added successfully`);
+      if (keepOpen) {
+        setAddForm({ en: '', ar: '', code: '', active: true });
+      } else {
+        setAddModalOpen(false);
+      }
+    } else {
+      toast.error(`${enName} already exists`);
+    }
   };
 
   const saveDish = () => {
@@ -188,91 +248,21 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
   };
 
   // ==========================================================================
-  // LIBRARY HUB
-  // ==========================================================================
-
-  const libcard = (
-    icon: any,
-    name: string,
-    count: string,
-    onClick: () => void,
-    green?: boolean,
-  ) => (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-3.5 text-left p-4 rounded-[12px] border border-[#e7e9f0] bg-white hover:bg-[#f7f8fb] hover:border-[#d6dae6] cursor-pointer transition-colors"
-    >
-      <span
-        className={cx(
-          'w-10 h-10 rounded-[10px] flex items-center justify-center flex-shrink-0',
-          green ? 'bg-[#e7f6f0] text-[#1f9e75]' : 'bg-[#eaf7fc] text-[#1d7da3]',
-        )}
-      >
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block font-semibold text-[#19233a]">{name}</span>
-        <span className="block text-[13px] text-[#5d6678] mt-0.5">{count}</span>
-      </span>
-    </button>
-  );
-
-  const viewLibrary = (
-    <Card>
-      <CardHead title="Food library" sub="Fakeeh Hospital · set up once, reuse everywhere" />
-      <div className="grid grid-cols-2 gap-3 p-5">
-        {libcard(
-          <Salad size={20} />,
-          'Dishes',
-          `${db.dishes.length} items · names, photos, allergens`,
-          () => setView('dishes'),
-        )}
-        {libcard(
-          <LayoutGrid size={20} />,
-          'Sections',
-          `${db.sections.length} groups · soup, mains, drinks…`,
-          () => openReflists('sections'),
-        )}
-        {libcard(
-          <Stethoscope size={20} />,
-          'Diets',
-          `${db.diets.length} conditions · linked to HIS codes`,
-          () => openReflists('diets'),
-        )}
-        {libcard(
-          <AlertTriangle size={20} />,
-          'Allergens',
-          `${db.allergens.length} tags · used for safety checks`,
-          () => openReflists('allergens'),
-        )}
-        {libcard(
-          <Coffee size={20} />,
-          'Meals',
-          `${db.meals.length} types · breakfast, lunch, dinner`,
-          () => openReflists('meals'),
-        )}
-      </div>
-      <Bar>
-        <div className="flex items-start gap-2.5 text-[13px] text-[#5d6678]">
-          <Info size={16} className="flex-shrink-0 mt-0.5 text-[#9099ab]" />
-          <span>
-            Build the library first, then a menu set just picks from it — nothing is typed twice.
-          </span>
-        </div>
-      </Bar>
-    </Card>
-  );
-
-  // ==========================================================================
   // DISHES LIST
   // ==========================================================================
+
+  const q = dishSearch.trim().toLowerCase();
+  const dishRows = db.dishes
+    .map((dish: any, i: number) => ({ dish, i }))
+    .filter(({ dish }: any) =>
+      !q ? true : (dish.en || '').toLowerCase().includes(q) || (dish.ar || '').includes(dishSearch.trim()),
+    );
 
   const viewDishes = (
     <Card>
       <CardHead
-        back={{ label: 'Library', onClick: () => setView('library') }}
-        title="Dishes"
-        sub={`${db.dishes.length} dishes`}
+        title="Menu Dishes"
+        sub={`${db.dishes.length} dishes in the library`}
         right={
           <>
             <Btn variant="neutral" onClick={() => setImportOpen(true)}>
@@ -286,53 +276,78 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
           </>
         }
       />
-      <div className="flex gap-2.5 px-5 pb-4">
-        <div className="flex-1 flex items-center gap-2 h-[38px] px-3 border border-[#e7e9f0] rounded-[10px] text-[#9099ab]">
-          <Search size={16} />
-          <span className="text-[13.5px]">Search dishes</span>
+      <div className="px-5 pt-4">
+        <div className="flex items-center gap-2 h-[38px] px-3 border border-[#e7e9f0] rounded-[10px] focus-within:border-[#4EBEE3] transition-colors">
+          <Search size={16} className="text-[#9099ab] flex-shrink-0" />
+          <input
+            value={dishSearch}
+            onChange={(e) => setDishSearch(e.target.value)}
+            placeholder="Search dishes by name"
+            className="flex-1 bg-transparent outline-none text-[13.5px] text-[#19233a] placeholder:text-[#9099ab]"
+          />
+          {dishSearch && (
+            <button
+              onClick={() => setDishSearch('')}
+              className="text-[#9099ab] hover:text-[#5d6678] cursor-pointer flex-shrink-0"
+              title="Clear"
+            >
+              <X size={15} />
+            </button>
+          )}
         </div>
-        <Tag>
-          <Filter size={13} />
-          All sections
-        </Tag>
       </div>
-      <div>
-        {db.dishes.map((dish: any, i: number) => (
-          <div
-            key={i}
-            onClick={() => openDish(i)}
-            className={cx(rowCls, 'cursor-pointer hover:bg-[#f7f8fb] transition-colors')}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="font-medium text-[#19233a] truncate">{dish.en}</div>
-              {dish.ar ? (
-                <div className="text-[13px] text-[#9099ab] truncate" dir="rtl">
-                  {dish.ar}
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-[13px] text-[#b9770b] mt-0.5">
-                  <AlertTriangle size={13} />
-                  Arabic name missing
-                </div>
-              )}
+
+      <div className="mt-4">
+        {dishRows.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center py-14 px-5">
+            <div className="w-14 h-14 rounded-full bg-[#f7f8fb] flex items-center justify-center text-[#9099ab] mb-3">
+              <Salad size={26} />
             </div>
-            {dish.allergens && dish.allergens.length > 0 && (
-              <span className="text-[12px] px-[9px] py-[3px] rounded-[7px] bg-[#fbf1de] text-[#b9770b] whitespace-nowrap">
-                {dish.allergens.join(' · ')}
-              </span>
-            )}
-            <Tag>{dish.section}</Tag>
-            <Toggle
-              on={dish.on}
-              onClick={(e: any) => {
-                e.stopPropagation();
-                updateFood((d: any) => {
-                  d.dishes[i].on = !d.dishes[i].on;
-                });
-              }}
-            />
+            <div className="font-semibold text-[#16274D]">
+              {q ? 'No dishes match your search' : 'No dishes yet'}
+            </div>
+            <div className="text-[13px] text-[#5d6678] mt-1">
+              {q ? 'Try a different name, or clear the search.' : 'Add your first dish to the library.'}
+            </div>
           </div>
-        ))}
+        ) : (
+          dishRows.map(({ dish, i }: any) => (
+            <div
+              key={i}
+              onClick={() => openDish(i)}
+              className={cx(rowCls, 'cursor-pointer hover:bg-[#f7f8fb] transition-colors')}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="font-medium text-[#19233a] truncate">{dish.en}</div>
+                {dish.ar ? (
+                  <div className="text-[13px] text-[#9099ab] truncate" dir="rtl">
+                    {dish.ar}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-[13px] text-[#b9770b] mt-0.5">
+                    <AlertTriangle size={13} />
+                    Arabic name missing
+                  </div>
+                )}
+              </div>
+              {dish.allergens && dish.allergens.length > 0 && (
+                <span className="text-[12px] px-[9px] py-[3px] rounded-[7px] bg-[#fbf1de] text-[#b9770b] whitespace-nowrap">
+                  {dish.allergens.join(' · ')}
+                </span>
+              )}
+              <Tag>{dish.section}</Tag>
+              <Toggle
+                on={dish.on}
+                onClick={(e: any) => {
+                  e.stopPropagation();
+                  updateFood((d: any) => {
+                    d.dishes[i].on = !d.dishes[i].on;
+                  });
+                }}
+              />
+            </div>
+          ))
+        )}
       </div>
     </Card>
   );
@@ -553,10 +568,15 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
   const viewRefLists = (
     <Card>
       <CardHead
-        back={{ label: 'Library', onClick: () => setView('library') }}
-        title="Reference lists"
+        title="Reference Lists"
         right={
-          <Btn variant="primary" onClick={() => toast('New row added (demo)')}>
+          <Btn
+            variant="primary"
+            onClick={() => {
+              setAddForm({ en: '', ar: '', code: '', active: true });
+              setAddModalOpen(true);
+            }}
+          >
             <Plus size={16} />
             {addLabel[tab]}
           </Btn>
@@ -691,7 +711,7 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
       className="fixed inset-0 bg-[#16274D]/45 flex items-center justify-center z-40 p-5"
       onClick={() => setImportOpen(false)}
     >
-      <Card className="max-w-[540px] w-full" >
+      <Card className="max-w-[540px] w-full">
         <div onClick={(e) => e.stopPropagation()}>
           <CardHead
             title="Import dishes"
@@ -756,13 +776,158 @@ export default function FoodLibraryPage({ onNavigate }: { onNavigate: (route: st
 
   // ==========================================================================
 
+  const refListAddModal = addModalOpen && (
+    <div
+      className="fixed inset-0 bg-[#16274D]/45 flex items-center justify-center z-40 p-5"
+      onClick={() => setAddModalOpen(false)}
+    >
+      <Card className="max-w-[480px] w-full" onClick={(e) => e.stopPropagation()}>
+        <CardHead
+          title={addLabel[tab]}
+          sub={`Add a new ${tab.slice(0, -1)} to the library`}
+          right={
+            <button
+              onClick={() => setAddModalOpen(false)}
+              className="w-9 h-9 flex items-center justify-center rounded-[10px] text-[#5d6678] hover:bg-[#f7f8fb] cursor-pointer transition-colors"
+            >
+              <X size={18} />
+            </button>
+          }
+        />
+        <div className="p-5 flex flex-col gap-4">
+          {tab === 'sections' && (
+            <>
+              <div>
+                <label className="block text-[12px] text-[#5d6678] mb-1 font-medium">Section Name (English)</label>
+                <input
+                  type="text"
+                  value={addForm.en}
+                  onChange={(e) => setAddForm((f) => ({ ...f, en: e.target.value }))}
+                  className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a]"
+                  placeholder="e.g. Appetizers"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] text-[#5d6678] mb-1 font-medium text-right">Section Name (Arabic)</label>
+                <input
+                  type="text"
+                  value={addForm.ar}
+                  onChange={(e) => setAddForm((f) => ({ ...f, ar: e.target.value }))}
+                  className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a] text-right"
+                  placeholder="اسم القسم"
+                  dir="rtl"
+                />
+              </div>
+              <div className="flex items-center justify-between py-1 border-t border-[#e7e9f0] mt-1 pt-3">
+                <span className="text-[13.5px] font-medium text-[#19233a]">Activate</span>
+                <Toggle
+                  on={addForm.active}
+                  onClick={() => setAddForm((f) => ({ ...f, active: !f.active }))}
+                />
+              </div>
+            </>
+          )}
+
+          {tab === 'diets' && (
+            <>
+              <div>
+                <label className="block text-[12px] text-[#5d6678] mb-1 font-medium">Diet Name (English)</label>
+                <input
+                  type="text"
+                  value={addForm.en}
+                  onChange={(e) => setAddForm((f) => ({ ...f, en: e.target.value }))}
+                  className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a]"
+                  placeholder="e.g. Diabetic Diet"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] text-[#5d6678] mb-1 font-medium text-right">Diet Name (Arabic)</label>
+                <input
+                  type="text"
+                  value={addForm.ar}
+                  onChange={(e) => setAddForm((f) => ({ ...f, ar: e.target.value }))}
+                  className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a] text-right"
+                  placeholder="اسم الحمية الغذائية"
+                  dir="rtl"
+                />
+              </div>
+              <div>
+                <label className="block text-[12px] text-[#5d6678] mb-1 font-medium">HL7 Code (HIS Code)</label>
+                <input
+                  type="text"
+                  value={addForm.code}
+                  onChange={(e) => setAddForm((f) => ({ ...f, code: e.target.value }))}
+                  className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a] font-mono"
+                  placeholder="e.g. DIAB_01"
+                />
+              </div>
+              <div className="flex items-center justify-between py-1 border-t border-[#e7e9f0] mt-1 pt-3">
+                <span className="text-[13.5px] font-medium text-[#19233a]">Active</span>
+                <Toggle
+                  on={addForm.active}
+                  onClick={() => setAddForm((f) => ({ ...f, active: !f.active }))}
+                />
+              </div>
+            </>
+          )}
+
+          {tab === 'allergens' && (
+            <div>
+              <label className="block text-[12px] text-[#5d6678] mb-1 font-medium">Allergen Name</label>
+              <input
+                type="text"
+                value={addForm.en}
+                onChange={(e) => setAddForm((f) => ({ ...f, en: e.target.value }))}
+                className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a]"
+                placeholder="e.g. Peanut"
+                autoFocus
+              />
+            </div>
+          )}
+
+          {tab === 'meals' && (
+            <div>
+              <label className="block text-[12px] text-[#5d6678] mb-1 font-medium">Meal Name</label>
+              <input
+                type="text"
+                value={addForm.en}
+                onChange={(e) => setAddForm((f) => ({ ...f, en: e.target.value }))}
+                className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a]"
+                placeholder="e.g. Afternoon Tea"
+                autoFocus
+              />
+            </div>
+          )}
+        </div>
+        <Bar>
+          <Btn variant="neutral" onClick={() => setAddModalOpen(false)}>
+            Cancel
+          </Btn>
+          <div className="flex-grow" />
+          <Btn
+            variant="neutral"
+            onClick={() => handleSave(true)}
+            className="border-[#d6dae6] hover:bg-[#f7f8fb] text-[#19233a]"
+          >
+            Save & Add Another
+          </Btn>
+          <Btn variant="primary" onClick={() => handleSave(false)}>
+            Save & Close
+          </Btn>
+        </Bar>
+      </Card>
+    </div>
+  );
+
   return (
-    <FoodPage current="lib" onNavigate={onNavigate}>
-      {view === 'library' && viewLibrary}
+    <FoodPage>
       {view === 'dishes' && viewDishes}
       {view === 'dish' && viewDishForm}
       {view === 'reflists' && viewRefLists}
       {importModal}
+      {refListAddModal}
     </FoodPage>
   );
 }
