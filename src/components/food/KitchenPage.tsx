@@ -89,6 +89,7 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
 
   // Selected tickets state
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'queue' | 'status'>('queue');
 
   // Filters state
   const [selectedMeals, setSelectedMeals] = useState<string[]>([]);
@@ -102,7 +103,14 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
   const advance = (id: string) => {
     let newStatus = '';
     updateFood((d: any) => {
-      const o = d.orders.find((ord: any) => ord.id === id);
+      let o = d.orders.find((ord: any) => ord.id === id);
+      if (!o) {
+        const generated = allOrders.find(x => x.id === id);
+        if (generated) {
+          d.orders.unshift({ ...generated, status: 'Submitted' });
+          o = d.orders[0];
+        }
+      }
       if (o) {
         newStatus = o.status === 'Submitted' ? 'Printed' : 'Delivered';
         o.status = newStatus;
@@ -113,12 +121,16 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
 
   // Print a single ticket (and advance status to Printed if it is Submitted)
   const printSingle = (order: any) => {
-    if (order.status === 'Submitted') {
-      updateFood((d: any) => {
-        const o = d.orders.find((ord: any) => ord.id === order.id);
-        if (o) o.status = 'Printed';
-      });
-    }
+    updateFood((d: any) => {
+      let o = d.orders.find((ord: any) => ord.id === order.id);
+      if (!o) {
+        d.orders.unshift({ ...order, status: 'Submitted' });
+        o = d.orders[0];
+      }
+      if (o && o.status === 'Submitted') {
+        o.status = 'Printed';
+      }
+    });
     setPrintingOrders([order]);
     setTimeout(() => {
       window.print();
@@ -131,8 +143,16 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
     if (toPrint.length === 0) return;
 
     updateFood((d: any) => {
-      d.orders.forEach((o: any) => {
-        if (selectedOrderIds.includes(o.id) && o.status === 'Submitted') {
+      selectedOrderIds.forEach((id) => {
+        let o = d.orders.find((ord: any) => ord.id === id);
+        if (!o) {
+          const generated = allOrders.find(x => x.id === id);
+          if (generated) {
+            d.orders.unshift({ ...generated, status: 'Submitted' });
+            o = d.orders[0];
+          }
+        }
+        if (o && o.status === 'Submitted') {
           o.status = 'Printed';
         }
       });
@@ -149,8 +169,16 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
   const bulkDeliver = () => {
     if (selectedOrderIds.length === 0) return;
     updateFood((d: any) => {
-      d.orders.forEach((o: any) => {
-        if (selectedOrderIds.includes(o.id) && o.status !== 'Delivered') {
+      selectedOrderIds.forEach((id) => {
+        let o = d.orders.find((ord: any) => ord.id === id);
+        if (!o) {
+          const generated = allOrders.find(x => x.id === id);
+          if (generated) {
+            d.orders.unshift({ ...generated, status: 'Submitted' });
+            o = d.orders[0];
+          }
+        }
+        if (o && o.status !== 'Delivered') {
           o.status = 'Delivered';
         }
       });
@@ -179,8 +207,106 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
     .filter(Boolean)
     .sort() as string[];
 
+  // Get current time comparison
+  const getCutoffStatus = () => {
+    const now = new Date();
+    const currentStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+    
+    const timeToMinutes = (tStr: string) => {
+      const [h, m] = tStr.split(':').map(Number);
+      return h * 60 + m;
+    };
+    
+    const cutoffTime = db.win.close || '20:00';
+    const currentMin = timeToMinutes(currentStr);
+    const cutoffMin = timeToMinutes(cutoffTime);
+    const isAfterCutoff = currentMin >= cutoffMin;
+    
+    return {
+      currentStr,
+      cutoffTime,
+      isAfterCutoff
+    };
+  };
+
+  const { currentStr, cutoffTime, isAfterCutoff } = getCutoffStatus();
+
+  // Load devices and occupancies to generate auto-filled defaults if after cutoff
+  const getFullKitchenOrders = () => {
+    const devRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_devices') : null;
+    const devices: any[] = devRaw ? JSON.parse(devRaw) : [];
+    
+    const occRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_manual_room_occupancy') : null;
+    const occupancies: any = occRaw ? JSON.parse(occRaw) : {};
+
+    const MOCK_PATIENT_NAMES: Record<string, string> = {
+      'MRN1000000': 'Ahmed Al-Salem',
+      'MRN1000001': 'Sara Hassan',
+      'MRN1000002': 'Khalid Al-Otaibi',
+      'MRN1000003': 'Maryam Saleh',
+      'MRN1000004': 'Fatima Noor',
+      'MRN1000005': 'Omar Said',
+    };
+
+    const meal = selectedMeals[0] || 'Lunch';
+    const day = 'Wed'; // Mock current day
+
+    const list = [...db.orders];
+
+    if (isAfterCutoff) {
+      const activeDevices = devices.filter((d: any) => d.isActive);
+      
+      activeDevices.forEach((d: any, idx: number) => {
+        const roomStr = d.roomNo.replace(/[A-Za-z]/g, '');
+        const bedStr = d.roomNo.replace(/[^A-Za-z]/g, '') || d.bedNo;
+        
+        const occKey = Object.keys(occupancies).find(key => occupancies[key].mrn === d.mrn);
+        const occ = occKey ? occupancies[occKey] : null;
+        const patientName = occ?.name || MOCK_PATIENT_NAMES[d.mrn] || `Patient (${d.mrn})`;
+        const diet = occ?.diet || 'Regular';
+
+        const hasOrder = db.orders.some((ord: any) => 
+          ord.meal === meal &&
+          (ord.room === roomStr && ord.bed === bedStr || ord.name === patientName)
+        );
+
+        if (!hasOrder) {
+          let defaultLines: [string, string][] = [];
+          try {
+            const menuSet = db.sets.find((s: any) => s.id === 'standard') || db.sets[0];
+            const dietMenu = menuSet.menu[diet]?.[meal] || menuSet.menu['Regular']?.[meal] || [];
+            defaultLines = dietMenu.map((sec: any) => {
+              const defItem = sec.days[day]?.def || sec.days['Wed']?.def || '';
+              return [sec.sec, defItem];
+            }).filter((x: any) => x[1]);
+          } catch (e) {
+            defaultLines = [['Mains', 'Standard Main Dish'], ['Drinks', 'Water']];
+          }
+
+          list.push({
+            id: `DEF-${d.mrn}`,
+            name: patientName,
+            room: roomStr,
+            bed: bedStr,
+            diet: diet,
+            meal: meal,
+            date: 'Today',
+            time: cutoffTime,
+            status: 'Submitted',
+            isDefaultAutoFill: true,
+            lines: defaultLines
+          });
+        }
+      });
+    }
+
+    return list;
+  };
+
+  const allOrders = getFullKitchenOrders();
+
   // Filter orders
-  const visibleOrders = db.orders.filter((o: any) => {
+  const visibleOrders = allOrders.filter((o: any) => {
     const matchMeal = selectedMeals.length === 0 || selectedMeals.includes(o.meal);
     const matchDiet = selectedDiets.length === 0 || selectedDiets.includes(o.diet);
     const matchWard = selectedWards.length === 0 || selectedWards.includes(o.room);
@@ -197,36 +323,171 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
     }
   };
 
-  // ---- empty state ---------------------------------------------------------
-  if (db.orders.length === 0) {
-    return (
-      <FoodPage current="kit" onNavigate={onNavigate}>
-        <Card>
-          <div className="text-center py-[50px] px-5 text-[#5d6678]">
-            <ChefHat size={48} className="mx-auto text-[#9099ab]" />
-            <div className="font-semibold text-[#16274D] mt-3">No orders yet</div>
-            <div className="text-[#5d6678] mt-1">
-              Place an order in the patient kiosk and it lands here.
-            </div>
-            <div className="mt-4 flex justify-center">
-              <Btn variant="primary" onClick={() => onNavigate('food-kiosk')}>
-                <Tablet size={16} />
-                Open patient kiosk
-              </Btn>
-            </div>
-          </div>
-        </Card>
-      </FoodPage>
-    );
-  }
-
-  const counts = db.orders.reduce(
+  const counts = allOrders.reduce(
     (acc: any, o: any) => {
       acc[o.status] = (acc[o.status] || 0) + 1;
       return acc;
     },
     { Submitted: 0, Printed: 0, Delivered: 0 },
   );
+
+  const viewOrderStatus = () => {
+    const devRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_devices') : null;
+    const devices: any[] = devRaw ? JSON.parse(devRaw) : [];
+    
+    const occRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_manual_room_occupancy') : null;
+    const occupancies: any = occRaw ? JSON.parse(occRaw) : {};
+
+    const activeDevices = devices.filter((d: any) => d.isActive);
+
+    const MOCK_PATIENT_NAMES: Record<string, string> = {
+      'MRN1000000': 'Ahmed Al-Salem',
+      'MRN1000001': 'Sara Hassan',
+      'MRN1000002': 'Khalid Al-Otaibi',
+      'MRN1000003': 'Maryam Saleh',
+      'MRN1000004': 'Fatima Noor',
+      'MRN1000005': 'Omar Said',
+    };
+
+    const meal = selectedMeals[0] || 'Lunch';
+    const day = 'Wed'; // Mock current day
+
+    return (
+      <div className="space-y-4 text-left">
+        {/* Cutoff Status Card */}
+        <Card className="p-5 bg-white border border-[#e7e9f0] rounded-[16px]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="text-[14px] font-semibold text-[#16274D] flex items-center gap-2">
+                <span>Ordering Window Cutoff:</span>
+                <span className="bg-[#eaf5fa] text-[#0a84b1] px-2.5 py-0.5 rounded-full font-mono text-[13px] border border-[#e7e9f0]">
+                  {cutoffTime}
+                </span>
+              </div>
+              <div className="text-[13px] text-[#5d6678] mt-1">
+                Current Time: <span className="font-semibold text-[#16274D] font-mono">{currentStr}</span> (Comparison based on device sync)
+              </div>
+            </div>
+            <div>
+              {isAfterCutoff ? (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-50 border border-red-200 text-red-700 font-semibold text-[13px]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                  After Cutoff (Ordering Closed - Defaults Applied)
+                </div>
+              ) : (
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-green-50 border border-green-200 text-green-700 font-semibold text-[13px]">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
+                  Before Cutoff (Ordering Open)
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+
+        {/* Patient Status List */}
+        <Card className="overflow-hidden">
+          <div className="bg-[#f8fafc] px-5 py-3 border-b border-[#e7e9f0] flex items-center justify-between">
+            <span className="text-[13px] font-bold text-[#5d6678] uppercase tracking-wide">
+              Active Bedside Patients ({activeDevices.length})
+            </span>
+            <span className="text-[12.5px] text-[#5d6678]">
+              Active Meal: <span className="font-semibold text-[#16274D]">{meal}</span>
+            </span>
+          </div>
+
+          <div className="divide-y divide-[#e7e9f0]">
+            {activeDevices.map((d: any) => {
+              const occKey = Object.keys(occupancies).find(key => occupancies[key].mrn === d.mrn);
+              const occ = occKey ? occupancies[occKey] : null;
+              
+              const patientName = occ?.name || MOCK_PATIENT_NAMES[d.mrn] || `Patient (${d.mrn})`;
+              const diet = occ?.diet || 'Regular';
+
+              const roomStr = d.roomNo.replace(/[A-Za-z]/g, '');
+              const bedStr = d.roomNo.replace(/[^A-Za-z]/g, '') || d.bedNo;
+
+              // Check if order exists
+              const order = db.orders.find((ord: any) => 
+                ord.meal === meal &&
+                ((ord.room === roomStr && ord.bed === bedStr) || ord.name === patientName)
+              );
+
+              let orderStatus: 'ordered' | 'default' | 'pending' = 'pending';
+              let statusLabel = 'Not Ordered Yet';
+              let statusClass = 'bg-gray-100 text-gray-700 border-gray-200';
+              let displayItems: string[] = [];
+
+              if (order) {
+                orderStatus = 'ordered';
+                statusLabel = `Ordered (${order.status})`;
+                statusClass = 'bg-green-50 text-green-700 border-green-200';
+                displayItems = (order.lines || []).map((l: any) => l[1]);
+              } else if (isAfterCutoff) {
+                orderStatus = 'default';
+                statusLabel = 'Auto-Filled (Default)';
+                statusClass = 'bg-[#fbf1de] text-[#b9770b] border-[#fbf1de]';
+                
+                try {
+                  const menuSet = db.sets.find((s: any) => s.id === 'standard') || db.sets[0];
+                  const dietMenu = menuSet.menu[diet]?.[meal] || menuSet.menu['Regular']?.[meal] || [];
+                  displayItems = dietMenu.map((sec: any) => sec.days[day]?.def || sec.days['Wed']?.def).filter(Boolean);
+                } catch (e) {
+                  displayItems = ['Standard Main Dish', 'Standard Drink'];
+                }
+              } else {
+                orderStatus = 'pending';
+                statusLabel = 'Not Ordered Yet';
+                statusClass = 'bg-blue-50 text-blue-700 border-blue-200';
+              }
+
+              return (
+                <div key={d.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#fcfdfe] transition-colors">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[#16274D]/10 flex items-center justify-center text-[#16274D] font-bold">
+                      {patientName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
+                    </div>
+                    <div className="text-left">
+                      <div className="font-semibold text-[#16274D] text-[14.5px]">
+                        {patientName}
+                      </div>
+                      <div className="text-[12.5px] text-[#5d6678] mt-0.5">
+                        Room {d.roomNo} · Bed {d.bedNo} · Floor {d.floor} · Bldg {d.building}
+                      </div>
+                      <div className="text-[11.5px] text-[#9099ab] font-medium mt-0.5">
+                        MRN: {d.mrn} · Diet: {diet} · Group: {d.group}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="sm:text-right flex flex-col sm:items-end gap-1.5 min-w-[200px]">
+                    <span className={cx("inline-flex items-center px-2.5 py-0.5 rounded-full text-[12px] font-semibold border", statusClass)}>
+                      {statusLabel}
+                    </span>
+                    <div className="text-[12.5px] text-[#5d6678]">
+                      {orderStatus === 'ordered' && (
+                        <div className="font-medium text-[#16274D] max-w-[280px] sm:text-right">
+                          {displayItems.join(' · ')}
+                        </div>
+                      )}
+                      {orderStatus === 'default' && (
+                        <div className="max-w-[280px] sm:text-right">
+                          <span className="text-[11px] font-bold text-[#b9770b] uppercase block mb-0.5">Default items loaded:</span>
+                          <span className="font-medium text-[#16274D]">{displayItems.join(' · ')}</span>
+                        </div>
+                      )}
+                      {orderStatus === 'pending' && (
+                        <span className="text-gray-400 italic">Pending patient selection</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </div>
+    );
+  };
 
   return (
     <FoodPage current="kit" onNavigate={onNavigate}>
@@ -261,25 +522,71 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
         }
       `}} />
 
-      {/* Header, Filters, and Bulk Actions Card with !overflow-visible to prevent dropdown clipping */}
-      <Card className="mb-5 !overflow-visible">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 px-5 py-[18px] border-b border-[#e7e9f0]">
-          <div className="min-w-0">
-            <div className="font-['Poppins',sans-serif] font-semibold text-[18px] text-[#16274D]">
-              Kitchen queue
+      {/* Tabs */}
+      <div className="flex bg-[#f7f8fb] p-1 rounded-[10px] mx-0 mb-5 border border-[#e7e9f0]">
+        <button
+          onClick={() => setActiveTab('queue')}
+          className={cx(
+            'flex-1 py-2 text-center rounded-[8px] text-[13px] font-semibold transition-all cursor-pointer border-none outline-none',
+            activeTab === 'queue'
+              ? 'bg-[#16274D] text-white shadow'
+              : 'text-[#5d6678] hover:text-[#16274D] hover:bg-white/50'
+          )}
+        >
+          Kitchen Queue
+        </button>
+        <button
+          onClick={() => setActiveTab('status')}
+          className={cx(
+            'flex-1 py-2 text-center rounded-[8px] text-[13px] font-semibold transition-all cursor-pointer border-none outline-none',
+            activeTab === 'status'
+              ? 'bg-[#16274D] text-white shadow'
+              : 'text-[#5d6678] hover:text-[#16274D] hover:bg-white/50'
+          )}
+        >
+          Patient Order Status
+        </button>
+      </div>
+
+      {activeTab === 'status' ? (
+        viewOrderStatus()
+      ) : visibleOrders.length === 0 ? (
+        <Card>
+          <div className="text-center py-[50px] px-5 text-[#5d6678]">
+            <ChefHat size={48} className="mx-auto text-[#9099ab]" />
+            <div className="font-semibold text-[#16274D] mt-3">No orders yet</div>
+            <div className="text-[#5d6678] mt-1">
+              Place an order in the patient kiosk and it lands here.
             </div>
-            <div className="text-[13px] text-[#5d6678] mt-0.5">
-              {db.orders.length} orders · {counts.Submitted} new, {counts.Printed} printing,{' '}
-              {counts.Delivered} delivered
+            <div className="mt-4 flex justify-center">
+              <Btn variant="primary" onClick={() => onNavigate('food-kiosk')}>
+                <Tablet size={16} />
+                Open patient kiosk
+              </Btn>
             </div>
           </div>
-          <div className="flex gap-2 flex-shrink-0">
-            <Btn variant="neutral" onClick={() => onNavigate('food-kiosk')}>
-              <Tablet size={16} />
-              Add an order
-            </Btn>
-          </div>
-        </div>
+        </Card>
+      ) : (
+        <>
+          {/* Header, Filters, and Bulk Actions Card with !overflow-visible to prevent dropdown clipping */}
+          <Card className="mb-5 !overflow-visible">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 px-5 py-[18px] border-b border-[#e7e9f0]">
+              <div className="min-w-0">
+                <div className="font-['Poppins',sans-serif] font-semibold text-[18px] text-[#16274D]">
+                  Kitchen queue
+                </div>
+                <div className="text-[13px] text-[#5d6678] mt-0.5">
+                  {allOrders.length} orders · {counts.Submitted} new, {counts.Printed} printing,{' '}
+                  {counts.Delivered} delivered
+                </div>
+              </div>
+              <div className="flex gap-2 flex-shrink-0">
+                <Btn variant="neutral" onClick={() => onNavigate('food-kiosk')}>
+                  <Tablet size={16} />
+                  Add an order
+                </Btn>
+              </div>
+            </div>
 
         {/* Multi-Filter Section */}
         <div className="px-5 py-4 bg-[#f8fafc] border-b border-[#e7e9f0] !overflow-visible">
@@ -568,6 +875,9 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
           );
         })}
       </div>
+
+      </>
+      )}
 
       {/* Print rendering area (hidden on screen, visible during browser print) */}
       <div id="print-area" className="hidden">
