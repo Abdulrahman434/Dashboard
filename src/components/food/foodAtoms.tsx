@@ -150,11 +150,20 @@ export function Note({ tone = 'info', icon, children, className }: any) {
 
 // ---- misc ------------------------------------------------------------------
 
-export function Metric({ label, value }: any) {
+export function Metric({ label, value, active, onClick, color }: any) {
   return (
-    <div className="bg-[#f7f8fb] rounded-[10px] px-[15px] py-[13px]">
-      <div className="text-[12.5px] text-[#5d6678]">{label}</div>
-      <div className="text-[23px] font-semibold text-[#16274D] mt-0.5 font-['Poppins',sans-serif]">{value}</div>
+    <div 
+      className={cx(
+        "rounded-[10px] px-[15px] py-[13px] transition-colors",
+        onClick ? 'cursor-pointer hover:bg-opacity-80' : '',
+        active && !color ? 'bg-[#16274D] text-white' : '',
+        !active ? 'bg-[#f7f8fb]' : ''
+      )}
+      style={active && color ? { backgroundColor: color, color: 'white' } : undefined}
+      onClick={onClick}
+    >
+      <div className={cx("text-[12.5px]", active ? 'text-white/80' : 'text-[#5d6678]')}>{label}</div>
+      <div className={cx("text-[23px] font-semibold mt-0.5 font-['Poppins',sans-serif]", active ? 'text-white' : 'text-[#16274D]')}>{value}</div>
     </div>
   );
 }
@@ -193,11 +202,12 @@ export function MiniSeg({ options, value, onChange }: any) {
 
 // ---- card + header ---------------------------------------------------------
 
-export function Card({ className, children, style }: any) {
+export function Card({ className, children, style, ...rest }: any) {
   return (
     <div
       className={cx('rounded-[14px] border border-[#e7e9f0] bg-white shadow-[0_1px_2px_rgba(22,39,77,.05),0_1px_3px_rgba(22,39,77,.04)] overflow-hidden', className)}
       style={style}
+      {...rest}
     >
       {children}
     </div>
@@ -271,10 +281,10 @@ export function ContextBar({ withDay, ctx, onCtx, db, diets, meals }: any) {
 }
 
 // Page shell: centered content with process tracker on top.
-export function FoodPage({ narrow, children }: any) {
+export function FoodPage({ children }: any) {
   return (
     <div className="p-6 font-['Poppins',sans-serif]">
-      <div className={cx('mx-auto w-full', narrow ? 'max-w-[760px]' : 'max-w-[1040px]')}>
+      <div className="mx-auto w-full max-w-full">
         <ResetDemoLink />
         {children}
       </div>

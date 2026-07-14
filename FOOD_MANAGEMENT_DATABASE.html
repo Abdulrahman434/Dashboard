@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CareInn — Food Management Database Specification</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root{
+    --navy:#16274D; --cyan:#4EBEE3; --cyan-soft:#eaf7fc; --cyan-ink:#1d7da3;
+    --ink:#19233a; --muted:#5d6678; --faint:#9099ab;
+    --line:#e7e9f0; --line2:#d6dae6; --bg:#f7f8fb; --white:#fff;
+    --ok:#1f9e75; --ok-bg:#e7f6f0; --warn:#b9770b; --warn-bg:#fbf1de;
+    --danger:#c0392b; --danger-bg:#fcebe9; --mono:'JetBrains Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0; font-family:'Poppins',system-ui,sans-serif; color:var(--ink);
+    background:var(--bg); font-size:14px; line-height:1.55;
+  }
+  a{color:var(--cyan-ink); text-decoration:none;}
+  a:hover{text-decoration:underline;}
+  .wrap{max-width:1080px; margin:0 auto; padding:0 24px 80px;}
+
+  /* ---- header ---- */
+  header.hero{
+    background:linear-gradient(135deg,var(--navy),#20366b);
+    color:#fff; padding:44px 0 40px; margin-bottom:0;
+  }
+  header.hero .wrap{padding-bottom:0;}
+  .eyebrow{font-size:12.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--cyan); font-weight:600;}
+  header.hero h1{font-size:31px; font-weight:600; margin:8px 0 6px;}
+  header.hero p{margin:0; color:#c7d0e4; max-width:720px; font-size:14.5px;}
+  .meta-row{display:flex; flex-wrap:wrap; gap:10px; margin-top:22px;}
+  .meta-pill{background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.16);
+    border-radius:9px; padding:7px 13px; font-size:12.5px; color:#e6ecf8;}
+  .meta-pill b{color:#fff; font-weight:600;}
+
+  /* ---- sticky nav ---- */
+  nav.toc{
+    position:sticky; top:0; z-index:20; background:rgba(247,248,251,.92);
+    backdrop-filter:blur(8px); border-bottom:1px solid var(--line);
+    padding:11px 0; margin-bottom:30px;
+  }
+  nav.toc .wrap{padding-bottom:0; display:flex; flex-wrap:wrap; gap:7px;}
+  nav.toc a{font-size:12.5px; color:var(--muted); padding:5px 11px; border-radius:20px;
+    border:1px solid var(--line2); background:#fff;}
+  nav.toc a:hover{border-color:var(--cyan); background:var(--cyan-soft); color:var(--cyan-ink); text-decoration:none;}
+
+  section{margin-top:14px;}
+  h2.sec{font-size:20px; color:var(--navy); font-weight:600; margin:38px 0 4px; display:flex; align-items:center; gap:11px;}
+  h2.sec .num{display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px;
+    background:var(--navy); color:#fff; border-radius:8px; font-size:14px; flex-shrink:0;}
+  .sec-sub{color:var(--muted); margin:0 0 16px 39px; font-size:13.5px;}
+
+  /* ---- intro callout ---- */
+  .note{display:flex; gap:12px; padding:15px 17px; border-radius:12px; font-size:13.5px; margin:16px 0;}
+  .note.info{background:var(--cyan-soft); color:var(--cyan-ink);}
+  .note.warn{background:var(--warn-bg); color:var(--warn);}
+  .note b{font-weight:600;}
+  .note .ico{font-size:17px; line-height:1.3;}
+
+  /* ---- table cards ---- */
+  .tbl{background:#fff; border:1px solid var(--line); border-radius:14px; overflow:hidden;
+    box-shadow:0 1px 2px rgba(22,39,77,.05),0 1px 3px rgba(22,39,77,.04); margin:18px 0;}
+  .tbl-head{padding:15px 20px; border-bottom:1px solid var(--line); display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;}
+  .tbl-head .tname{font-family:var(--mono); font-size:15px; font-weight:600; color:var(--navy);}
+  .tbl-head .tdesc{font-size:13px; color:var(--muted);}
+  .tbl-head .badge{margin-left:auto;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  thead th{background:var(--bg); text-align:left; padding:9px 14px; font-size:11px; letter-spacing:.05em;
+    text-transform:uppercase; color:var(--faint); font-weight:600; border-bottom:1px solid var(--line);}
+  tbody td{padding:9px 14px; border-bottom:1px solid var(--line); vertical-align:top;}
+  tbody tr:last-child td{border-bottom:0;}
+  tbody tr:hover{background:#fcfdfe;}
+  td.col{font-family:var(--mono); font-weight:500; color:var(--ink); white-space:nowrap;}
+  td.type{font-family:var(--mono); font-size:12px; color:var(--cyan-ink); white-space:nowrap;}
+  td.desc{color:var(--muted); font-size:12.8px;}
+  td.desc code{background:var(--bg); padding:1px 5px; border-radius:5px; font-family:var(--mono); font-size:11.5px; color:var(--navy);}
+
+  /* key tags */
+  .k{display:inline-block; font-family:var(--mono); font-size:10px; font-weight:600; padding:1px 6px;
+    border-radius:5px; margin-right:4px; letter-spacing:.03em; vertical-align:middle;}
+  .k.pk{background:#fef3d6; color:#8a6100;}
+  .k.fk{background:var(--cyan-soft); color:var(--cyan-ink);}
+  .k.uq{background:#efe7fb; color:#6b3fb0;}
+  .k.nn{background:#eef1f7; color:var(--muted);}
+  .k.idx{background:var(--ok-bg); color:var(--ok);}
+
+  .badge{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:500;
+    padding:3px 10px; border-radius:7px; white-space:nowrap;}
+  .badge.ref{background:#eef1f7; color:var(--muted);}
+  .badge.core{background:var(--cyan-soft); color:var(--cyan-ink);}
+  .badge.op{background:var(--ok-bg); color:var(--ok);}
+  .badge.jn{background:#efe7fb; color:#6b3fb0;}
+
+  /* ---- enum / seed chips ---- */
+  .chips{display:flex; flex-wrap:wrap; gap:7px; margin:4px 0 2px;}
+  .chip{font-family:var(--mono); font-size:12px; background:#fff; border:1px solid var(--line2);
+    border-radius:7px; padding:4px 10px; color:var(--ink);}
+  .chip b{color:var(--cyan-ink);}
+
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr;} nav.toc{position:static;}}
+
+  .legend{display:flex; flex-wrap:wrap; gap:14px; background:#fff; border:1px solid var(--line);
+    border-radius:12px; padding:14px 18px; font-size:12.5px; color:var(--muted); margin:16px 0;}
+  .legend span{display:inline-flex; align-items:center; gap:6px;}
+
+  /* map diagram */
+  .map{background:#fff; border:1px solid var(--line); border-radius:14px; padding:22px; margin:18px 0;
+    font-family:var(--mono); font-size:12.5px; line-height:1.9; color:var(--ink); overflow-x:auto;}
+  .map .r{color:var(--faint);}
+  .map .e{color:var(--navy); font-weight:600;}
+  .map .rel{color:var(--cyan-ink);}
+
+  code.inline{font-family:var(--mono); background:#fff; border:1px solid var(--line2);
+    padding:1px 6px; border-radius:5px; font-size:12px; color:var(--navy);}
+
+  footer{margin-top:56px; padding-top:22px; border-top:1px solid var(--line); color:var(--faint); font-size:12.5px;}
+
+  @media print{
+    nav.toc{display:none;} body{background:#fff;} header.hero{background:var(--navy)!important; -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    .tbl,.map,.legend{break-inside:avoid;} a{color:var(--ink);}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">CareInn · Developer Handoff</div>
+    <h1>Food Management — Database Specification</h1>
+    <p>Relational schema for the hospital in-patient meal-ordering module: diet-aware menus, per-day menu sets, patient meal orders, and the kitchen queue. Derived directly from the working prototype data model.</p>
+    <div class="meta-row">
+      <div class="meta-pill"><b>Version</b> 1.0</div>
+      <div class="meta-pill"><b>Tables</b> 20</div>
+      <div class="meta-pill"><b>Target</b> PostgreSQL / MySQL</div>
+      <div class="meta-pill"><b>Source</b> foodStore.ts prototype</div>
+      <div class="meta-pill"><b>Date</b> 2026-07-09</div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="wrap">
+    <a href="#overview">Overview</a>
+    <a href="#map">Relationship map</a>
+    <a href="#reference">1 · Reference data</a>
+    <a href="#catalog">2 · Dish catalog</a>
+    <a href="#menusets">3 · Menu sets</a>
+    <a href="#operations">4 · Patients &amp; orders</a>
+    <a href="#enums">Enums</a>
+    <a href="#seed">Seed data</a>
+    <a href="#notes">Implementation notes</a>
+  </div>
+</nav>
+
+<div class="wrap">
+
+  <!-- OVERVIEW -->
+  <section id="overview">
+    <h2 class="sec"><span class="num">i</span> Overview</h2>
+    <p class="sec-sub">How the data is organised and how to read this document.</p>
+
+    <div class="note info">
+      <span class="ico">◆</span>
+      <div>
+        The module lets a <b>hospital dietary team</b> build meal menus that adapt per <b>diet type</b> (Regular, Diabetic, Low sodium…), per <b>meal</b> (Breakfast/Lunch/Dinner), and per <b>day of week</b>. Patients (or nurses) place <b>meal orders</b> from the currently published menu, and orders flow through a <b>kitchen queue</b> (Submitted → Printed → Delivered).
+      </div>
+    </div>
+
+    <p>The 20 tables fall into four groups:</p>
+    <div class="chips">
+      <span class="chip"><b>1</b> · Reference data — allergens, meals, sections, diets, service window</span>
+      <span class="chip"><b>2</b> · Dish catalog — dishes + allergens, patient groups</span>
+      <span class="chip"><b>3</b> · Menu sets — sets, rules, per-day dish lists</span>
+      <span class="chip"><b>4</b> · Operations — patients, orders</span>
+    </div>
+
+    <div class="legend">
+      <span><span class="k pk">PK</span> primary key</span>
+      <span><span class="k fk">FK</span> foreign key</span>
+      <span><span class="k uq">UQ</span> unique</span>
+      <span><span class="k nn">NN</span> not null</span>
+      <span><span class="k idx">IX</span> indexed</span>
+      <span><span class="badge ref">reference</span></span>
+      <span><span class="badge core">core</span></span>
+      <span><span class="badge jn">junction</span></span>
+      <span><span class="badge op">operational</span></span>
+    </div>
+  </section>
+
+  <!-- MAP -->
+  <section id="map">
+    <h2 class="sec"><span class="num">◈</span> Relationship map</h2>
+    <p class="sec-sub">Cardinality of the main entities. <span style="font-family:var(--mono)">──&lt;</span> means "one-to-many".</p>
+    <div class="map">
+<span class="e">meals</span> <span class="rel">──&lt;</span> <span class="e">meal_sections</span> <span class="rel">&gt;──</span> <span class="e">menu_sections</span> <span class="r">(which categories appear in each meal)</span>
+<span class="e">menu_sections</span> <span class="rel">──&lt;</span> <span class="e">dishes</span> <span class="rel">──&lt;</span> <span class="e">dish_allergens</span> <span class="rel">&gt;──</span> <span class="e">allergens</span>
+
+<span class="e">menu_sets</span> <span class="rel">──&lt;</span> <span class="e">menu_set_diets</span>   <span class="rel">&gt;──</span> <span class="e">diets</span>
+<span class="e">menu_sets</span> <span class="rel">──&lt;</span> <span class="e">menu_set_meals</span>   <span class="rel">&gt;──</span> <span class="e">meals</span>
+<span class="e">menu_sets</span> <span class="rel">──&lt;</span> <span class="e">menu_set_groups</span>  <span class="rel">&gt;──</span> <span class="e">patient_groups</span>
+<span class="e">menu_sets</span> <span class="rel">──&lt;</span> <span class="e">menu_section_rules</span> <span class="r">(diet × meal × section → min/max/serve-to-all)</span>
+                <span class="e">menu_section_rules</span> <span class="rel">──&lt;</span> <span class="e">menu_day_slots</span> <span class="r">(one row per weekday: default dish)</span>
+                                  <span class="e">menu_day_slots</span> <span class="rel">──&lt;</span> <span class="e">menu_day_dishes</span> <span class="rel">&gt;──</span> <span class="e">dishes</span>
+
+<span class="e">diets</span> <span class="rel">──&lt;</span> <span class="e">patients</span> <span class="rel">──&lt;</span> <span class="e">patient_allergies</span> <span class="rel">&gt;──</span> <span class="e">allergens</span>
+<span class="e">patients</span> <span class="rel">──&lt;</span> <span class="e">orders</span> <span class="rel">──&lt;</span> <span class="e">order_lines</span> <span class="rel">&gt;──</span> <span class="e">dishes</span>
+    </div>
+    <div class="note warn">
+      <span class="ico">▲</span>
+      <div><b>Menu ownership.</b> In the prototype, <b>every menu set owns its own independent menu tree</b> — editing one set never touches another's dishes or rules. That is why <code class="inline">menu_section_rules</code> and its children hang off <code class="inline">menu_sets</code>, not off the global sections. Dishes, however, are shared from one catalog.</div>
+    </div>
+  </section>
+
+  <!-- 1. REFERENCE -->
+  <section id="reference">
+    <h2 class="sec"><span class="num">1</span> Reference data</h2>
+    <p class="sec-sub">Slow-changing lookup tables the dietary team configures once. All support English + Arabic labels.</p>
+
+    <!-- allergens -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">allergens</span><span class="tdesc">Allergen tags applied to dishes and patients.</span><span class="badge ref">reference</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">code</td><td class="type">varchar(40)</td><td><span class="k uq">UQ</span><span class="k nn">NN</span></td><td class="desc">Stable slug, e.g. <code>milk</code>, <code>gluten</code>, <code>peanut</code>.</td></tr>
+        <tr><td class="col">name_en</td><td class="type">varchar(80)</td><td><span class="k nn">NN</span></td><td class="desc">English label — e.g. "Milk", "Shellfish".</td></tr>
+        <tr><td class="col">name_ar</td><td class="type">varchar(80)</td><td></td><td class="desc">Arabic label (RTL).</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Display order.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- meals -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">meals</span><span class="tdesc">The daily meal services.</span><span class="badge ref">reference</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">code</td><td class="type">varchar(30)</td><td><span class="k uq">UQ</span><span class="k nn">NN</span></td><td class="desc"><code>breakfast</code> · <code>lunch</code> · <code>dinner</code>.</td></tr>
+        <tr><td class="col">name_en</td><td class="type">varchar(40)</td><td><span class="k nn">NN</span></td><td class="desc">Display name.</td></tr>
+        <tr><td class="col">name_ar</td><td class="type">varchar(40)</td><td></td><td class="desc">Arabic display name.</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Service order in the day.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- menu_sections -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">menu_sections</span><span class="tdesc">Menu categories, e.g. Cereals, Soup, Mains, Drinks.</span><span class="badge ref">reference</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">code</td><td class="type">varchar(40)</td><td><span class="k uq">UQ</span><span class="k nn">NN</span></td><td class="desc">Slug, e.g. <code>mains</code>, <code>side_orders</code>.</td></tr>
+        <tr><td class="col">name_en</td><td class="type">varchar(80)</td><td><span class="k nn">NN</span></td><td class="desc">English label.</td></tr>
+        <tr><td class="col">name_ar</td><td class="type">varchar(80)</td><td></td><td class="desc">Arabic label.</td></tr>
+        <tr><td class="col">is_active</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">Prototype <code>on</code> flag — hidden everywhere when false. Default <code>true</code>.</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Display order.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- meal_sections -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">meal_sections</span><span class="tdesc">Which sections belong to which meal (Breakfast has Cereals/Eggs…, Lunch has Soup/Salad/Mains…).</span><span class="badge jn">junction</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">meal_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>meals.id</code>.</td></tr>
+        <tr><td class="col">section_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>menu_sections.id</code>.</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Section order within that meal.</td></tr>
+        <tr><td colspan="4" class="desc"><span class="k uq">UQ</span> <code>(meal_id, section_id)</code></td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- diets -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">diets</span><span class="tdesc">Diet / therapeutic order types, mapped to HIS codes.</span><span class="badge ref">reference</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">code</td><td class="type">varchar(40)</td><td><span class="k uq">UQ</span><span class="k nn">NN</span></td><td class="desc">Slug, e.g. <code>diabetic</code>, <code>low_sodium</code>.</td></tr>
+        <tr><td class="col">name_en</td><td class="type">varchar(80)</td><td><span class="k nn">NN</span></td><td class="desc">English label.</td></tr>
+        <tr><td class="col">name_ar</td><td class="type">varchar(80)</td><td></td><td class="desc">Arabic label.</td></tr>
+        <tr><td class="col">his_code</td><td class="type">varchar(60)</td><td><span class="k idx">IX</span></td><td class="desc">Hospital Information System diet code, e.g. <code>577365-DM</code>. Used by the HIS integration to reconcile orders.</td></tr>
+        <tr><td class="col">is_regular</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">Marks the base/fallback diet (exactly one row = true). The menu falls back to this diet when a specific one has no entry.</td></tr>
+        <tr><td class="col">is_active</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">Prototype <code>on</code> flag. Default <code>true</code>.</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Display order.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- service_windows -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">service_windows</span><span class="tdesc">Ordering-window rules: when patients may place an order and for which service day.</span><span class="badge ref">reference</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">meal_id</td><td class="type">bigint</td><td><span class="k fk">FK</span></td><td class="desc">→ <code>meals.id</code>. <code>NULL</code> = applies to all meals when <code>same_for_all</code> is true.</td></tr>
+        <tr><td class="col">service_day</td><td class="type">varchar(30)</td><td><span class="k nn">NN</span></td><td class="desc">Which day the order is for — e.g. <code>Tomorrow only</code>, <code>Same day</code>. See enum.</td></tr>
+        <tr><td class="col">open_time</td><td class="type">time</td><td><span class="k nn">NN</span></td><td class="desc">Window opens, e.g. <code>16:00</code>.</td></tr>
+        <tr><td class="col">close_time</td><td class="type">time</td><td><span class="k nn">NN</span></td><td class="desc">Window closes, e.g. <code>20:00</code>.</td></tr>
+        <tr><td class="col">same_for_all</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">One window shared by all meals (prototype <code>sameAll</code>).</td></tr>
+        <tr><td class="col">auto_default</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">If the patient does not order, auto-assign the default dishes (<code>autoDefault</code>).</td></tr>
+        <tr><td class="col">allow_edit</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">Whether the patient may edit an order inside the window (<code>allowEdit</code>).</td></tr>
+      </tbody></table>
+    </div>
+  </section>
+
+  <!-- 2. CATALOG -->
+  <section id="catalog">
+    <h2 class="sec"><span class="num">2</span> Dish catalog</h2>
+    <p class="sec-sub">The shared library of dishes and the patient groups a menu set can target.</p>
+
+    <!-- dishes -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">dishes</span><span class="tdesc">Master dish library — every food item that can appear on a menu.</span><span class="badge core">core</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">name_en</td><td class="type">varchar(120)</td><td><span class="k nn">NN</span></td><td class="desc">English name, e.g. "Grilled chicken".</td></tr>
+        <tr><td class="col">name_ar</td><td class="type">varchar(120)</td><td></td><td class="desc">Arabic name, e.g. "دجاج مشوي".</td></tr>
+        <tr><td class="col">section_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>menu_sections.id</code> — the dish's category.</td></tr>
+        <tr><td class="col">image_url</td><td class="type">varchar(500)</td><td></td><td class="desc">Optional dish photo (the "Photo" upload in the dish form).</td></tr>
+        <tr><td class="col">is_active</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">Prototype <code>on</code> flag — retire a dish without deleting history. Default <code>true</code>.</td></tr>
+        <tr><td class="col">created_at</td><td class="type">timestamptz</td><td><span class="k nn">NN</span></td><td class="desc">Audit.</td></tr>
+        <tr><td class="col">updated_at</td><td class="type">timestamptz</td><td><span class="k nn">NN</span></td><td class="desc">Audit.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- dish_allergens -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">dish_allergens</span><span class="tdesc">Allergens contained in a dish (many-to-many).</span><span class="badge jn">junction</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">dish_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>dishes.id</code>.</td></tr>
+        <tr><td class="col">allergen_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>allergens.id</code>.</td></tr>
+        <tr><td colspan="4" class="desc">Composite <span class="k pk">PK</span> <code>(dish_id, allergen_id)</code>. Drives the allergy warning when a patient's allergens intersect a dish's.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- patient_groups -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">patient_groups</span><span class="tdesc">Audience segments a menu set targets — e.g. Kids, Adults, VIP.</span><span class="badge ref">reference</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">name</td><td class="type">varchar(60)</td><td><span class="k uq">UQ</span><span class="k nn">NN</span></td><td class="desc">Group name.</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Display order.</td></tr>
+      </tbody></table>
+    </div>
+  </section>
+
+  <!-- 3. MENU SETS -->
+  <section id="menusets">
+    <h2 class="sec"><span class="num">3</span> Menu sets</h2>
+    <p class="sec-sub">A menu set is a complete, self-contained menu (e.g. "Standard week", "Ramadan 2026"). Only the <b>Published</b> set is live. Each set carries its own rules and per-day dish lists.</p>
+
+    <!-- menu_sets -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">menu_sets</span><span class="tdesc">A named menu with a lifecycle status and an activation window.</span><span class="badge core">core</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">code</td><td class="type">varchar(60)</td><td><span class="k uq">UQ</span><span class="k nn">NN</span></td><td class="desc">Slug, e.g. <code>standard</code>, <code>ramadan</code>, <code>eid</code>.</td></tr>
+        <tr><td class="col">name</td><td class="type">varchar(120)</td><td><span class="k nn">NN</span></td><td class="desc">Display name, e.g. "Ramadan 2026".</td></tr>
+        <tr><td class="col">status</td><td class="type">varchar(20)</td><td><span class="k nn">NN</span><span class="k idx">IX</span></td><td class="desc">Lifecycle: <code>Draft</code> · <code>Scheduled</code> · <code>Published</code> · <code>Archived</code>. At most one <code>Published</code> at a time (the live set).</td></tr>
+        <tr><td class="col">subtitle</td><td class="type">varchar(240)</td><td></td><td class="desc">Human summary shown on the card, e.g. "8 diets · 3 meals · starts 16 Jun".</td></tr>
+        <tr><td class="col">active_from</td><td class="type">date</td><td></td><td class="desc">When the set becomes live (for Scheduled sets). Nullable.</td></tr>
+        <tr><td class="col">active_to</td><td class="type">date</td><td></td><td class="desc">Optional end date. Nullable = open-ended.</td></tr>
+        <tr><td class="col">created_at</td><td class="type">timestamptz</td><td><span class="k nn">NN</span></td><td class="desc">Audit.</td></tr>
+        <tr><td class="col">updated_at</td><td class="type">timestamptz</td><td><span class="k nn">NN</span></td><td class="desc">Drives the "edited 2d ago" label.</td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="grid2">
+      <!-- menu_set_diets -->
+      <div class="tbl">
+        <div class="tbl-head"><span class="tname">menu_set_diets</span><span class="badge jn">junction</span></div>
+        <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th></tr></thead><tbody>
+          <tr><td class="col">menu_set_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td></tr>
+          <tr><td class="col">diet_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td></tr>
+          <tr><td colspan="3" class="desc">Which diets this set covers (a "Kids only" set may skip Chemotherapy).</td></tr>
+        </tbody></table>
+      </div>
+      <!-- menu_set_meals -->
+      <div class="tbl">
+        <div class="tbl-head"><span class="tname">menu_set_meals</span><span class="badge jn">junction</span></div>
+        <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th></tr></thead><tbody>
+          <tr><td class="col">menu_set_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td></tr>
+          <tr><td class="col">meal_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td></tr>
+          <tr><td colspan="3" class="desc">Which meals this set covers.</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+
+    <!-- menu_set_groups -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">menu_set_groups</span><span class="tdesc">Patient groups this set is offered to.</span><span class="badge jn">junction</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">menu_set_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>menu_sets.id</code>.</td></tr>
+        <tr><td class="col">group_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>patient_groups.id</code>.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- menu_section_rules -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">menu_section_rules</span><span class="tdesc">The heart of the menu: one row per (set × diet × meal × section) with its selection rule.</span><span class="badge core">core</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">menu_set_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>menu_sets.id</code>.</td></tr>
+        <tr><td class="col">diet_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>diets.id</code>.</td></tr>
+        <tr><td class="col">meal_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>meals.id</code>.</td></tr>
+        <tr><td class="col">section_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>menu_sections.id</code>.</td></tr>
+        <tr><td class="col">min_select</td><td class="type">smallint</td><td><span class="k nn">NN</span></td><td class="desc">Minimum picks required. <code>0</code> = optional.</td></tr>
+        <tr><td class="col">max_select</td><td class="type">smallint</td><td></td><td class="desc">Maximum picks. <code>NULL</code> = unlimited (used with serve-to-all).</td></tr>
+        <tr><td class="col">serve_to_all</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">Prototype <code>forAll</code> — section is served to everyone, no choice (e.g. Drinks). Default <code>false</code>.</td></tr>
+        <tr><td colspan="4" class="desc"><span class="k uq">UQ</span> <code>(menu_set_id, diet_id, meal_id, section_id)</code>. Rule text is derived: min≥1 &amp; max=1 → "Choose one · required"; serve_to_all → "Served to everyone".</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- menu_day_slots -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">menu_day_slots</span><span class="tdesc">Per weekday breakdown of a rule — holds that day's default dish.</span><span class="badge core">core</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">rule_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>menu_section_rules.id</code>.</td></tr>
+        <tr><td class="col">day_of_week</td><td class="type">varchar(3)</td><td><span class="k nn">NN</span></td><td class="desc">One of <code>Sat Sun Mon Tue Wed Thu Fri</code> (week starts Saturday).</td></tr>
+        <tr><td class="col">default_dish_id</td><td class="type">bigint</td><td><span class="k fk">FK</span></td><td class="desc">→ <code>dishes.id</code>. The pre-selected default for that day (prototype <code>def</code>). <code>NULL</code> for serve-to-all sections.</td></tr>
+        <tr><td colspan="4" class="desc"><span class="k uq">UQ</span> <code>(rule_id, day_of_week)</code>.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- menu_day_dishes -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">menu_day_dishes</span><span class="tdesc">The actual dishes offered on a given weekday for that section.</span><span class="badge jn">junction</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">day_slot_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>menu_day_slots.id</code>.</td></tr>
+        <tr><td class="col">dish_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>dishes.id</code>.</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Order the dish appears in the list.</td></tr>
+        <tr><td colspan="4" class="desc">Composite <span class="k pk">PK</span> <code>(day_slot_id, dish_id)</code> — the menu item list a patient chooses from.</td></tr>
+      </tbody></table>
+    </div>
+  </section>
+
+  <!-- 4. OPERATIONS -->
+  <section id="operations">
+    <h2 class="sec"><span class="num">4</span> Patients &amp; orders</h2>
+    <p class="sec-sub">The operational side: admitted patients and the meal orders that feed the kitchen queue.</p>
+
+    <!-- patients -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">patients</span><span class="tdesc">Admitted patients with their prescribed diet and allergies.</span><span class="badge op">operational</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">mrn</td><td class="type">varchar(40)</td><td><span class="k uq">UQ</span><span class="k idx">IX</span></td><td class="desc">Medical record number / HIS patient id (recommended addition for HIS sync).</td></tr>
+        <tr><td class="col">full_name</td><td class="type">varchar(160)</td><td><span class="k nn">NN</span></td><td class="desc">Patient name.</td></tr>
+        <tr><td class="col">room</td><td class="type">varchar(20)</td><td><span class="k idx">IX</span></td><td class="desc">Room number, e.g. "312".</td></tr>
+        <tr><td class="col">bed</td><td class="type">varchar(10)</td><td></td><td class="desc">Bed letter, e.g. "A".</td></tr>
+        <tr><td class="col">diet_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>diets.id</code> — prescribed diet.</td></tr>
+        <tr><td class="col">is_admitted</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">Currently in-patient. Default <code>true</code>.</td></tr>
+        <tr><td class="col">created_at</td><td class="type">timestamptz</td><td><span class="k nn">NN</span></td><td class="desc">Audit.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- patient_allergies -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">patient_allergies</span><span class="tdesc">A patient's allergens (many-to-many).</span><span class="badge jn">junction</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">patient_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>patients.id</code>.</td></tr>
+        <tr><td class="col">allergen_id</td><td class="type">bigint</td><td><span class="k pk">PK</span><span class="k fk">FK</span></td><td class="desc">→ <code>allergens.id</code>.</td></tr>
+        <tr><td colspan="4" class="desc">Intersect with <code>dish_allergens</code> to flag unsafe dishes for that patient.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- orders -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">orders</span><span class="tdesc">A patient's meal order for a specific meal on a specific day.</span><span class="badge op">operational</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">order_code</td><td class="type">varchar(20)</td><td><span class="k uq">UQ</span><span class="k nn">NN</span></td><td class="desc">Human reference, e.g. <code>ORD-1042</code> (auto-incrementing).</td></tr>
+        <tr><td class="col">patient_id</td><td class="type">bigint</td><td><span class="k fk">FK</span></td><td class="desc">→ <code>patients.id</code>. Nullable so historical orders survive discharge.</td></tr>
+        <tr><td class="col">menu_set_id</td><td class="type">bigint</td><td><span class="k fk">FK</span></td><td class="desc">→ <code>menu_sets.id</code> — the set that was live when ordered.</td></tr>
+        <tr><td class="col">diet_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>diets.id</code> — diet at time of order.</td></tr>
+        <tr><td class="col">meal_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>meals.id</code>.</td></tr>
+        <tr><td class="col">patient_name</td><td class="type">varchar(160)</td><td><span class="k nn">NN</span></td><td class="desc">Snapshot of name (kitchen ticket stays correct after edits).</td></tr>
+        <tr><td class="col">room</td><td class="type">varchar(20)</td><td></td><td class="desc">Snapshot of room.</td></tr>
+        <tr><td class="col">bed</td><td class="type">varchar(10)</td><td></td><td class="desc">Snapshot of bed.</td></tr>
+        <tr><td class="col">service_date</td><td class="type">date</td><td><span class="k nn">NN</span><span class="k idx">IX</span></td><td class="desc">The day the meal is for.</td></tr>
+        <tr><td class="col">status</td><td class="type">varchar(20)</td><td><span class="k nn">NN</span><span class="k idx">IX</span></td><td class="desc">Kitchen lifecycle: <code>Submitted → Printed → Delivered</code> (plus <code>Cancelled</code>).</td></tr>
+        <tr><td class="col">is_auto</td><td class="type">boolean</td><td><span class="k nn">NN</span></td><td class="desc">True if generated by the auto-default rule rather than the patient. Default <code>false</code>.</td></tr>
+        <tr><td class="col">submitted_at</td><td class="type">timestamptz</td><td><span class="k nn">NN</span></td><td class="desc">When placed (drives the "11:40" time column).</td></tr>
+        <tr><td class="col">printed_at</td><td class="type">timestamptz</td><td></td><td class="desc">Set when the kitchen prints the ticket.</td></tr>
+        <tr><td class="col">delivered_at</td><td class="type">timestamptz</td><td></td><td class="desc">Set on delivery.</td></tr>
+      </tbody></table>
+    </div>
+
+    <!-- order_lines -->
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">order_lines</span><span class="tdesc">The individual dishes on an order (the "lines" array in the prototype).</span><span class="badge op">operational</span></div>
+      <table><thead><tr><th>Column</th><th>Type</th><th>Keys</th><th>Description</th></tr></thead><tbody>
+        <tr><td class="col">id</td><td class="type">bigserial</td><td><span class="k pk">PK</span></td><td class="desc">Surrogate key.</td></tr>
+        <tr><td class="col">order_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>orders.id</code> (cascade delete).</td></tr>
+        <tr><td class="col">section_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>menu_sections.id</code> — which section this pick satisfies.</td></tr>
+        <tr><td class="col">dish_id</td><td class="type">bigint</td><td><span class="k fk">FK</span><span class="k nn">NN</span></td><td class="desc">→ <code>dishes.id</code>.</td></tr>
+        <tr><td class="col">dish_name_snapshot</td><td class="type">varchar(120)</td><td><span class="k nn">NN</span></td><td class="desc">Name captured at order time (ticket integrity if a dish is later renamed).</td></tr>
+        <tr><td class="col">sort_order</td><td class="type">int</td><td></td><td class="desc">Line order on the ticket.</td></tr>
+      </tbody></table>
+    </div>
+  </section>
+
+  <!-- ENUMS -->
+  <section id="enums">
+    <h2 class="sec"><span class="num">≡</span> Enumerated values</h2>
+    <p class="sec-sub">Fixed value sets. Implement as native <code class="inline">ENUM</code>, a <code class="inline">CHECK</code> constraint, or small lookup tables.</p>
+
+    <div class="tbl"><div class="tbl-head"><span class="tname">menu_sets.status</span></div>
+      <div style="padding:14px 18px;"><div class="chips">
+        <span class="chip"><b>Draft</b> — being built, not visible</span>
+        <span class="chip"><b>Scheduled</b> — goes live on active_from</span>
+        <span class="chip"><b>Published</b> — the live set (max one)</span>
+        <span class="chip"><b>Archived</b> — retired</span>
+      </div></div>
+    </div>
+
+    <div class="tbl"><div class="tbl-head"><span class="tname">orders.status</span></div>
+      <div style="padding:14px 18px;"><div class="chips">
+        <span class="chip"><b>Submitted</b> — placed, in kitchen queue</span>
+        <span class="chip"><b>Printed</b> — ticket printed, being prepared</span>
+        <span class="chip"><b>Delivered</b> — served to patient</span>
+        <span class="chip"><b>Cancelled</b> — voided</span>
+      </div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="tbl"><div class="tbl-head"><span class="tname">day_of_week</span></div>
+        <div style="padding:14px 18px;"><div class="chips">
+          <span class="chip">Sat</span><span class="chip">Sun</span><span class="chip">Mon</span><span class="chip">Tue</span><span class="chip">Wed</span><span class="chip">Thu</span><span class="chip">Fri</span>
+        </div><p class="desc" style="margin:8px 0 0;">Week starts Saturday.</p></div>
+      </div>
+      <div class="tbl"><div class="tbl-head"><span class="tname">service_windows.service_day</span></div>
+        <div style="padding:14px 18px;"><div class="chips">
+          <span class="chip"><b>Tomorrow only</b></span><span class="chip">Same day</span><span class="chip">Next 2 days</span>
+        </div><p class="desc" style="margin:8px 0 0;">Extend as ordering policy requires.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SEED -->
+  <section id="seed">
+    <h2 class="sec"><span class="num">◇</span> Seed data</h2>
+    <p class="sec-sub">The reference values shipped in the prototype — a good starting fixture.</p>
+
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">allergens</span> <span class="tdesc">9 rows</span></div>
+      <div style="padding:14px 18px;"><div class="chips">
+        <span class="chip">Milk · حليب</span><span class="chip">Egg · بيض</span><span class="chip">Gluten · جلوتين</span>
+        <span class="chip">Nuts · مكسرات</span><span class="chip">Fish · سمك</span><span class="chip">Shellfish · محار</span>
+        <span class="chip">Soy · صويا</span><span class="chip">Sesame · سمسم</span><span class="chip">Peanut · فول سوداني</span>
+      </div></div>
+    </div>
+
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">diets</span> <span class="tdesc">8 rows · with HIS codes</span></div>
+      <table><thead><tr><th>English</th><th>Arabic</th><th>HIS code</th><th>Notes</th></tr></thead><tbody>
+        <tr><td class="col">Regular</td><td>عادي</td><td class="type">577365</td><td class="desc">Base diet (is_regular = true)</td></tr>
+        <tr><td class="col">Diabetic</td><td>سكري</td><td class="type">577365-DM</td><td class="desc">Desserts limited to sugar-free / fruit</td></tr>
+        <tr><td class="col">Low sodium</td><td>قليل الصوديوم</td><td class="type">577365-LS</td><td class="desc"></td></tr>
+        <tr><td class="col">Low potassium</td><td>قليل البوتاسيوم</td><td class="type">577365-LK</td><td class="desc"></td></tr>
+        <tr><td class="col">Soft diet</td><td>طعام طري</td><td class="type">577365-SOFT</td><td class="desc"></td></tr>
+        <tr><td class="col">Chemotherapy</td><td>علاج كيماوي</td><td class="type">577365-CH</td><td class="desc"></td></tr>
+        <tr><td class="col">Kids</td><td>أطفال</td><td class="type">577365-KD</td><td class="desc"></td></tr>
+        <tr><td class="col">OB / maternity</td><td>ولادة</td><td class="type">577365-OB</td><td class="desc"></td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="grid2">
+      <div class="tbl">
+        <div class="tbl-head"><span class="tname">meal_sections</span> <span class="tdesc">Breakfast</span></div>
+        <div style="padding:14px 18px;"><div class="chips">
+          <span class="chip">Cereals</span><span class="chip">Eggs</span><span class="chip">Baked breads</span><span class="chip">Dairy</span><span class="chip">Drinks</span>
+        </div></div>
+      </div>
+      <div class="tbl">
+        <div class="tbl-head"><span class="tname">meal_sections</span> <span class="tdesc">Lunch &amp; Dinner</span></div>
+        <div style="padding:14px 18px;"><div class="chips">
+          <span class="chip">Soup</span><span class="chip">Salad</span><span class="chip">Mains</span><span class="chip">Side orders</span><span class="chip">Dessert</span><span class="chip">Drinks</span>
+        </div></div>
+      </div>
+    </div>
+
+    <div class="tbl">
+      <div class="tbl-head"><span class="tname">menu_sets</span> <span class="tdesc">3 rows</span></div>
+      <table><thead><tr><th>Name</th><th>Status</th><th>Groups</th><th>Active from</th></tr></thead><tbody>
+        <tr><td class="col">Standard week</td><td><span class="badge op">Published</span></td><td class="desc">Kids, Adults, VIP</td><td class="desc">2026-06-01</td></tr>
+        <tr><td class="col">Ramadan 2026</td><td><span class="badge ref">Draft</span></td><td class="desc">Kids, Adults, VIP</td><td class="desc">—</td></tr>
+        <tr><td class="col">Eid special</td><td><span class="badge core">Scheduled</span></td><td class="desc">Kids, Adults, VIP</td><td class="desc">2026-06-16</td></tr>
+      </tbody></table>
+    </div>
+
+    <div class="note info">
+      <span class="ico">◆</span>
+      <div>The prototype also ships <b>39 dishes</b> across the 10 sections (Cornflakes, Grilled chicken, Lentil soup, Water…) each with Arabic names and allergen tags, plus <b>4 sample patients</b> and <b>2 sample orders</b>. Full values are in <code class="inline">src/components/food/foodStore.ts → SEED()</code> if you want to import them verbatim.</div>
+    </div>
+  </section>
+
+  <!-- NOTES -->
+  <section id="notes">
+    <h2 class="sec"><span class="num">✦</span> Implementation notes</h2>
+    <p class="sec-sub">Guidance for turning this into a production backend.</p>
+
+    <div class="tbl"><div style="padding:6px 4px;">
+      <table><tbody>
+        <tr><td class="col" style="width:210px;">Snapshots on orders</td><td class="desc">Order rows copy <code>patient_name</code>, <code>room</code>, <code>bed</code> and each line's <code>dish_name_snapshot</code> so a printed kitchen ticket never changes if the patient is discharged or a dish is renamed. Keep the FKs too, for reporting.</td></tr>
+        <tr><td class="col">One live set</td><td class="desc">Enforce "at most one Published set" with a partial unique index: <code>CREATE UNIQUE INDEX one_published ON menu_sets ((status)) WHERE status='Published';</code></td></tr>
+        <tr><td class="col">Menu volume</td><td class="desc">Rules explode as set × diet × meal × section × 7 days. One full set ≈ 8 diets × ~2.4 meals-with-sections ≈ hundreds of rule rows and thousands of <code>menu_day_dishes</code>. All indexed by <code>menu_set_id</code>; fine for Postgres/MySQL.</td></tr>
+        <tr><td class="col">Regular-diet fallback</td><td class="desc">The prototype falls back to the Regular diet's menu when a specific diet has no rows for a meal. Reproduce this in the read query (coalesce to <code>is_regular</code> diet), not by duplicating data.</td></tr>
+        <tr><td class="col">Allergy safety</td><td class="desc">Flag a dish as unsafe when <code>dish_allergens</code> ∩ <code>patient_allergies</code> ≠ ∅. Consider a DB view for this.</td></tr>
+        <tr><td class="col">i18n</td><td class="desc">Every catalog/reference table carries <code>name_en</code> + <code>name_ar</code>. Arabic is RTL — store as UTF-8, no transformation needed.</td></tr>
+        <tr><td class="col">HIS integration</td><td class="desc"><code>diets.his_code</code> and the suggested <code>patients.mrn</code> are the join keys to the Hospital Information System for diet orders and patient identity.</td></tr>
+        <tr><td class="col">Soft deletes</td><td class="desc"><code>is_active</code> on dishes/sections/diets mirrors the prototype <code>on</code> toggles — hide instead of deleting to preserve order history.</td></tr>
+      </tbody></table>
+    </div></div>
+  </section>
+
+  <footer>
+    CareInn Food Management · Database Specification v1.0 · Generated 2026-07-09 · Source of truth: <code class="inline">src/components/food/foodStore.ts</code><br/>
+    Tip: open in a browser and use <b>Print → Save as PDF</b> to share a portable copy with your developer.
+  </footer>
+
+</div>
+</body>
+</html>

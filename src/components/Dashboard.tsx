@@ -52,6 +52,11 @@ import FoodLibraryPage from './food/FoodLibraryPage';
 import MenuSetsPage from './food/MenuSetsPage';
 import PatientKioskPage from './food/PatientKioskPage';
 import KitchenPage from './food/KitchenPage';
+import CareSuiteLibraryPage from './caresuite/CareSuiteLibraryPage';
+import CareSuiteWorkflowPage from './caresuite/CareSuiteWorkflowPage';
+import CareSuiteTeamsPage from './caresuite/CareSuiteTeamsPage';
+import CareSuiteDashboardPage from './caresuite/CareSuiteDashboardPage';
+import TeamCategoriesPage from './caresuite/TeamCategoriesPage';
 import { MultiSelectDropdown } from './UnifiedDropdown';
 import { nurseStationService } from '../services/nurseStationService';
 
@@ -125,6 +130,14 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       );
     }
 
+    // CareSuite Dashboard routing — cs-dashboard:admin is the fixed "sees
+    // everything" view; cs-dashboard:<teamId> is one dynamic entry per team
+    // created in Teams Assignment (mirrors the ns: pattern above).
+    if (activeItem.startsWith('cs-dashboard:')) {
+      const scope = activeItem.slice('cs-dashboard:'.length);
+      return <CareSuiteDashboardPage scope={scope} onNavigate={handleNavigation} />;
+    }
+
     switch (activeItem) {
       case 'dashboard':
         return <DashboardHome onNavigate={handleNavigation} />;
@@ -153,6 +166,18 @@ export default function Dashboard({ onLogout }: DashboardProps) {
 
       case 'food-kitchen':
         return <KitchenPage onNavigate={handleNavigation} />;
+
+      case 'cs-library':
+        return <CareSuiteLibraryPage onNavigate={handleNavigation} />;
+
+      case 'cs-workflow':
+        return <CareSuiteWorkflowPage onNavigate={handleNavigation} />;
+
+      case 'cs-teams':
+        return <CareSuiteTeamsPage onNavigate={handleNavigation} />;
+
+      case 'team-categories':
+        return <TeamCategoriesPage />;
 
       // Site Configuration - Main
       case 'asset-manager':

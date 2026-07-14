@@ -160,7 +160,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
         date: k.day,
         time,
         status: 'Submitted',
-        lines,
+        lines: lines.map((l) => [l.section, l.name]),
       });
     });
     setKiosk((kk) => ({ ...kk, stage: 'done' }));

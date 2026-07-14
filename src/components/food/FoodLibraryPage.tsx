@@ -259,97 +259,100 @@ export default function FoodLibraryPage({
     );
 
   const viewDishes = (
-    <Card>
-      <CardHead
-        title="Menu Dishes"
-        sub={`${db.dishes.length} dishes in the library`}
-        right={
-          <>
-            <Btn variant="neutral" onClick={() => setImportOpen(true)}>
-              <Upload size={16} />
-              Import
-            </Btn>
-            <Btn variant="primary" onClick={() => openDish(null)}>
-              <Plus size={16} />
-              Add dish
-            </Btn>
-          </>
-        }
-      />
-      <div className="px-5 pt-4">
-        <div className="flex items-center gap-2 h-[38px] px-3 border border-[#e7e9f0] rounded-[10px] focus-within:border-[#4EBEE3] transition-colors">
-          <Search size={16} className="text-[#9099ab] flex-shrink-0" />
-          <input
-            value={dishSearch}
-            onChange={(e) => setDishSearch(e.target.value)}
-            placeholder="Search dishes by name"
-            className="flex-1 bg-transparent outline-none text-[13.5px] text-[#19233a] placeholder:text-[#9099ab]"
-          />
-          {dishSearch && (
-            <button
-              onClick={() => setDishSearch('')}
-              className="text-[#9099ab] hover:text-[#5d6678] cursor-pointer flex-shrink-0"
-              title="Clear"
-            >
-              <X size={15} />
-            </button>
-          )}
+    <>
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-[24px] font-semibold text-[#16274D] font-['Poppins',sans-serif]">Menu Dishes</h1>
+          <div className="text-[14px] text-[#6B7280]">{db.dishes.length} dishes in the library</div>
+        </div>
+        <div className="flex gap-2">
+          <Btn variant="neutral" onClick={() => setImportOpen(true)}>
+            <Upload size={16} className="text-[#5d6678]" />
+            Import
+          </Btn>
+          <Btn variant="primary" onClick={() => openDish(null)}>
+            <Plus size={16} />
+            Add dish
+          </Btn>
         </div>
       </div>
 
-      <div className="mt-4">
-        {dishRows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center py-14 px-5">
-            <div className="w-14 h-14 rounded-full bg-[#f7f8fb] flex items-center justify-center text-[#9099ab] mb-3">
-              <Salad size={26} />
-            </div>
-            <div className="font-semibold text-[#16274D]">
-              {q ? 'No dishes match your search' : 'No dishes yet'}
-            </div>
-            <div className="text-[13px] text-[#5d6678] mt-1">
-              {q ? 'Try a different name, or clear the search.' : 'Add your first dish to the library.'}
-            </div>
+      <Card>
+        <div className="px-5 pt-4">
+          <div className="flex items-center gap-2 h-[38px] px-3 border border-[#e7e9f0] rounded-[10px] focus-within:border-[#4EBEE3] transition-colors">
+            <Search size={16} className="text-[#9099ab] flex-shrink-0" />
+            <input
+              value={dishSearch}
+              onChange={(e) => setDishSearch(e.target.value)}
+              placeholder="Search dishes by name"
+              className="flex-1 bg-transparent outline-none text-[13.5px] text-[#19233a] placeholder:text-[#9099ab]"
+            />
+            {dishSearch && (
+              <button
+                onClick={() => setDishSearch('')}
+                className="text-[#9099ab] hover:text-[#5d6678] cursor-pointer flex-shrink-0"
+                title="Clear"
+              >
+                <X size={15} />
+              </button>
+            )}
           </div>
-        ) : (
-          dishRows.map(({ dish, i }: any) => (
-            <div
-              key={i}
-              onClick={() => openDish(i)}
-              className={cx(rowCls, 'cursor-pointer hover:bg-[#f7f8fb] transition-colors')}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="font-medium text-[#19233a] truncate">{dish.en}</div>
-                {dish.ar ? (
-                  <div className="text-[13px] text-[#9099ab] truncate" dir="rtl">
-                    {dish.ar}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-[13px] text-[#b9770b] mt-0.5">
-                    <AlertTriangle size={13} />
-                    Arabic name missing
-                  </div>
-                )}
+        </div>
+
+        <div className="mt-4">
+          {dishRows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center py-14 px-5">
+              <div className="w-14 h-14 rounded-full bg-[#f7f8fb] flex items-center justify-center text-[#9099ab] mb-3">
+                <Salad size={26} />
               </div>
-              {dish.allergens && dish.allergens.length > 0 && (
-                <span className="text-[12px] px-[9px] py-[3px] rounded-[7px] bg-[#fbf1de] text-[#b9770b] whitespace-nowrap">
-                  {dish.allergens.join(' · ')}
-                </span>
-              )}
-              <Tag>{dish.section}</Tag>
-              <Toggle
-                on={dish.on}
-                onClick={(e: any) => {
-                  e.stopPropagation();
-                  updateFood((d: any) => {
-                    d.dishes[i].on = !d.dishes[i].on;
-                  });
-                }}
-              />
+              <div className="font-semibold text-[#16274D]">
+                {q ? 'No dishes match your search' : 'No dishes yet'}
+              </div>
+              <div className="text-[13px] text-[#5d6678] mt-1">
+                {q ? 'Try a different name, or clear the search.' : 'Add your first dish to the library.'}
+              </div>
             </div>
-          ))
-        )}
-      </div>
-    </Card>
+          ) : (
+            dishRows.map(({ dish, i }: any) => (
+              <div
+                key={i}
+                onClick={() => openDish(i)}
+                className={cx(rowCls, 'cursor-pointer hover:bg-[#f7f8fb] transition-colors')}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-[#19233a] truncate">{dish.en}</div>
+                  {dish.ar ? (
+                    <div className="text-[13px] text-[#9099ab] truncate" dir="rtl">
+                      {dish.ar}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 text-[13px] text-[#b9770b] mt-0.5">
+                      <AlertTriangle size={13} />
+                      Arabic name missing
+                    </div>
+                  )}
+                </div>
+                {dish.allergens && dish.allergens.length > 0 && (
+                  <span className="text-[12px] px-[9px] py-[3px] rounded-[7px] bg-[#fbf1de] text-[#b9770b] whitespace-nowrap">
+                    {dish.allergens.join(' · ')}
+                  </span>
+                )}
+                <Tag>{dish.section}</Tag>
+                <Toggle
+                  on={dish.on}
+                  onClick={(e: any) => {
+                    e.stopPropagation();
+                    updateFood((d: any) => {
+                      d.dishes[i].on = !d.dishes[i].on;
+                    });
+                  }}
+                />
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+    </>
   );
 
   // ==========================================================================

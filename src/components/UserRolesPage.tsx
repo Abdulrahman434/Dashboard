@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserCircle, Plus, Trash2, X, Edit2, Search, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { SingleSelectDropdown } from './UnifiedDropdown';
 import { useNurseStations } from '../hooks/useNurseStations';
+import { useCareSuiteTeams } from '../hooks/useCareSuite';
 
 interface Permission {
   id: string;
@@ -20,6 +21,7 @@ interface Role {
   assignedUsers: number;
   permissions: string[]; // Array of permission IDs
   nurseStationId?: string; // Scopes a nurse role to ONE Nurse Station ward
+  careSuiteTeamId?: string; // Scopes a role to ONE CareSuite team
 }
 
 const PERMISSION_MODULES: PermissionModule[] = [
@@ -221,6 +223,8 @@ export function UserRolesPage() {
 
   // Nurse Stations — sourced from the same store as the sidebar + Manage tab
   const { stations } = useNurseStations();
+  // CareSuite Teams — sourced from the same store as the sidebar + Teams Assignment
+  const { teams: careSuiteTeams } = useCareSuiteTeams();
 
   // Panel form state
   const [roleName, setRoleName] = useState('');
@@ -228,6 +232,7 @@ export function UserRolesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedModules, setExpandedModules] = useState<string[]>([]);
   const [nurseStationId, setNurseStationId] = useState('');
+  const [careSuiteTeamId, setCareSuiteTeamId] = useState('');
 
   const handleAddRole = () => {
     setEditingRole(null);
@@ -236,6 +241,7 @@ export function UserRolesPage() {
     setSearchQuery('');
     setExpandedModules([]);
     setNurseStationId('');
+    setCareSuiteTeamId('');
     setIsPanelOpen(true);
   };
 
@@ -246,6 +252,7 @@ export function UserRolesPage() {
     setSearchQuery('');
     setExpandedModules([]);
     setNurseStationId(role.nurseStationId ?? '');
+    setCareSuiteTeamId(role.careSuiteTeamId ?? '');
     setIsPanelOpen(true);
   };
 
@@ -256,7 +263,7 @@ export function UserRolesPage() {
       // Update existing role
       setRoles(roles.map(role =>
         role.id === editingRole.id
-          ? { ...role, name: roleName, permissions: selectedPermissions, nurseStationId: nurseStationId || undefined }
+          ? { ...role, name: roleName, permissions: selectedPermissions, nurseStationId: nurseStationId || undefined, careSuiteTeamId: careSuiteTeamId || undefined }
           : role
       ));
     } else {
@@ -266,7 +273,8 @@ export function UserRolesPage() {
         name: roleName,
         assignedUsers: 0,
         permissions: selectedPermissions,
-        nurseStationId: nurseStationId || undefined
+        nurseStationId: nurseStationId || undefined,
+        careSuiteTeamId: careSuiteTeamId || undefined
       };
       setRoles([...roles, newRole]);
     }
@@ -470,6 +478,9 @@ export function UserRolesPage() {
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
                     Nurse Station
                   </th>
+                  <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
+                    CareSuite Team
+                  </th>
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif] w-32">
                     Actions
                   </th>
@@ -504,6 +515,11 @@ export function UserRolesPage() {
                     <td className="px-6 py-4">
                       <span className="text-[14px] text-[#0f1729] font-['Poppins',sans-serif]">
                         {stations.find(s => s.id === role.nurseStationId)?.name ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[14px] text-[#0f1729] font-['Poppins',sans-serif]">
+                        {careSuiteTeams.find(t => t.id === role.careSuiteTeamId)?.name ?? '—'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -604,6 +620,26 @@ export function UserRolesPage() {
                       />
                       <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-1">
                         Scope this role to a single Nurse Station ward (optional).
+                      </p>
+                    </div>
+
+                    {/* CareSuite Team — scope a role to ONE team, similar to Nurse Station */}
+                    <div>
+                      <label className="block text-[13px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-1.5">
+                        CareSuite Team
+                      </label>
+                      <SingleSelectDropdown
+                        options={[
+                          { value: '', label: 'None (not scoped to a team)' },
+                          ...careSuiteTeams.map((t) => ({ value: t.id, label: t.name })),
+                        ]}
+                        value={careSuiteTeamId}
+                        onChange={setCareSuiteTeamId}
+                        placeholder={careSuiteTeams.length ? 'Select a CareSuite team' : 'No teams created yet'}
+                        disabled={careSuiteTeams.length === 0}
+                      />
+                      <p className="text-[11px] text-gray-500 font-['Poppins',sans-serif] mt-1">
+                        Scope this role to a single CareSuite team's dashboard (optional).
                       </p>
                     </div>
 

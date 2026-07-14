@@ -1,17 +1,347 @@
-import { useState } from 'react';
-import { ChefHat, Tablet, Printer, Check, CheckCheck, User, Clock, Utensils, CheckCircle2, Stethoscope } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { ChefHat, Tablet, Printer, Check, CheckCheck, User, Clock, Utensils, CheckCircle2, Stethoscope, Edit, BedDouble, Gem, Crown, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, updateFood } from './foodStore';
+import { useFood, updateFood, resolve, MEAL_SECTIONS, rulesFor, nextOrderId } from './foodStore';
 import { cx, Btn, Badge, Card, FoodPage } from './foodAtoms';
 import { MultiSelectDropdown } from '../UnifiedDropdown';
+import { nurseStationService } from '../../services/nurseStationService';
 
-export default function KitchenPage({ onNavigate }: { onNavigate: (route: string) => void }) {
+interface KitchenCardProps {
+  roomNumber: string;
+  type: string;
+  headerColor: string;
+  icon: any;
+  order: any | null;
+  onEdit: () => void;
+  onPrint: () => void;
+  onDeliver: () => void;
+}
+
+function KitchenCard({
+  roomNumber,
+  type,
+  headerColor,
+  icon: Icon,
+  order,
+  onEdit,
+  onPrint,
+  onDeliver,
+}: KitchenCardProps) {
+  const getItemsSummary = () => {
+    if (!order || !order.lines) return '';
+    return order.lines
+      .map((l: any) => {
+        if (Array.isArray(l)) return l[1];
+        if (l && typeof l === 'object') return l.name;
+        return '';
+      })
+      .filter(Boolean)
+      .join(', ');
+  };
+
+  const getStatusStyle = () => {
+    if (!order) return { text: '#DF4354', bg: '#FEF2F2', label: 'No Order' };
+    if (order.status === 'Submitted') return { text: '#b9770b', bg: '#fbf1de', label: 'Submitted' };
+    if (order.status === 'Printed') return { text: '#0a84b1', bg: '#eaf5fa', label: 'Printed' };
+    if (order.status === 'Delivered') return { text: '#1f9e75', bg: '#e7f6f0', label: 'Delivered' };
+    return { text: '#DF4354', bg: '#FEF2F2', label: order.status };
+  };
+
+  const status = getStatusStyle();
+
+  return (
+    <div
+      onClick={onEdit}
+      className="text-left rounded-lg overflow-hidden shadow-sm border border-gray-200 bg-white flex flex-col justify-between min-h-[175px]
+                 transition hover:shadow-md hover:scale-[1.01] cursor-pointer select-none"
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-3 py-1.5 text-white font-['Poppins',sans-serif] shrink-0"
+        style={{ background: headerColor }}
+      >
+        <span className="text-[11px] font-bold tracking-wide uppercase opacity-95">{type}</span>
+        <Icon size={13} strokeWidth={2.5} />
+      </div>
+
+      {/* Body */}
+      <div className="p-3 flex-1 flex flex-col justify-between bg-white font-['Poppins',sans-serif]">
+        <div>
+          {/* Room Number and Status Badge */}
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[18px] font-bold text-[#18355E] tracking-tight">{roomNumber}</span>
+            <span 
+              className="font-bold px-2 py-0.5 rounded text-[9px] tracking-wide uppercase"
+              style={{ color: status.text, backgroundColor: status.bg }}
+            >
+              {status.label}
+            </span>
+          </div>
+
+          {/* Details */}
+          {order ? (
+            <div className="text-[11px] leading-[1.4] text-[#637381] space-y-1 mt-1 font-['Poppins',sans-serif]">
+              <div className="flex items-center gap-1">
+                <span className="font-normal text-gray-400">Patient:</span>
+                <span className="font-semibold text-gray-800 truncate block max-w-[120px]">{order.name}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-normal text-gray-400">Diet:</span>
+                <span className="font-semibold text-gray-800">{order.diet}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="font-normal text-gray-400">Meal:</span>
+                <span className="font-semibold text-gray-800">{order.meal}</span>
+              </div>
+              <div className="flex items-start gap-1">
+                <span className="font-normal text-gray-400 shrink-0">Items:</span>
+                <span className="font-semibold text-gray-800 line-clamp-2" title={getItemsSummary()}>
+                  {getItemsSummary() || <span className="italic text-gray-400 font-normal">None selected</span>}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] leading-[1.4] text-[#637381] italic py-2">
+              Waiting for order selection
+            </div>
+          )}
+        </div>
+
+        {/* Actions Footer */}
+        {order && (
+          <div className="mt-3 flex items-center justify-end gap-2 text-[10.5px] font-bold border-t border-gray-100 pt-2 shrink-0 font-['Poppins',sans-serif]">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="text-[#0a84b1] hover:underline cursor-pointer border-0 bg-transparent p-0"
+            >
+              Edit
+            </button>
+            <span className="text-gray-300">·</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPrint();
+              }}
+              className="text-[#0a84b1] hover:underline cursor-pointer border-0 bg-transparent p-0"
+            >
+              Print
+            </button>
+            {order.status === 'Printed' && (
+              <>
+                <span className="text-gray-300">·</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeliver();
+                  }}
+                  className="text-green-600 hover:underline cursor-pointer border-0 bg-transparent p-0"
+                >
+                  Deliver
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+export default function KitchenPage({
+  onNavigate,
+  restrictToWardId,
+}: {
+  onNavigate: (route: string) => void;
+  restrictToWardId?: string;
+}) {
   const db = useFood();
+  const station = restrictToWardId ? nurseStationService.get(restrictToWardId) : null;
+
+  const [editingOrder, setEditingOrder] = useState<any | null>(null);
+  const [editSelections, setEditSelections] = useState<Record<string, string[]>>({});
+
+  const startEdit = (order: any) => {
+    setEditingOrder(order);
+    const initialSel: Record<string, string[]> = {};
+    (order.lines || []).forEach((line: any) => {
+      const [sec, dishName] = Array.isArray(line) ? [line[0], line[1]] : [line.section, line.name];
+      if (!initialSel[sec]) initialSel[sec] = [];
+      if (!initialSel[sec].includes(dishName)) {
+        initialSel[sec].push(dishName);
+      }
+    });
+    setEditSelections(initialSel);
+  };
+
+  const handleToggleDish = (section: string, dishName: string, max: number) => {
+    setEditSelections(prev => {
+      const current = prev[section] ? [...prev[section]] : [];
+      if (current.includes(dishName)) {
+        return {
+          ...prev,
+          [section]: current.filter(x => x !== dishName)
+        };
+      } else {
+        if (max === 1) {
+          return {
+            ...prev,
+            [section]: [dishName]
+          };
+        } else {
+          return {
+            ...prev,
+            [section]: [...current, dishName]
+          };
+        }
+      }
+    });
+  };
+
+  const saveEdit = () => {
+    if (!editingOrder) return;
+    
+    const newLines: [string, string][] = [];
+    Object.entries(editSelections).forEach(([sec, dishes]) => {
+      dishes.forEach(dish => {
+        newLines.push([sec, dish]);
+      });
+    });
+
+    updateFood((draft: any) => {
+      let o = draft.orders.find((ord: any) => ord.id === editingOrder.id);
+      if (!o) {
+        draft.orders.unshift({
+          ...editingOrder,
+          id: editingOrder.id.startsWith('DEF-') ? nextOrderId() : editingOrder.id,
+          isDefaultAutoFill: false,
+          lines: newLines
+        });
+      } else {
+        o.lines = newLines;
+      }
+    });
+
+    toast.success('Order updated successfully');
+    setEditingOrder(null);
+  };
+
+  const renderEditModal = () => {
+    if (!editingOrder) return null;
+
+    const sections = MEAL_SECTIONS[editingOrder.meal] || [];
+
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+        <div className="bg-white rounded-[20px] max-w-2xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-gray-100 overflow-hidden font-sans">
+          {/* Header */}
+          <div className="bg-[#16274D] text-white p-5 flex items-center justify-between">
+            <div>
+              <h3 className="font-['Poppins',sans-serif] font-bold text-[18px]">
+                Edit Order #{editingOrder.id.replace('ORD-', '')}
+              </h3>
+              <p className="text-[12.5px] text-[#4EBEE3] mt-0.5">
+                For {editingOrder.name} · Room {editingOrder.room}{editingOrder.bed && ` / Bed ${editingOrder.bed}`} · Diet: {editingOrder.diet} · {editingOrder.meal}
+              </p>
+            </div>
+            <button
+              onClick={() => setEditingOrder(null)}
+              className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition-colors cursor-pointer border-0 outline-none"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Scrollable Body */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {sections.map((section: string) => {
+              const rules = rulesFor(section, editingOrder.diet);
+              const max = rules.forAll ? 99 : (rules.max || 1);
+              const isSelectedToEveryone = !!rules.forAll;
+              
+              const sectionDishes = db.dishes.filter(
+                (d: any) => d.section === section && d.on
+              );
+
+              const selectedInSec = editSelections[section] || [];
+
+              return (
+                <div key={section} className="border-b border-gray-100 pb-5 last:border-0 last:pb-0">
+                  <div className="flex justify-between items-baseline mb-3">
+                    <span className="font-['Poppins',sans-serif] font-semibold text-[15px] text-[#16274D]">
+                      {section}
+                    </span>
+                    <span className="text-[12px] text-[#9099ab] font-medium">
+                      {isSelectedToEveryone ? 'Served to everyone' : max === 1 ? 'Choose one' : `Choose up to ${max}`}
+                    </span>
+                  </div>
+                  {sectionDishes.length === 0 ? (
+                    <p className="text-[13px] text-gray-400 italic">No dishes available in this section</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {sectionDishes.map((dish: any) => {
+                        const isSelected = selectedInSec.includes(dish.en);
+                        return (
+                          <button
+                            key={dish.en}
+                            type="button"
+                            onClick={() => handleToggleDish(section, dish.en, max)}
+                            className={cx(
+                              "flex items-center gap-2.5 rounded-[12px] p-3 text-left w-full transition-all border outline-none cursor-pointer",
+                              isSelected
+                                ? "border-[#4EBEE3] bg-[#eaf7fc] text-[#1d7da3] font-semibold"
+                                : "border-[#d6dae6] bg-white text-[#19233a] hover:border-[#4EBEE3]"
+                            )}
+                          >
+                            <span
+                              className={cx(
+                                "shrink-0 w-5 h-5 rounded-full flex items-center justify-center border",
+                                isSelected ? "bg-[#4EBEE3] border-[#4EBEE3]" : "border-[#d6dae6]"
+                              )}
+                            >
+                              {isSelected && <Check size={12} strokeWidth={3} className="text-white" />}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <span className="block text-[13.5px] leading-tight truncate">{dish.en}</span>
+                              <span className="block text-[11px] text-[#9099ab] truncate font-normal mt-0.5">{dish.ar}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Footer */}
+          <div className="p-4 bg-[#f8fafc] border-t border-[#e7e9f0] flex justify-end gap-2 shrink-0">
+            <Btn variant="neutral" onClick={() => setEditingOrder(null)}>
+              Cancel
+            </Btn>
+            <Btn variant="primary" onClick={saveEdit}>
+              Save Changes
+            </Btn>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Load occupancies & devices
   const getDeviceAndOccupancy = (o: any, idx: number) => {
     const devRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_devices') : null;
-    const devices: any[] = devRaw ? JSON.parse(devRaw) : [];
+    const allDevs: any[] = devRaw ? JSON.parse(devRaw) : [];
+
+    const devices = restrictToWardId && station
+      ? allDevs.filter((d: any) =>
+          station.rooms.some((r: any) => r.source === 'device' && r.deviceId === d.deviceId)
+        )
+      : allDevs;
     
     const occRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_manual_room_occupancy') : null;
     const occupancies: any = occRaw ? JSON.parse(occRaw) : {};
@@ -203,9 +533,13 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
   };
 
   // Extract unique rooms
-  const uniqueRooms = Array.from(new Set(db.orders.map((o: any) => o.room || '')))
-    .filter(Boolean)
-    .sort() as string[];
+  const uniqueRooms = restrictToWardId && station
+    ? Array.from(new Set(station.rooms.map((r: any) => r.roomNumber)))
+        .filter(Boolean)
+        .sort() as string[]
+    : Array.from(new Set(db.orders.map((o: any) => o.room || '')))
+        .filter(Boolean)
+        .sort() as string[];
 
   // Get current time comparison
   const getCutoffStatus = () => {
@@ -234,7 +568,13 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
   // Load devices and occupancies to generate auto-filled defaults if after cutoff
   const getFullKitchenOrders = () => {
     const devRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_devices') : null;
-    const devices: any[] = devRaw ? JSON.parse(devRaw) : [];
+    const allDevs: any[] = devRaw ? JSON.parse(devRaw) : [];
+
+    const devices = restrictToWardId && station
+      ? allDevs.filter((d: any) =>
+          station.rooms.some((r: any) => r.source === 'device' && r.deviceId === d.deviceId)
+        )
+      : allDevs;
     
     const occRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_manual_room_occupancy') : null;
     const occupancies: any = occRaw ? JSON.parse(occRaw) : {};
@@ -251,7 +591,27 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
     const meal = selectedMeals[0] || 'Lunch';
     const day = 'Wed'; // Mock current day
 
-    const list = [...db.orders];
+    const list = restrictToWardId && station
+      ? db.orders.filter((o: any) => {
+          const hasMatchingRoom = station.rooms.some(
+            (r: any) =>
+              r.roomNumber.toLowerCase() === (o.room || '').toLowerCase() &&
+              (r.bed || '').toLowerCase() === (o.bed || '').toLowerCase()
+          );
+          if (hasMatchingRoom) return true;
+
+          const dev = allDevs.find((d: any) => 
+            d.roomNo === `${o.room}${o.bed}` || 
+            (d.roomNo === o.room && d.bedNo === o.bed)
+          );
+          if (dev) {
+            return station.rooms.some(
+              (r: any) => r.source === 'device' && r.deviceId === dev.deviceId
+            );
+          }
+          return false;
+        })
+      : [...db.orders];
 
     if (isAfterCutoff) {
       const activeDevices = devices.filter((d: any) => d.isActive);
@@ -305,6 +665,49 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
 
   const allOrders = getFullKitchenOrders();
 
+  const roomOrders = useMemo(() => {
+    if (!station) return [];
+    
+    return station.rooms.map((room) => {
+      const order = allOrders.find(
+        (o: any) =>
+          o.room.toLowerCase() === room.roomNumber.toLowerCase() &&
+          (o.bed || '').toLowerCase() === (room.bed || '').toLowerCase()
+      );
+      
+      let headerColor = '#18355E';
+      let icon = BedDouble;
+      let typeLabel = room.type || 'Single';
+
+      const num = room.roomNumber.toLowerCase();
+      const group = typeLabel.toLowerCase();
+      if (group.includes("vip") || num.includes("vip") || num.includes("v")) {
+        typeLabel = "VIP";
+        headerColor = '#09ADEA';
+        icon = Gem;
+      } else if (group.includes("royal") || num.includes("royal") || num.includes("r")) {
+        typeLabel = "Royal";
+        headerColor = '#8B2975';
+        icon = Crown;
+      } else if (group.includes("isolated") || num.includes("iso") || num.includes("i")) {
+        typeLabel = "Single isolated";
+        headerColor = '#EEBB2C';
+        icon = ShieldAlert;
+      } else if (group !== "single") {
+        headerColor = "#A0AEC0";
+        icon = BedDouble;
+      }
+
+      return {
+        room,
+        order,
+        typeLabel,
+        headerColor,
+        icon,
+      };
+    });
+  }, [station, allOrders]);
+
   // Filter orders
   const visibleOrders = allOrders.filter((o: any) => {
     const matchMeal = selectedMeals.length === 0 || selectedMeals.includes(o.meal);
@@ -333,7 +736,13 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
 
   const viewOrderStatus = () => {
     const devRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_devices') : null;
-    const devices: any[] = devRaw ? JSON.parse(devRaw) : [];
+    const allDevs: any[] = devRaw ? JSON.parse(devRaw) : [];
+
+    const devices = restrictToWardId && station
+      ? allDevs.filter((d: any) =>
+          station.rooms.some((r: any) => r.source === 'device' && r.deviceId === d.deviceId)
+        )
+      : allDevs;
     
     const occRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_manual_room_occupancy') : null;
     const occupancies: any = occRaw ? JSON.parse(occRaw) : {};
@@ -501,6 +910,7 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
             visibility: visible;
           }
           #print-area {
+            display: block !important;
             position: absolute;
             left: 0;
             top: 0;
@@ -668,214 +1078,262 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
       </Card>
 
       {/* Grid of Kitchen Tickets */}
-      <div className="grid grid-cols-1 gap-5">
-        {visibleOrders.map((o: any, idx: number) => {
-          const isCompanion = o.name.toLowerCase().includes('companion');
-          const info = getDeviceAndOccupancy(o, idx);
+      {restrictToWardId ?
+        /* Grid of Kitchen Cards (Ward view layout) */
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          {roomOrders.map(({ room, order, typeLabel, headerColor, icon: Icon }) => (
+            <KitchenCard
+              key={room.roomNumber + '_' + (room.bed || '')}
+              roomNumber={room.roomNumber + (room.bed || '')}
+              type={typeLabel}
+              headerColor={headerColor}
+              icon={Icon}
+              order={order}
+              onEdit={() => {
+                if (order) {
+                  startEdit(order);
+                } else {
+                  toast('No order placed for this room');
+                }
+              }}
+              onPrint={() => {
+                if (order) printSingle(order);
+              }}
+              onDeliver={() => {
+                if (order) advance(order.id);
+              }}
+            />
+          ))}
+        </div>
+      :
+        /* Grid of Kitchen Tickets */
+        <div className="grid grid-cols-1 gap-5">
+          {visibleOrders.map((o: any, idx: number) => {
+            const isCompanion = o.name.toLowerCase().includes('companion');
+            const info = getDeviceAndOccupancy(o, idx);
 
-          // Categorize lines
-          const mealItems: string[] = [];
-          const accompaniments: string[] = [];
+            // Categorize lines
+            const mealItems: string[] = [];
+            const accompaniments: string[] = [];
 
-          (o.lines || []).forEach(([section, dish]: [string, string]) => {
-            if (isAccompaniment(section, dish)) {
-              accompaniments.push(dish);
-            } else {
-              mealItems.push(dish);
-            }
-          });
+            (o.lines || []).forEach(([section, dish]: [string, string]) => {
+              if (isAccompaniment(section, dish)) {
+                accompaniments.push(dish);
+              } else {
+                mealItems.push(dish);
+              }
+            });
 
-          // Fetch patient allergies
-          const patientObj = db.patients.find((p: any) => p.name === o.name);
-          const allergiesList = isCompanion
-            ? 'None'
-            : patientObj && patientObj.allergies.length > 0
-            ? patientObj.allergies.join(', ')
-            : 'None';
+            // Fetch patient allergies
+            const patientObj = db.patients.find((p: any) => p.name === o.name);
+            const allergiesList = isCompanion
+              ? 'None'
+              : patientObj && patientObj.allergies.length > 0
+              ? patientObj.allergies.join(', ')
+              : 'None';
 
-          // Determine visual tones for patient vs companion
-          const headerBg = isCompanion ? 'bg-[#fdf0f2]' : 'bg-[#eaf5fa]';
-          const headerText = isCompanion ? 'text-[#d11a47]' : 'text-[#0a84b1]';
-          const avatarBg = isCompanion ? 'bg-[#d11a47]' : 'bg-[#0a84b1]';
+            // Determine visual tones for patient vs companion
+            const headerBg = isCompanion ? 'bg-[#fdf0f2]' : 'bg-[#eaf5fa]';
+            const headerText = isCompanion ? 'text-[#d11a47]' : 'text-[#0a84b1]';
+            const avatarBg = isCompanion ? 'bg-[#d11a47]' : 'bg-[#0a84b1]';
 
-          return (
-            <div
-              key={o.id}
-              className="relative grid grid-cols-1 lg:grid-cols-5 gap-0 rounded-[16px] border border-[#e7e9f0] bg-white shadow-sm overflow-hidden"
-            >
-              {/* Checkbox selector */}
-              <button
-                type="button"
-                onClick={() => toggleSelectOrder(o.id)}
-                className="absolute top-4 left-4 z-10 focus:outline-none cursor-pointer p-0 bg-transparent border-0"
-                title="Select Ticket"
+            return (
+              <div
+                key={o.id}
+                className="relative grid grid-cols-1 lg:grid-cols-5 gap-0 rounded-[16px] border border-[#e7e9f0] bg-white shadow-sm overflow-hidden"
               >
-                <div className={cx(
-                  "w-5.5 h-5.5 rounded-md border-2 flex items-center justify-center transition-all shadow-sm",
-                  selectedOrderIds.includes(o.id)
-                    ? "bg-[#4EBEE3] border-[#4EBEE3] text-white"
-                    : "bg-white border-gray-300 hover:border-[#4EBEE3] text-transparent"
-                )}>
-                  <Check size={14} strokeWidth={3} />
-                </div>
-              </button>
+                {/* Checkbox selector */}
+                <button
+                  type="button"
+                  onClick={() => toggleSelectOrder(o.id)}
+                  className="absolute top-4 left-4 z-10 focus:outline-none cursor-pointer p-0 bg-transparent border-0"
+                  title="Select Ticket"
+                >
+                  <div className={cx(
+                    "w-5.5 h-5.5 rounded-md border-2 flex items-center justify-center transition-all shadow-sm",
+                    selectedOrderIds.includes(o.id)
+                      ? "bg-[#4EBEE3] border-[#4EBEE3] text-white"
+                      : "bg-white border-gray-300 hover:border-[#4EBEE3] text-transparent"
+                  )}>
+                    <Check size={14} strokeWidth={3} />
+                  </div>
+                </button>
 
-              {/* LEFT PANEL: Order status & primary actions */}
-              <div className="lg:col-span-2 flex flex-col items-center justify-center p-6 bg-[#fcfdfe] border-b lg:border-b-0 lg:border-r border-[#e7e9f0] text-center">
-                <div className={cx(
-                  "w-16 h-16 rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(31,158,117,0.15)] mb-4",
-                  o.status === 'Delivered' ? 'bg-[#e7f6f0] text-[#1f9e75]' : o.status === 'Printed' ? 'bg-[#fbf1de] text-[#b9770b]' : 'bg-[#eaf7fc] text-[#1d7da3]'
-                )}>
-                  {o.status === 'Delivered' ? <CheckCircle2 size={32} /> : o.status === 'Printed' ? <Printer size={32} /> : <CheckCircle2 size={32} />}
-                </div>
+                {/* LEFT PANEL: Order status & primary actions */}
+                <div className="lg:col-span-2 flex flex-col items-center justify-center p-6 bg-[#fcfdfe] border-b lg:border-b-0 lg:border-r border-[#e7e9f0] text-center">
+                  <div className={cx(
+                    "w-16 h-16 rounded-full flex items-center justify-center shadow-[0_4px_10px_rgba(31,158,117,0.15)] mb-4",
+                    o.status === 'Delivered' ? 'bg-[#e7f6f0] text-[#1f9e75]' : o.status === 'Printed' ? 'bg-[#fbf1de] text-[#b9770b]' : 'bg-[#eaf7fc] text-[#1d7da3]'
+                  )}>
+                    {o.status === 'Delivered' ? <CheckCircle2 size={32} /> : o.status === 'Printed' ? <Printer size={32} /> : <CheckCircle2 size={32} />}
+                  </div>
 
-                <div className="font-semibold text-[#16274D] text-[18px]">
-                  {o.status === 'Submitted' && 'Meal Order Confirmed'}
-                  {o.status === 'Printed' && 'Meal Order Printed'}
-                  {o.status === 'Delivered' && 'Meal Order Delivered'}
-                </div>
+                  <div className="font-semibold text-[#16274D] text-[18px]">
+                    {o.status === 'Submitted' && 'Meal Order Confirmed'}
+                    {o.status === 'Printed' && 'Meal Order Printed'}
+                    {o.status === 'Delivered' && 'Meal Order Delivered'}
+                  </div>
 
-                <div className="text-[13.5px] text-[#5d6678] mt-2 mb-5 px-4 leading-relaxed">
-                  {o.status === 'Submitted' && `Your ${o.meal.toLowerCase()} order has been sent to the kitchen and will be delivered during the scheduled time.`}
-                  {o.status === 'Printed' && `Your ${o.meal.toLowerCase()} order is printed and being prepared by the kitchen staff for delivery.`}
-                  {o.status === 'Delivered' && `Your ${o.meal.toLowerCase()} order has been successfully delivered.`}
-                </div>
+                  <div className="text-[13.5px] text-[#5d6678] mt-2 mb-5 px-4 leading-relaxed">
+                    {o.status === 'Submitted' && `Your ${o.meal.toLowerCase()} order has been sent to the kitchen and will be delivered during the scheduled time.`}
+                    {o.status === 'Printed' && `Your ${o.meal.toLowerCase()} order is printed and being prepared by the kitchen staff for delivery.`}
+                    {o.status === 'Delivered' && `Your ${o.meal.toLowerCase()} order has been successfully delivered.`}
+                  </div>
 
-                <div>
-                  {o.status === 'Submitted' && (
-                    <Btn variant="accent" onClick={() => printSingle(o)}>
-                      <Printer size={16} />
-                      Print Ticket
-                    </Btn>
-                  )}
-                  {o.status === 'Printed' && (
-                    <div className="flex gap-2 items-center">
-                      <Btn variant="neutral" onClick={() => printSingle(o)} title="Reprint Ticket">
-                        <Printer size={16} />
-                      </Btn>
-                      <Btn variant="primary" onClick={() => advance(o.id)}>
-                        <Check size={16} />
-                        Mark Delivered
-                      </Btn>
-                    </div>
-                  )}
-                  {o.status === 'Delivered' && (
-                    <div className="flex flex-col items-center gap-1.5">
-                      <Badge tone="ok" className="h-[38px] px-5 font-semibold text-[14px]">
-                        <CheckCheck size={16} className="mr-1" />
-                        Delivered
-                      </Badge>
-                      <button
-                        onClick={() => printSingle(o)}
-                        className="text-[12.5px] text-[#0a84b1] hover:underline font-semibold cursor-pointer flex items-center gap-1 mt-1 font-['Poppins',sans-serif]"
-                      >
-                        <Printer size={13} /> Reprint Ticket
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* RIGHT PANEL: The Ticket itself */}
-              <div className="lg:col-span-3 p-5 flex flex-col justify-center bg-gray-50/50">
-                <div className="border border-[#e7e9f0] rounded-[14px] bg-white shadow-sm overflow-hidden">
-                  {/* Ticket Header */}
-                  <div className={cx("flex items-center justify-between p-4 border-b border-[#e7e9f0]", headerBg)}>
-                    <div className="flex items-center">
-                      <div className={cx("w-10 h-10 rounded-full flex items-center justify-center text-white", avatarBg)}>
-                        <User size={18} />
+                  <div>
+                    {o.status === 'Submitted' && (
+                      <div className="flex gap-2 items-center">
+                        <Btn variant="neutral" onClick={() => startEdit(o)}>
+                          <Edit size={14} />
+                          Edit
+                        </Btn>
+                        <Btn variant="accent" onClick={() => printSingle(o)}>
+                          <Printer size={16} />
+                          Print Ticket
+                        </Btn>
                       </div>
-                      <div className="ml-3 min-w-0 text-left">
-                        <div className="font-bold text-[#16274D] text-[15px] truncate">
-                          {isCompanion ? 'For Companion' : `For ${info.patientName}`} · {info.locationDetails}
+                    )}
+                    {o.status === 'Printed' && (
+                      <div className="flex gap-2 items-center">
+                        <Btn variant="neutral" onClick={() => startEdit(o)} title="Edit Order">
+                          <Edit size={14} />
+                          Edit
+                        </Btn>
+                        <Btn variant="neutral" onClick={() => printSingle(o)} title="Reprint Ticket">
+                          <Printer size={16} />
+                        </Btn>
+                        <Btn variant="primary" onClick={() => advance(o.id)}>
+                          <Check size={16} />
+                          Mark Delivered
+                        </Btn>
+                      </div>
+                    )}
+                    {o.status === 'Delivered' && (
+                      <div className="flex flex-col items-center gap-1.5">
+                        <Badge tone="ok" className="h-[38px] px-5 font-semibold text-[14px]">
+                          <CheckCheck size={16} className="mr-1" />
+                          Delivered
+                        </Badge>
+                        <div className="flex gap-2 items-center mt-1">
+                          <button
+                            onClick={() => startEdit(o)}
+                            className="text-[12.5px] text-[#0a84b1] hover:underline font-semibold cursor-pointer flex items-center gap-1 font-['Poppins',sans-serif]"
+                          >
+                            <Edit size={13} /> Edit Order
+                          </button>
+                          <span className="text-gray-300">·</span>
+                          <button
+                            onClick={() => printSingle(o)}
+                            className="text-[12.5px] text-[#0a84b1] hover:underline font-semibold cursor-pointer flex items-center gap-1 font-['Poppins',sans-serif]"
+                          >
+                            <Printer size={13} /> Reprint Ticket
+                          </button>
                         </div>
-                        <div className="text-[12px] text-[#5d6678] font-medium mt-0.5 truncate">
-                          Diet: {o.diet} · Allergens: {allergiesList} {info.mrn && `· MRN: ${info.mrn}`} {info.deviceId && `· Device: ${info.deviceId}`}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* RIGHT PANEL: The Ticket itself */}
+                <div className="lg:col-span-3 p-5 flex flex-col justify-center bg-gray-50/50">
+                  <div className="border border-[#e7e9f0] rounded-[14px] bg-white shadow-sm overflow-hidden">
+                    {/* Ticket Header */}
+                    <div className={cx("flex items-center justify-between p-4 border-b border-[#e7e9f0]", headerBg)}>
+                      <div className="flex items-center">
+                        <div className={cx("w-10 h-10 rounded-full flex items-center justify-center text-white", avatarBg)}>
+                          <User size={18} />
+                        </div>
+                        <div className="ml-3 min-w-0 text-left">
+                          <div className="font-bold text-[#16274D] text-[15px] truncate">
+                            {isCompanion ? 'For Companion' : `For ${info.patientName}`} · {info.locationDetails}
+                          </div>
+                          <div className="text-[12px] text-[#5d6678] font-medium mt-0.5 truncate">
+                            Diet: {o.diet} · Allergens: {allergiesList} {info.mrn && `· MRN: ${info.mrn}`} {info.deviceId && `· Device: ${info.deviceId}`}
+                          </div>
+                        </div>
+                      </div>
+                      <div className={cx("font-bold text-[14px] flex-shrink-0 ml-2", headerText)}>
+                        Order ID: ##{o.id.replace('ORD-', '')}
+                      </div>
+                    </div>
+
+                    {/* Ticket Delivery Row */}
+                    <div className="p-4 flex justify-between items-start border-b border-[#e7e9f0]">
+                      <div className="flex items-center gap-2 text-[11px] font-bold text-[#9099ab] tracking-wider uppercase mt-1">
+                        <Clock size={15} className="text-[#9099ab]" />
+                        <span>Delivery Time</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-[#16274D] text-[13.5px]">
+                          {o.meal} ({o.meal === 'Breakfast' ? '8:00 AM – 9:00 AM' : o.meal === 'Lunch' ? '1:00 PM – 2:00 PM' : '6:00 PM – 7:30 PM'})
+                        </div>
+                        <div className="text-[12.5px] text-[#5d6678] mt-0.5">
+                          {o.date === 'Today' ? 'Sun, Jul 5, 2026' : o.date}
                         </div>
                       </div>
                     </div>
-                    <div className={cx("font-bold text-[14px] flex-shrink-0 ml-2", headerText)}>
-                      Order ID: ##{o.id.replace('ORD-', '')}
-                    </div>
-                  </div>
 
-                  {/* Ticket Delivery Row */}
-                  <div className="p-4 flex justify-between items-start border-b border-[#e7e9f0]">
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-[#9099ab] tracking-wider uppercase mt-1">
-                      <Clock size={15} className="text-[#9099ab]" />
-                      <span>Delivery Time</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-[#16274D] text-[13.5px]">
-                        {o.meal} ({o.meal === 'Breakfast' ? '8:00 AM – 9:00 AM' : o.meal === 'Lunch' ? '1:00 PM – 2:00 PM' : '6:00 PM – 7:30 PM'})
+                    {/* Ticket Meal Items Row */}
+                    <div className="p-4 flex justify-between items-start border-b border-[#e7e9f0]">
+                      <div className="flex items-center gap-2 text-[11px] font-bold text-[#9099ab] tracking-wider uppercase mt-1">
+                        <Utensils size={15} className="text-[#9099ab]" />
+                        <span>Your Meal Items</span>
                       </div>
-                      <div className="text-[12.5px] text-[#5d6678] mt-0.5">
-                        {o.date === 'Today' ? 'Sun, Jul 5, 2026' : o.date}
+                      <div className="text-right font-medium text-[#16274D] text-[13.5px] space-y-1">
+                        {mealItems.map((dish, di) => (
+                          <div key={di} className="leading-tight">{dish}</div>
+                        ))}
+                        {mealItems.length === 0 && <div className="text-gray-400 italic">None selected</div>}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Ticket Meal Items Row */}
-                  <div className="p-4 flex justify-between items-start border-b border-[#e7e9f0]">
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-[#9099ab] tracking-wider uppercase mt-1">
-                      <Utensils size={15} className="text-[#9099ab]" />
-                      <span>Your Meal Items</span>
-                    </div>
-                    <div className="text-right font-medium text-[#16274D] text-[13.5px] space-y-1">
-                      {mealItems.map((dish, di) => (
-                        <div key={di} className="leading-tight">{dish}</div>
-                      ))}
-                      {mealItems.length === 0 && <div className="text-gray-400 italic">None selected</div>}
-                    </div>
-                  </div>
-
-                  {/* Ticket Extras Row */}
-                  <div className="p-4 flex justify-between items-start">
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-[#9099ab] tracking-wider uppercase mt-1">
-                      <CheckCircle2 size={15} className="text-[#9099ab]" />
-                      <span>Comes With Your Meal</span>
-                    </div>
-                    <div className="text-right font-medium text-[#16274D] text-[13.5px] space-y-1">
-                      {accompaniments.map((dish, di) => (
-                        <div key={di} className="leading-tight">{dish}</div>
-                      ))}
-                      {accompaniments.length === 0 && <div className="text-gray-400 italic">None</div>}
-                    </div>
-                  </div>
-
-                  {/* Ticket Observations Row */}
-                  <div className="p-4 bg-[#f8fafc] border-t border-[#e7e9f0] flex flex-col md:flex-row justify-between items-start gap-3">
-                    <div className="flex items-center gap-2 text-[11px] font-bold text-[#b9770b] tracking-wider uppercase mt-1">
-                      <Stethoscope size={15} className="text-[#b9770b]" />
-                      <span>Clinical Observation</span>
-                    </div>
-                    <div className="text-right text-[12.5px] text-[#5d6678] max-w-[320px]">
-                      <div className="font-semibold text-[#16274D]">
-                        Vitals: BP {info.obs.vitals.bp} · HR {info.obs.vitals.hr} · Temp {info.obs.vitals.temp}°C · SpO2 {info.obs.vitals.spo2}%
+                    {/* Ticket Extras Row */}
+                    <div className="p-4 flex justify-between items-start">
+                      <div className="flex items-center gap-2 text-[11px] font-bold text-[#9099ab] tracking-wider uppercase mt-1">
+                        <CheckCircle2 size={15} className="text-[#9099ab]" />
+                        <span>Comes With Your Meal</span>
                       </div>
-                      <div className="mt-1">
-                        Pain Score: <span className="font-semibold text-[#16274D]">{info.obs.painLevel}/10</span>
-                        {info.activeRisks.length > 0 && (
-                          <>
-                            {' · Risks: '}
-                            <span className="font-semibold text-red-600">{info.activeRisks.join(', ')}</span>
-                          </>
+                      <div className="text-right font-medium text-[#16274D] text-[13.5px] space-y-1">
+                        {accompaniments.map((dish, di) => (
+                          <div key={di} className="leading-tight">{dish}</div>
+                        ))}
+                        {accompaniments.length === 0 && <div className="text-gray-400 italic">None</div>}
+                      </div>
+                    </div>
+
+                    {/* Ticket Observations Row */}
+                    <div className="p-4 bg-[#f8fafc] border-t border-[#e7e9f0] flex flex-col md:flex-row justify-between items-start gap-3">
+                      <div className="flex items-center gap-2 text-[11px] font-bold text-[#b9770b] tracking-wider uppercase mt-1">
+                        <Stethoscope size={15} className="text-[#b9770b]" />
+                        <span>Clinical Observation</span>
+                      </div>
+                      <div className="text-right text-[12.5px] text-[#5d6678] max-w-[320px]">
+                        <div className="font-semibold text-[#16274D]">
+                          Vitals: BP {info.obs.vitals.bp} · HR {info.obs.vitals.hr} · Temp {info.obs.vitals.temp}°C · SpO2 {info.obs.vitals.spo2}%
+                        </div>
+                        <div className="mt-1">
+                          Pain Score: <span className="font-semibold text-[#16274D]">{info.obs.painLevel}/10</span>
+                          {info.activeRisks.length > 0 && (
+                            <>
+                              {' · Risks: '}
+                              <span className="font-semibold text-red-600">{info.activeRisks.join(', ')}</span>
+                            </>
+                          )}
+                        </div>
+                        {info.obs.nurseNotes && (
+                          <div className="mt-1 text-[11.5px] italic text-[#718096] bg-white p-2.5 rounded-md border border-[#e7e9f0] text-left">
+                            "{info.obs.nurseNotes}"
+                          </div>
                         )}
                       </div>
-                      {info.obs.nurseNotes && (
-                        <div className="mt-1 text-[11.5px] italic text-[#718096] bg-white p-2 rounded-md border border-[#e7e9f0] text-left">
-                          "{info.obs.nurseNotes}"
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
+            );
+          })}
+        </div>
+      }
       </>
       )}
 
@@ -1007,6 +1465,7 @@ export default function KitchenPage({ onNavigate }: { onNavigate: (route: string
           );
         })}
       </div>
+      {editingOrder && renderEditModal()}
     </FoodPage>
   );
 }

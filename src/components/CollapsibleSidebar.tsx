@@ -87,11 +87,14 @@ import {
   Salad,
   CalendarDays,
   ChefHat,
-  ListTree
+  ListTree,
+  GitBranch,
+  Tag
 } from 'lucide-react';
 import { Fingerprint } from 'lucide-react';
 import imgCareInnLogo from "figma:asset/1527704e7ade377192f897bbb5d87c3293623da3.png";
 import { useNurseStations } from '../hooks/useNurseStations';
+import { useCareSuiteTeams } from '../hooks/useCareSuite';
 
 interface CollapsibleSidebarProps {
   activeItem: string;
@@ -175,9 +178,27 @@ const navigationItems: MenuItem[] = [
       { id: 'food-kitchen', label: 'Kitchen', icon: ChefHat }
     ]
   },
-  { 
-    id: 'channels', 
-    label: 'Channels', 
+  {
+    id: 'caresuite',
+    label: 'CareSuite Manager',
+    icon: ClipboardList,
+    subItems: [
+      { id: 'cs-library', label: 'Library', icon: BookOpen },
+      { id: 'cs-workflow', label: 'Workflow', icon: GitBranch },
+      { id: 'cs-teams', label: 'Teams Assignment', icon: Users }
+    ]
+  },
+  {
+    id: 'caresuite-dashboard',
+    label: 'CareSuite Dashboard',
+    icon: LayoutGrid,
+    subItems: [
+      { id: 'cs-dashboard:admin', label: 'Admin', icon: LayoutGrid }
+    ]
+  },
+  {
+    id: 'channels',
+    label: 'Channels',
     icon: Monitor
   },
   { 
@@ -227,7 +248,8 @@ const navigationItems: MenuItem[] = [
     icon: Settings,
     subItems: [
       { id: 'users', label: 'Users', icon: Users2 },
-      { id: 'users-roles', label: 'Users Roles', icon: UserCircle }
+      { id: 'users-roles', label: 'Users Roles', icon: UserCircle },
+      { id: 'team-categories', label: 'Team Categories', icon: Tag }
     ]
   },
   { 
@@ -275,15 +297,29 @@ export default function CollapsibleSidebar({ activeItem, onItemClick, onLogout, 
   // Live Nurse Station list — created stations appear as nested entries under
   // the Nurse Station section (single source: nurseStationService store).
   const { stations } = useNurseStations();
+  // Live CareSuite Teams list — each team created in Teams Assignment gets
+  // its own dashboard entry, alongside the fixed "Admin" (sees everything).
+  const { teams: careSuiteTeams } = useCareSuiteTeams();
   const navItems: MenuItem[] = navigationItems.map((item) => {
-    if (item.id !== 'nurse-station-section') return item;
-    return {
-      ...item,
-      subItems: [
-        ...(item.subItems || []),
-        ...stations.map((s) => ({ id: `ns:${s.id}`, label: s.name, icon: Stethoscope })),
-      ],
-    };
+    if (item.id === 'nurse-station-section') {
+      return {
+        ...item,
+        subItems: [
+          ...(item.subItems || []),
+          ...stations.map((s) => ({ id: `ns:${s.id}`, label: s.name, icon: Stethoscope })),
+        ],
+      };
+    }
+    if (item.id === 'caresuite-dashboard') {
+      return {
+        ...item,
+        subItems: [
+          ...(item.subItems || []),
+          ...careSuiteTeams.map((t) => ({ id: `cs-dashboard:${t.id}`, label: t.name, icon: Users })),
+        ],
+      };
+    }
+    return item;
   });
 
   const toggleExpanded = (itemId: string) => {

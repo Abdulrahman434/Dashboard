@@ -1,12 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Users2, Plus, Trash2, X, Eye, EyeOff } from 'lucide-react';
 import { SingleSelectDropdown } from './UnifiedDropdown';
-
-interface User {
-  id: string;
-  username: string;
-  userRole: string;
-}
+import { useCareSuite } from '../hooks/useCareSuite';
+import { userService, USER_EVENT, User } from '../services/userService';
 
 const USER_ROLES = ['IT', 'PX', 'Nurse Station'];
 
@@ -15,17 +11,30 @@ export function UsersPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
+  useEffect(() => {
+    const load = () => setUsers(userService.listUsers());
+    load();
+    window.addEventListener(USER_EVENT, load);
+    return () => window.removeEventListener(USER_EVENT, load);
+  }, []);
+  
   // Modal form state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [userRole, setUserRole] = useState('');
+  const [department, setDepartment] = useState('');
+  const [teamCategoryId, setTeamCategoryId] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+
+  // CareSuite team categories, for the optional "Team Category" field below.
+  const { categories: teamCategories } = useCareSuite();
 
   // Inline edit state
   const [editingField, setEditingField] = useState<{ userId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [editingTeamCategoryId, setEditingTeamCategoryId] = useState<string | null>(null);
 
   const validatePassword = (pwd: string): string[] => {
     const errors: string[] = [];
@@ -55,35 +64,41 @@ export function UsersPage() {
   const handleAddUser = () => {
     if (!username || !password || !userRole || passwordErrors.length > 0) return;
 
-    const newUser: User = {
-      id: `user-${Date.now()}`,
+    userService.createUser({
       username,
-      userRole
-    };
-
-    setUsers([...users, newUser]);
+      userRole,
+      department: department.trim() || undefined,
+      teamCategoryId: teamCategoryId || undefined,
+    });
     setUsername('');
     setPassword('');
     setUserRole('');
+    setDepartment('');
+    setTeamCategoryId('');
     setPasswordErrors([]);
     setIsModalOpen(false);
   };
 
+  const handleUpdateDepartment = (id: string, value: string) => {
+    userService.updateUser(id, { department: value.trim() || undefined });
+  };
+
+  const handleUpdateTeamCategory = (id: string, value: string) => {
+    userService.updateUser(id, { teamCategoryId: value || undefined });
+    setEditingTeamCategoryId(null);
+  };
+
   const handleDelete = (id: string) => {
-    setUsers(users.filter(user => user.id !== id));
+    userService.removeUser(id);
     setSelectedIds(selectedIds.filter(selectedId => selectedId !== id));
   };
 
   const handleUpdateUsername = (id: string, value: string) => {
-    setUsers(users.map(user =>
-      user.id === id ? { ...user, username: value } : user
-    ));
+    userService.updateUser(id, { username: value });
   };
 
   const handleUpdateUserRole = (id: string, value: string) => {
-    setUsers(users.map(user =>
-      user.id === id ? { ...user, userRole: value } : user
-    ));
+    userService.updateUser(id, { userRole: value });
     setEditingRoleId(null);
   };
 
@@ -185,6 +200,12 @@ export function UsersPage() {
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
                     User Role
                   </th>
+                  <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
+                    Department
+                  </th>
+                  <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
+                    Team Category
+                  </th>
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif] w-24">
                     Actions
                   </th>
@@ -259,6 +280,65 @@ export function UsersPage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
+                      {editingField?.userId === user.id && editingField.field === 'department' ? (
+                        <input
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={() => {
+                            handleUpdateDepartment(user.id, editValue);
+                            setEditingField(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleUpdateDepartment(user.id, editValue);
+                              setEditingField(null);
+                            }
+                            if (e.key === 'Escape') {
+                              setEditingField(null);
+                              setEditValue('');
+                            }
+                          }}
+                          autoFocus
+                          placeholder="Optional"
+                          className="w-full px-2 py-1 border border-[#4EBEE3] rounded text-[14px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/20"
+                        />
+                      ) : (
+                        <span
+                          onClick={() => {
+                            setEditingField({ userId: user.id, field: 'department' });
+                            setEditValue(user.department || '');
+                          }}
+                          className="cursor-pointer hover:text-[#4EBEE3] transition-colors text-[14px] font-['Poppins',sans-serif]"
+                        >
+                          {user.department || <span className="text-gray-400">—</span>}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {editingTeamCategoryId === user.id ? (
+                        <select
+                          value={user.teamCategoryId || ''}
+                          onChange={(e) => handleUpdateTeamCategory(user.id, e.target.value)}
+                          onBlur={() => setEditingTeamCategoryId(null)}
+                          autoFocus
+                          className="w-full px-2 py-1 border border-[#4EBEE3] rounded text-[14px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/20"
+                        >
+                          <option value="">No category</option>
+                          {teamCategories.map(cat => (
+                            <option key={cat.id} value={cat.id}>{cat.nameEn}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span
+                          onClick={() => setEditingTeamCategoryId(user.id)}
+                          className="cursor-pointer hover:text-[#4EBEE3] transition-colors text-[14px] font-['Poppins',sans-serif]"
+                        >
+                          {teamCategories.find(c => c.id === user.teamCategoryId)?.nameEn || <span className="text-gray-400">—</span>}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
                       <button
                         onClick={() => handleDelete(user.id)}
                         className="text-red-500 hover:text-red-700 transition-colors p-2 rounded-lg hover:bg-red-50"
@@ -295,6 +375,8 @@ export function UsersPage() {
                   setUsername('');
                   setPassword('');
                   setUserRole('');
+                  setDepartment('');
+                  setTeamCategoryId('');
                   setPasswordErrors([]);
                   setShowPassword(false);
                 }}
@@ -404,6 +486,33 @@ export function UsersPage() {
                   placeholder="Select a role"
                 />
               </div>
+
+              {/* Department (optional) */}
+              <div>
+                <label className="block text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-2">
+                  Department <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  placeholder="e.g., Housekeeping"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3] focus:border-transparent font-['Poppins',sans-serif] text-[14px]"
+                />
+              </div>
+
+              {/* Team Category (optional) — links this user to a CareSuite team category */}
+              <div>
+                <label className="block text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-2">
+                  Team Category <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <SingleSelectDropdown
+                  options={[{ value: '', label: 'No category' }, ...teamCategories.map(c => ({ value: c.id, label: c.nameEn }))]}
+                  value={teamCategoryId}
+                  onChange={setTeamCategoryId}
+                  placeholder="No category"
+                />
+              </div>
             </div>
 
             {/* Modal Footer */}
@@ -414,6 +523,8 @@ export function UsersPage() {
                   setUsername('');
                   setPassword('');
                   setUserRole('');
+                  setDepartment('');
+                  setTeamCategoryId('');
                   setPasswordErrors([]);
                   setShowPassword(false);
                 }}
