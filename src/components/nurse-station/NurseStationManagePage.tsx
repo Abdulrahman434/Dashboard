@@ -154,7 +154,7 @@ export default function NurseStationManagePage({
                           <span className="text-[12px] text-[#6B7280] font-['Poppins',sans-serif]">
                             {[s.building && `Bldg ${s.building}`, s.floor && `Floor ${s.floor}`]
                               .filter(Boolean)
-                              .join(' Â· ')}
+                              .join(' · ')}
                           </span>
                         )}
                       </div>
@@ -377,8 +377,8 @@ function StationDetail({ station }: { station: Station }) {
             {station.name}
           </h1>
           <p className="text-[14px] text-[#6B7280] font-['Poppins',sans-serif]">
-            {station.rooms.length} room{station.rooms.length !== 1 ? 's' : ''} Â·{' '}
-            {station.rooms.filter((r) => r.source === 'device').length} from devices Â·{' '}
+            {station.rooms.length} room{station.rooms.length !== 1 ? 's' : ''} ·{' '}
+            {station.rooms.filter((r) => r.source === 'device').length} from devices ·{' '}
             {station.rooms.filter((r) => r.source === 'manual').length} manual
           </p>
         </div>
@@ -611,7 +611,7 @@ function DevicePickerModal({
                 Pick from Device Manager
               </h2>
               <p className="text-[12px] text-gray-500 font-['Poppins',sans-serif]">
-                {picked.size} selected Â· single source of truth: Device Manager
+                {picked.size} selected · single source of truth: Device Manager
               </p>
             </div>
           </div>
@@ -683,7 +683,7 @@ function DevicePickerModal({
                         {d.deviceId}
                       </div>
                       <div className="text-[12px] text-[#6B7280] truncate">
-                        Room {d.roomNo} Â· Bed {d.bedNo} Â· Bldg {d.building} Â· Floor {d.floor} Â· POC{' '}
+                        Room {d.roomNo} · Bed {d.bedNo} · Bldg {d.building} · Floor {d.floor} · POC{' '}
                         {d.poc}
                       </div>
                     </div>

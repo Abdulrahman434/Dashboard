@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard';
 import AnalyticsPrintView from './components/AnalyticsPrintView';
 import { Toaster } from './components/ui/sonner';
 import { SIPProvider } from './contexts/SIPContext';
+import { initializeDevices } from './services/deviceInitializer';
 import './styles/chart-animations.css';
 
 // Extend Window interface for our custom property
@@ -15,6 +16,11 @@ declare global {
 
 // CareInn System Management Portal - Updated with inline editing
 export default function App() {
+  // Initialize device data immediately on mount
+  useEffect(() => {
+    initializeDevices();
+  }, []);
+
   // Suppress Recharts warnings IMMEDIATELY (before any rendering)
   if (typeof window !== 'undefined' && !window.__rechartsWarningsSuppressed) {
     const originalConsoleError = console.error;

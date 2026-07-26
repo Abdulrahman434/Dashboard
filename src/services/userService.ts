@@ -19,6 +19,8 @@ export interface User {
   userRole: string;
   department?: string;
   teamCategoryId?: string; // -> CareSuite TeamCategory.id, optional
+  image?: string; // base64 or URL
+  userType?: 'Doctor' | 'Nurse' | 'Staff';
 }
 
 function safeParse<T>(raw: string | null, fallback: T): T {
@@ -46,10 +48,10 @@ function seedIfEmpty(): void {
   if (localStorage.getItem(SEEDED_KEY)) return;
 
   const users: User[] = [
-    { id: 'user-1', username: 'John Doe', userRole: 'IT', department: 'IT Support' },
-    { id: 'user-2', username: 'Jane Smith', userRole: 'Nurse Station', department: 'Housekeeping', teamCategoryId: 'cat-housekeeping' },
-    { id: 'user-3', username: 'Mike Johnson', userRole: 'PX', department: 'Patient Experience' },
-    { id: 'user-4', username: 'Sarah Williams', userRole: 'Nurse Station', department: 'Maintenance', teamCategoryId: 'cat-maintenance' },
+    { id: 'user-1', username: 'John Doe', userRole: 'IT', department: 'IT Support', userType: 'Staff' },
+    { id: 'user-2', username: 'Jane Smith', userRole: 'Nurse Station', department: 'Housekeeping', teamCategoryId: 'cat-housekeeping', userType: 'Nurse' },
+    { id: 'user-3', username: 'Mike Johnson', userRole: 'PX', department: 'Patient Experience', userType: 'Staff' },
+    { id: 'user-4', username: 'Sarah Williams', userRole: 'Nurse Station', department: 'Maintenance', teamCategoryId: 'cat-maintenance', userType: 'Nurse' },
   ];
 
   write(USERS_KEY, users);

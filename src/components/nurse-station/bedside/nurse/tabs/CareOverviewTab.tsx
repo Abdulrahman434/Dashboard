@@ -1,24 +1,12 @@
 import { useState } from "react";
 import { ApiImage } from "../../ApiImage";
-import { Users, AlertTriangle, Apple, Plus, X, Activity, Eye, EyeOff, Info, Search } from "lucide-react";
+import { Users, AlertTriangle, Apple, Plus, X, Eye, Info, Search } from "lucide-react";
 import { useTheme } from "../../ThemeContext";
 import { useLocale } from "../../i18n";
 import { useNurseStore, nurseActions } from "../../NurseDataStore";
 import { useStaff } from "../../../../../hooks/useStaff";
 import type { StaffMember } from "../../../../../services/staffService";
-
-function painColor(n: number) {
-  if (n <= 0) return "#94A3B8";
-  if (n < 4) return "#10B981";
-  if (n < 7) return "#F59E0B";
-  return "#EF4444";
-}
-function painLabel(n: number) {
-  if (n <= 0) return "None";
-  if (n < 4) return "Mild";
-  if (n < 7) return "Moderate";
-  return "Severe";
-}
+import { useFood } from "../../../../food/foodStore";
 
 /* ─────────────────────────────────────────────────────────────── */
 /* Staff Picker Modal                                              */
@@ -33,7 +21,6 @@ function StaffPickerModal({
   alreadyInTeam: Set<string>;
 }) {
   const { staff } = useStaff();
-  const { theme: t } = useTheme();
   const [filter, setFilter] = useState<"All" | "Nurse" | "Doctor">("All");
   const [query, setQuery] = useState("");
 
@@ -229,11 +216,8 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
   const { theme: t } = useTheme();
   const { t: tr } = useLocale();
   const store = useNurseStore();
+  const foodStore = useFood();
   const isNurse = role === "nurse";
-
-  const [newAllergy, setNewAllergy] = useState("");
-  const [newDietCode, setNewDietCode] = useState("");
-  const [newDietLabel, setNewDietLabel] = useState("");
 
   const [staffPickerOpen, setStaffPickerOpen] = useState(false);
 
@@ -252,7 +236,15 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
     setStaffPickerOpen(false);
   };
 
-  const pc = painColor(store.painScore);
+  // Derive available diets and allergens dynamically from the food store
+  const availableAllergens = foodStore?.allergens || [
+    "Milk", "Egg", "Gluten", "Nuts", "Fish", "Shellfish", "Soy", "Sesame", "Peanut"
+  ];
+
+  const availableDiets = (foodStore?.diets || []).map((d: any) => {
+    const code = d.his.includes("-") ? d.his.split("-")[1] : d.en.substring(0, 3).toUpperCase();
+    return { code, label: d.en };
+  });
 
   return (
     <div className="space-y-5">
@@ -301,6 +293,12 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
           {store.careTeam.map((m) => {
             const isDoctor = m.roleKey === "care.team.attendingDoctor";
             const avatarBg = isDoctor ? "#8B5CF6" : t.primary;
+
+            // Make sure attending doctor name matches the PV1 doctor section
+            const doctorName = isDoctor && store.patient.attendingDoctorFirstName && store.patient.attendingDoctorLastName
+              ? `Dr. ${store.patient.attendingDoctorFirstName} ${store.patient.attendingDoctorLastName}`
+              : tr(m.nameKey);
+
             return (
               <div key={m.id} className="flex items-center gap-3 px-4 py-3 rounded-2xl" style={{ backgroundColor: "#F9FAFB", border: `1px solid ${t.borderDefault}` }}>
                 <div className="w-10 h-10 rounded-full overflow-hidden shrink-0">
@@ -309,12 +307,12 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-white font-bold text-[15px]"
                       style={{ backgroundColor: avatarBg }}>
-                      {tr(m.nameKey).charAt(0).toUpperCase()}
+                      {doctorName.charAt(0).toUpperCase()}
                     </div>
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p style={{ fontSize: "14px", fontWeight: 700, color: t.textHeading }}>{tr(m.nameKey)}</p>
+                  <p style={{ fontSize: "14px", fontWeight: 700, color: t.textHeading }}>{doctorName}</p>
                   <p style={{ fontSize: "12px", fontWeight: 600, color: isDoctor ? "#8B5CF6" : t.primary }}>{tr(m.roleKey)}</p>
                 </div>
                 {isNurse && (
@@ -355,7 +353,15 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
               style={{ fontSize: "13px", fontWeight: 700, color: t.error, backgroundColor: t.errorSubtle, border: `1px solid ${t.errorSubtle}` }}>
               <AlertTriangle size={12} /> {a}
               {isNurse && (
-                <button onClick={() => nurseActions.removeAllergy(a)} className="ml-1 cursor-pointer" style={{ background: "none", border: "none", color: t.error }}>
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to remove the allergy: "${a}"?`)) {
+                      nurseActions.removeAllergy(a);
+                    }
+                  }}
+                  className="ml-1 cursor-pointer"
+                  style={{ background: "none", border: "none", color: t.error }}
+                >
                   <X size={12} />
                 </button>
               )}
@@ -366,18 +372,27 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
           <div className="mt-4 pt-4 border-t border-gray-100">
             <p style={{ fontSize: "12px", fontWeight: 700, color: t.textMuted, marginBottom: 8 }}>Available Allergies (Tap to add/remove):</p>
             <div className="flex flex-wrap gap-2">
-              {["Penicillin", "Latex", "Shellfish", "Aspirin", "Peanuts", "Sulfonamides", "Morphine", "Eggs", "Dairy"].map(allergy => {
+              {availableAllergens.map(allergy => {
                 const isActive = store.allergies.includes(allergy);
                 return (
                   <button
                     key={allergy}
-                    onClick={() => isActive ? nurseActions.removeAllergy(allergy) : nurseActions.addAllergy(allergy)}
-                    className="px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all"
+                    onClick={() => {
+                      if (isActive) {
+                        if (window.confirm(`Are you sure you want to remove the allergy: "${allergy}"?`)) {
+                          nurseActions.removeAllergy(allergy);
+                        }
+                      } else {
+                        if (window.confirm(`Are you sure you want to add the allergy: "${allergy}"?`)) {
+                          nurseActions.addAllergy(allergy);
+                        }
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all cursor-pointer"
                     style={{
                       backgroundColor: isActive ? t.errorSubtle : "#F3F4F6",
                       color: isActive ? t.error : t.textMuted,
                       border: `1px solid ${isActive ? t.error : "transparent"}`,
-                      cursor: "pointer"
                     }}
                   >
                     {allergy}
@@ -398,7 +413,15 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
               style={{ fontSize: "13px", fontWeight: 700, color: t.primary, backgroundColor: t.primarySubtle }}>
               <span style={{ fontWeight: 800 }}>{d.code}</span> — {d.label}
               {isNurse && (
-                <button onClick={() => nurseActions.removeDietCode(d.code)} className="ml-1 cursor-pointer" style={{ background: "none", border: "none", color: t.primary }}>
+                <button
+                  onClick={() => {
+                    if (window.confirm(`Are you sure you want to remove the diet code: "${d.code} — ${d.label}"?`)) {
+                      nurseActions.removeDietCode(d.code);
+                    }
+                  }}
+                  className="ml-1 cursor-pointer"
+                  style={{ background: "none", border: "none", color: t.primary }}
+                >
                   <X size={12} />
                 </button>
               )}
@@ -407,28 +430,29 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
         </div>
         {isNurse && (
           <div className="mt-4 pt-4 border-t border-gray-100">
-            <p style={{ fontSize: "12px", fontWeight: 700, color: t.textMuted, marginBottom: 8 }}>Predefined Diet Codes:</p>
+            <p style={{ fontSize: "12px", fontWeight: 700, color: t.textMuted, marginBottom: 8 }}>Predefined Diet Codes (From Food Management):</p>
             <div className="flex flex-wrap gap-2">
-              {[
-                { code: "NAS", label: "No Added Salt" },
-                { code: "DM", label: "Diabetic Diet" },
-                { code: "LS", label: "Low Sodium" },
-                { code: "NPO", label: "Nothing by mouth" },
-                { code: "SOFT", label: "Soft Diet" },
-                { code: "LIQ", label: "Clear Liquid" },
-                { code: "RENAL", label: "Renal Diet" }
-              ].map(diet => {
+              {availableDiets.map(diet => {
                 const isActive = store.dietCodes.some(d => d.code === diet.code);
                 return (
                   <button
                     key={diet.code}
-                    onClick={() => isActive ? nurseActions.removeDietCode(diet.code) : nurseActions.addDietCode(diet.code, diet.label)}
-                    className="px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all text-left"
+                    onClick={() => {
+                      if (isActive) {
+                        if (window.confirm(`Are you sure you want to remove the diet code: "${diet.code} — ${diet.label}"?`)) {
+                          nurseActions.removeDietCode(diet.code);
+                        }
+                      } else {
+                        if (window.confirm(`Are you sure you want to add the diet code: "${diet.code} — ${diet.label}"?`)) {
+                          nurseActions.addDietCode(diet.code, diet.label);
+                        }
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-all text-left cursor-pointer"
                     style={{
                       backgroundColor: isActive ? t.primarySubtle : "#F3F4F6",
                       color: isActive ? t.primary : t.textMuted,
                       border: `1px solid ${isActive ? t.primary : "transparent"}`,
-                      cursor: "pointer"
                     }}
                   >
                     <span style={{ fontWeight: 800 }}>{diet.code}</span> — {diet.label}
@@ -439,47 +463,6 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
           </div>
         )}
       </div>
-
-      {/* Pain Score */}
-      <div className="nurse-card">
-        <h3 style={{ color: t.textHeading }}><Activity size={18} style={{ color: pc }} /> Pain Score</h3>
-        <div className="flex items-center gap-4">
-          <span style={{ fontSize: "36px", fontWeight: 900, color: pc }}>{store.painScore}<span style={{ fontSize: "18px", color: t.textMuted }}>/10</span></span>
-          <span style={{ fontSize: "12px", fontWeight: 800, color: pc, backgroundColor: `${pc}18`, padding: "4px 12px", borderRadius: 99 }}>{painLabel(store.painScore).toUpperCase()}</span>
-        </div>
-        {isNurse && (
-          <div className="mt-4">
-            <input type="range" min={0} max={10} value={store.painScore}
-              onChange={(e) => nurseActions.setPainScore(Number(e.target.value))}
-              className="w-full cursor-pointer" style={{ accentColor: pc }} />
-            <div className="flex justify-between mt-1" style={{ fontSize: "11px", color: t.textMuted }}>
-              <span>0 — None</span><span>10 — Severe</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* HIS Disclaimer Note */}
-      <div className="flex items-start gap-3 p-4 rounded-2xl" style={{ backgroundColor: `${t.primary}08`, border: `1px dashed ${t.primary}40` }}>
-        <Info size={20} style={{ color: t.primary, marginTop: 2 }} />
-        <div className="flex flex-col gap-1">
-          <p style={{ fontSize: "13px", fontWeight: 700, color: t.textHeading }}>Clinical Data Source Note</p>
-          <p style={{ fontSize: "12px", color: t.textMuted, lineHeight: "1.5" }}>
-            Information is synchronized from the Hospital Information System (HIS). Manual adjustments made here are for <strong>local bedside display only</strong> and will not update the patient's permanent Electronic Medical Record (EMR).
-            <br />
-            <em>Note: Any future updates from the HIS will automatically overwrite manual adjustments.</em>
-          </p>
-        </div>
-      </div>
-
-      {/* Staff Picker Modal */}
-      {staffPickerOpen && (
-        <StaffPickerModal
-          onClose={() => setStaffPickerOpen(false)}
-          onPick={handlePickStaff}
-          alreadyInTeam={alreadyInTeam}
-        />
-      )}
     </div>
   );
 }

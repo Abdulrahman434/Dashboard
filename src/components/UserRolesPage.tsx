@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserCircle, Plus, Trash2, X, Edit2, Search, ChevronDown, ChevronRight, Check } from 'lucide-react';
 import { SingleSelectDropdown } from './UnifiedDropdown';
 import { useNurseStations } from '../hooks/useNurseStations';
@@ -216,7 +216,20 @@ const PERMISSION_MODULES: PermissionModule[] = [
 ];
 
 export function UserRolesPage() {
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [roles, setRoles] = useState<Role[]>(() => {
+    const stored = localStorage.getItem("careinn_user_roles");
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch {}
+    }
+    // Default seeded roles
+    return [
+      { id: 'role-1', name: 'IT', assignedUsers: 1, permissions: ['dashboard-view', 'analytics-view', 'site-config-view', 'users-view'] },
+      { id: 'role-2', name: 'PX', assignedUsers: 1, permissions: ['dashboard-view', 'analytics-view', 'feature-wallpaper', 'feature-welcome-note'] },
+      { id: 'role-3', name: 'Nurse Station', assignedUsers: 2, permissions: ['dashboard-view', 'analytics-view'] },
+    ];
+  });
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -225,6 +238,27 @@ export function UserRolesPage() {
   const { stations } = useNurseStations();
   // CareSuite Teams — sourced from the same store as the sidebar + Teams Assignment
   const { teams: careSuiteTeams } = useCareSuiteTeams();
+
+  // Persist roles to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem("careinn_user_roles", JSON.stringify(roles));
+  }, [roles]);
+
+  // Clean up nurseStationId if the station is no longer in the stations list
+  useEffect(() => {
+    let changed = false;
+    const cleaned = roles.map(role => {
+      if (role.nurseStationId && !stations.some(s => s.id === role.nurseStationId)) {
+        changed = true;
+        const { nurseStationId, ...rest } = role;
+        return rest;
+      }
+      return role;
+    });
+    if (changed) {
+      setRoles(cleaned);
+    }
+  }, [stations, roles]);
 
   // Panel form state
   const [roleName, setRoleName] = useState('');

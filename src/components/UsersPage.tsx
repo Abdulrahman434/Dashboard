@@ -26,6 +26,8 @@ export function UsersPage() {
   const [teamCategoryId, setTeamCategoryId] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
+  const [modalImage, setModalImage] = useState<string>('');
+  const [userType, setUserType] = useState<'Doctor' | 'Nurse' | 'Staff'>('Staff');
 
   // CareSuite team categories, for the optional "Team Category" field below.
   const { categories: teamCategories } = useCareSuite();
@@ -35,6 +37,7 @@ export function UsersPage() {
   const [editValue, setEditValue] = useState('');
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [editingTeamCategoryId, setEditingTeamCategoryId] = useState<string | null>(null);
+  const [editingUserTypeId, setEditingUserTypeId] = useState<string | null>(null);
 
   const validatePassword = (pwd: string): string[] => {
     const errors: string[] = [];
@@ -61,6 +64,15 @@ export function UsersPage() {
     setPasswordErrors(errors);
   };
 
+  const handleImageChange = (id: string, file: File | undefined) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      userService.updateUser(id, { image: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleAddUser = () => {
     if (!username || !password || !userRole || passwordErrors.length > 0) return;
 
@@ -69,12 +81,16 @@ export function UsersPage() {
       userRole,
       department: department.trim() || undefined,
       teamCategoryId: teamCategoryId || undefined,
+      image: modalImage || undefined,
+      userType,
     });
     setUsername('');
     setPassword('');
     setUserRole('');
     setDepartment('');
     setTeamCategoryId('');
+    setModalImage('');
+    setUserType('Staff');
     setPasswordErrors([]);
     setIsModalOpen(false);
   };
@@ -194,8 +210,14 @@ export function UsersPage() {
                       className="w-4 h-4 rounded border-2 border-gray-300 text-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20 cursor-pointer accent-[#4EBEE3]"
                     />
                   </th>
+                  <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif] w-20">
+                    Image
+                  </th>
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
                     Username
+                  </th>
+                  <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
+                    User Type
                   </th>
                   <th className="px-6 py-3 text-left text-[13px] font-medium text-gray-600 font-['Poppins',sans-serif]">
                     User Role
@@ -221,6 +243,26 @@ export function UsersPage() {
                         onChange={(e) => handleSelectOne(user.id, e.target.checked)}
                         className="w-4 h-4 rounded border-2 border-gray-300 text-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20 cursor-pointer accent-[#4EBEE3]"
                       />
+                    </td>
+                    <td className="px-6 py-4">
+                      <label className="cursor-pointer block relative group w-10 h-10 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleImageChange(user.id, e.target.files?.[0])}
+                        />
+                        {user.image ? (
+                          <img src={user.image} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-[14px] font-bold text-gray-600">
+                            {user.username.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <span className="text-[9px] text-white font-medium">Edit</span>
+                        </div>
+                      </label>
                     </td>
                     <td className="px-6 py-4">
                       {editingField?.userId === user.id && editingField.field === 'username' ? (
@@ -254,6 +296,31 @@ export function UsersPage() {
                           className="cursor-pointer hover:text-[#4EBEE3] transition-colors text-[14px] text-[#0f1729] font-['Poppins',sans-serif]"
                         >
                           {user.username}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {editingUserTypeId === user.id ? (
+                        <select
+                          value={user.userType || 'Staff'}
+                          onChange={(e) => {
+                            userService.updateUser(user.id, { userType: e.target.value as any });
+                            setEditingUserTypeId(null);
+                          }}
+                          onBlur={() => setEditingUserTypeId(null)}
+                          autoFocus
+                          className="w-full px-2 py-1 border border-[#4EBEE3] rounded text-[14px] font-['Poppins',sans-serif] focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/20"
+                        >
+                          <option value="Doctor">Doctor</option>
+                          <option value="Nurse">Nurse</option>
+                          <option value="Staff">Staff</option>
+                        </select>
+                      ) : (
+                        <span
+                          onClick={() => setEditingUserTypeId(user.id)}
+                          className="cursor-pointer hover:text-[#4EBEE3] transition-colors text-[14px] text-[#0f1729] font-['Poppins',sans-serif]"
+                        >
+                          {user.userType || 'Staff'}
                         </span>
                       )}
                     </td>
@@ -388,6 +455,37 @@ export function UsersPage() {
 
             {/* Modal Body */}
             <div className="p-6 space-y-4">
+              {/* User Image */}
+              <div className="flex flex-col items-center justify-center pb-2">
+                <label className="cursor-pointer block relative group w-20 h-20 rounded-full overflow-hidden border-2 border-dashed border-gray-300 hover:border-[#4EBEE3] bg-gray-50 flex items-center justify-center">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setModalImage(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  {modalImage ? (
+                    <img src={modalImage} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="text-center p-2">
+                      <span className="text-[12px] text-gray-500 font-medium font-['Poppins',sans-serif]">Upload Image</span>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <span className="text-[11px] text-white font-medium">Choose</span>
+                  </div>
+                </label>
+              </div>
+
               {/* Username (Email ID) */}
               <div>
                 <label className="block text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-2">
@@ -474,6 +572,23 @@ export function UsersPage() {
                 </div>
               </div>
 
+              {/* User Type */}
+              <div>
+                <label className="block text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-2">
+                  User Type
+                </label>
+                <SingleSelectDropdown
+                  options={[
+                    { value: 'Doctor', label: 'Doctor' },
+                    { value: 'Nurse', label: 'Nurse' },
+                    { value: 'Staff', label: 'Staff' }
+                  ]}
+                  value={userType}
+                  onChange={(val) => setUserType(val as any)}
+                  placeholder="Select User Type"
+                />
+              </div>
+
               {/* User Role */}
               <div>
                 <label className="block text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-2">
@@ -525,6 +640,8 @@ export function UsersPage() {
                   setUserRole('');
                   setDepartment('');
                   setTeamCategoryId('');
+                  setModalImage('');
+                  setUserType('Staff');
                   setPasswordErrors([]);
                   setShowPassword(false);
                 }}

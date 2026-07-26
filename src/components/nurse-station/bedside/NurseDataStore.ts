@@ -81,6 +81,123 @@ export interface PatientProfile {
   extension: string;
   roomType?: string;
   stationId?: string;
+  // Patient Identity (PID)
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  prefix?: string;
+  suffix?: string;
+  degree?: string;
+  ssn?: string;
+  visitNumber?: string;
+  identifierType?: string;
+  // Demographics
+  race?: string;
+  religion?: string;
+  ethnicGroup?: string;
+  maritalStatus?: string;
+  citizenship?: string;
+  birthPlace?: string;
+  languageCode?: string;
+  languageText?: string;
+  nationalityCode?: string;
+  nationalityText?: string;
+  multipleBirthIndicator?: string;
+  birthOrder?: string;
+  // Contact & Address
+  email?: string;
+  businessPhone?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  // Visit Classification (PV1 / PV2)
+  patientClass?: string;
+  admissionType?: string;
+  admitSource?: string;
+  patientType?: string;
+  hospitalService?: string;
+  financialClassCode?: string;
+  accountStatus?: string;
+  vipIndicator?: string;
+  servicingFacility?: string;
+  evnRecordedDate?: string;
+  evnPlannedDate?: string;
+  admitReason?: string;
+  visitDescription?: string;
+  transferReason?: string;
+  dischargeDisposition?: string;
+  dietType?: string;
+  bedStatus?: string;
+  patientConditionCode?: string;
+  visitPriorityCode?: string;
+  patientStatusCode?: string;
+  admissionLevelOfCare?: string;
+  modeOfArrival?: string;
+  newbornIndicator?: string;
+  estLengthOfStay?: string;
+  actualLengthOfStay?: string;
+  // MSH / EVN
+  eventTypeOptions?: string;
+  eventReasonCode?: string;
+  sendingApp?: string;
+  sendingFacility?: string;
+  receivingApp?: string;
+  receivingFacility?: string;
+  messageControlId?: string;
+  processingId?: string;
+  hl7Version?: string;
+  security?: string;
+  // PV1 Doctors
+  attendingDoctorId?: string;
+  attendingDoctorLastName?: string;
+  attendingDoctorFirstName?: string;
+  attendingDoctorDegree?: string;
+  attendingDoctorSourceTable?: string;
+
+  referringDoctorId?: string;
+  referringDoctorLastName?: string;
+  referringDoctorFirstName?: string;
+  referringDoctorDegree?: string;
+  referringDoctorSourceTable?: string;
+
+  admittingDoctorId?: string;
+  admittingDoctorLastName?: string;
+  admittingDoctorFirstName?: string;
+  admittingDoctorDegree?: string;
+  admittingDoctorSourceTable?: string;
+
+  consultingDoctorId?: string;
+  consultingDoctorLastName?: string;
+  consultingDoctorFirstName?: string;
+  consultingDoctorDegree?: string;
+  consultingDoctorSourceTable?: string;
+  // Next of Kin (NK1)
+  nkSetId?: string;
+  nkFirstName?: string;
+  nkLastName?: string;
+  nkRelationship?: string;
+  nkPhone?: string;
+  nkAltPhone?: string;
+  nkEmail?: string;
+  nkAddress?: string;
+  nkCity?: string;
+  nkState?: string;
+  nkZip?: string;
+  nkJobTitle?: string;
+  nkEmergencyFlag?: string;
+  // Insurance (IN1)
+  insCompanyId?: string;
+  insName?: string;
+  insGroupName?: string;
+  insType?: string;
+  insPolicyNumber?: string;
+  insGroupNumber?: string;
+  insEffectiveDate?: string;
+  insExpiryDate?: string;
+  insPolicyHolderName?: string;
+  insRelationship?: string;
+  insPreAuthCode?: string;
 }
 
 export interface CareTeamMember {
@@ -99,10 +216,14 @@ export interface CarePlanItem {
   labelAr?: string; // custom arabic label
   done: boolean;
   active?: boolean;
+  status?: 'unchecked' | 'in-progress' | 'done';
   minutes?: number;
   day?: number;
   date?: string; // YYYY-MM-DD
   timeKey?: string;
+  time?: string;
+  period?: number;
+  autoFlag?: boolean;
 }
 
 export interface LabResult {
@@ -186,6 +307,9 @@ export interface NurseStoreState {
 
   /** Patient profile */
   patient: PatientProfile;
+
+  /** Field-level visibility for Patient Profile */
+  profileFieldVisibility?: Record<string, boolean>;
 
   /** Care team members */
   careTeam: CareTeamMember[];
@@ -291,11 +415,11 @@ function createDefaultState(): NurseStoreState {
       nameAr: "سارة صالح",
       nameKey: "clinical.patient.sara",
       age: "32",
-      mrn: "00-284619",
+      mrn: "MRN1000000",
       room: "412",
       bed:           "",
-      sex:           "",
-      dob:           "",
+      sex:           "Female",
+      dob:           "1994-07-24",
       admissionDate: getShiftedFormatted(0),
       dischargeDate: getShiftedFormatted(2),
       contact: "050 123 4567",
@@ -303,6 +427,123 @@ function createDefaultState(): NurseStoreState {
       emergencyName: "Ahmed Saleh",
       extension: "4217",
       roomType: "Single",
+      // PID fields
+      firstName: "Sara",
+      middleName: "",
+      lastName: "Saleh",
+      prefix: "Ms",
+      suffix: "",
+      degree: "",
+      ssn: "123-456-789",
+      visitNumber: "VN-00456",
+      identifierType: "MRN",
+      // Demographics
+      race: "Arab",
+      religion: "Islam",
+      ethnicGroup: "",
+      maritalStatus: "Married",
+      citizenship: "Saudi",
+      birthPlace: "Riyadh",
+      languageCode: "ar / en",
+      languageText: "Arabic / English",
+      nationalityCode: "SA",
+      nationalityText: "Saudi Arabia",
+      multipleBirthIndicator: "N",
+      birthOrder: "1",
+      // Contact & Address
+      email: "sara.saleh@example.com",
+      businessPhone: "",
+      streetAddress: "King Fahd Rd",
+      city: "Riyadh",
+      state: "Riyadh Province",
+      zipCode: "11564",
+      // Visit Classification (PV1 / PV2)
+      patientClass: "Inpatient",
+      admissionType: "Elective",
+      admitSource: "1 = Physician Referral",
+      patientType: "Standard",
+      hospitalService: "MED / SUR / OB",
+      financialClassCode: "FC-01",
+      accountStatus: "Active",
+      vipIndicator: "N",
+      servicingFacility: "CareInn Main Hospital",
+      evnRecordedDate: getShiftedFormatted(0),
+      evnPlannedDate: getShiftedFormatted(0),
+      admitReason: "Patient admitted for observation and treatment following routine evaluation.",
+      visitDescription: "Elective inpatient admission.",
+      transferReason: "N/A",
+      dischargeDisposition: "Routine Discharge",
+      dietType: "Regular Diet",
+      bedStatus: "Occupied",
+      patientConditionCode: "Stable",
+      visitPriorityCode: "Normal",
+      patientStatusCode: "Admitted",
+      admissionLevelOfCare: "Acute Care",
+      modeOfArrival: "Walk-in",
+      newbornIndicator: "N",
+      estLengthOfStay: "3 Days",
+      actualLengthOfStay: "2 Days",
+      // MSH / EVN
+      eventTypeOptions: "A01",
+      eventReasonCode: "01",
+      sendingApp: "CAREINN",
+      sendingFacility: "Facility 01",
+      receivingApp: "HIS",
+      receivingFacility: "Main HIS",
+      messageControlId: "MSG-1784992978800",
+      processingId: "P",
+      hl7Version: "2.3",
+      security: "Standard",
+      // PV1 Doctors
+      attendingDoctorId: "DOC-9921",
+      attendingDoctorLastName: "Abdulhalim",
+      attendingDoctorFirstName: "Omar",
+      attendingDoctorDegree: "MD",
+      attendingDoctorSourceTable: "STAFF_TABLE",
+
+      referringDoctorId: "",
+      referringDoctorLastName: "",
+      referringDoctorFirstName: "",
+      referringDoctorDegree: "",
+      referringDoctorSourceTable: "",
+
+      admittingDoctorId: "DOC-1102",
+      admittingDoctorLastName: "Al-Fahad",
+      admittingDoctorFirstName: "Fahad",
+      admittingDoctorDegree: "MD",
+      admittingDoctorSourceTable: "STAFF_TABLE",
+
+      consultingDoctorId: "DOC-3304",
+      consultingDoctorLastName: "Al-Mansoori",
+      consultingDoctorFirstName: "Mansoori",
+      consultingDoctorDegree: "MD",
+      consultingDoctorSourceTable: "STAFF_TABLE",
+      // Next of Kin (NK1)
+      nkSetId: "1",
+      nkFirstName: "Ahmed",
+      nkLastName: "Saleh",
+      nkRelationship: "Brother",
+      nkPhone: "055 987 6543",
+      nkAltPhone: "050 999 8877",
+      nkEmail: "ahmed.saleh@example.com",
+      nkAddress: "King Fahd Rd, Bldg 12",
+      nkCity: "Riyadh",
+      nkState: "Riyadh Province",
+      nkZip: "11564",
+      nkJobTitle: "Engineer",
+      nkEmergencyFlag: "Yes",
+      // Insurance (IN1)
+      insCompanyId: "3",
+      insName: "BUPA",
+      insGroupName: "Corporate Gold",
+      insType: "Silver A",
+      insPolicyNumber: "POL-994821",
+      insGroupNumber: "GRP-8820",
+      insEffectiveDate: getShiftedFormatted(-180),
+      insExpiryDate: "12/12/2026",
+      insPolicyHolderName: "Sara Saleh",
+      insRelationship: "Self",
+      insPreAuthCode: "AUTH-7721",
     },
 
     careTeam: [
@@ -310,22 +551,21 @@ function createDefaultState(): NurseStoreState {
       { id: "ct-2", nameKey: "care.team.name.omar", roleKey: "care.team.attendingDoctor", specialtyKey: "care.team.specialty.cardiology", img: imgOmar, visible: true },
     ],
 
-    allergies: ["Penicillin", "Latex", "Shellfish"],
+    allergies: ["Nuts", "Fish", "Shellfish"],
 
     dietCodes: [
-      { code: "NAS", label: "No Added Salt" },
-      { code: "DM", label: "Diabetic Diet" },
+      { code: "DM", label: "Diabetic" },
     ],
 
     painScore: 5,
 
     carePlan: [
-      { id: "cp-1", labelKey: "care.plan.initialAssessment", done: true, timeKey: "care.plan.done", day: 1, date: getShiftedISO(0) },
-      { id: "cp-2", labelKey: "care.plan.bloodWork", done: true, timeKey: "care.plan.done", day: 1, date: getShiftedISO(0) },
-      { id: "cp-3", labelKey: "care.plan.medicationRound", done: false, active: true, minutes: 45, day: 1, date: getShiftedISO(0) },
-      { id: "cp-4", labelKey: "care.plan.checkup", done: false, minutes: 15, day: 2, date: getShiftedISO(1) },
-      { id: "cp-5", labelKey: "care.plan.physicalTherapy", done: false, minutes: 30, day: 3, date: getShiftedISO(2) },
-      { id: "cp-6", labelKey: "care.plan.doctorReview", done: false, minutes: 10, day: 4, date: getShiftedISO(3) },
+      { id: "cp-1", labelKey: "care.plan.initialAssessment", label: "Initial Assessment", labelAr: "التقييم الأولي", done: true, status: 'done', time: "08:00 AM", period: 30, day: 1, date: getShiftedISO(0) },
+      { id: "cp-2", labelKey: "care.plan.bloodWork", label: "Routine Blood Work", labelAr: "تحاليل الدم الروتينية", done: true, status: 'done', time: "09:00 AM", period: 15, day: 1, date: getShiftedISO(0) },
+      { id: "cp-3", labelKey: "care.plan.medicationRound", label: "Morning Medication Round", labelAr: "جولة أدوية الصباح", done: false, active: true, status: 'in-progress', time: "10:30 AM", period: 45, day: 1, date: getShiftedISO(0), autoFlag: true },
+      { id: "cp-4", labelKey: "care.plan.checkup", label: "Doctor Checkup", labelAr: "فحص الطبيب", done: false, status: 'unchecked', time: "11:30 AM", period: 15, day: 2, date: getShiftedISO(1) },
+      { id: "cp-5", labelKey: "care.plan.physicalTherapy", label: "Physical Therapy", labelAr: "العلاج الطبيعي", done: false, status: 'unchecked', time: "02:00 PM", period: 60, day: 3, date: getShiftedISO(2) },
+      { id: "cp-6", labelKey: "care.plan.doctorReview", label: "Medical Director Review", labelAr: "مراجعة المدير الطبي", done: false, status: 'unchecked', time: "04:30 PM", period: 20, day: 4, date: getShiftedISO(3) },
     ],
     carePlanMode: "daily",
     carePlanSelectedDate: getTodayISO(),
@@ -383,6 +623,7 @@ function createDefaultState(): NurseStoreState {
         },
       },
     ],
+    profileFieldVisibility: {},
     nurseViewShortcutVisible: false,
   };
 }
@@ -659,29 +900,41 @@ const nurseStore = (() => {
     },
 
     toggleCarePlanItem: (id: string) => {
-      const idx = state.carePlan.findIndex(i => i.id === id);
-      if (idx === -1) return;
-
-      const item = state.carePlan[idx];
-      const newDone = !item.done;
-      
-      let nextCarePlan = state.carePlan.map((i) => {
-        if (i.id === id) return { ...i, done: newDone, active: false };
-        return i;
-      });
-
-      if (newDone) {
-        let activated = false;
-        nextCarePlan = nextCarePlan.map((i) => {
-          if (!activated && !i.done) {
-            activated = true;
-            return { ...i, active: true };
+      state = {
+        ...state,
+        carePlan: state.carePlan.map((i) => {
+          if (i.id !== id) return i;
+          
+          let currentStatus: 'unchecked' | 'in-progress' | 'done' = 'unchecked';
+          if (i.status) {
+            currentStatus = i.status;
+          } else if (i.done) {
+            currentStatus = 'done';
+          } else if (i.active) {
+            currentStatus = 'in-progress';
           }
-          return { ...i, active: false };
-        });
-      }
 
-      state = { ...state, carePlan: nextCarePlan };
+          let nextStatus: 'unchecked' | 'in-progress' | 'done';
+          let nextDone = false;
+          let nextActive = false;
+
+          if (currentStatus === 'unchecked') {
+            nextStatus = 'in-progress';
+            nextDone = false;
+            nextActive = true;
+          } else if (currentStatus === 'in-progress') {
+            nextStatus = 'done';
+            nextDone = true;
+            nextActive = false;
+          } else {
+            nextStatus = 'unchecked';
+            nextDone = false;
+            nextActive = false;
+          }
+
+          return { ...i, status: nextStatus, done: nextDone, active: nextActive };
+        })
+      };
       notify();
     },
 
@@ -772,6 +1025,18 @@ const nurseStore = (() => {
 
     setNurseViewShortcutVisible: (visible: boolean) => {
       state = { ...state, nurseViewShortcutVisible: visible };
+      notify();
+    },
+
+    setProfileFieldVisible: (fieldKey: string, visible: boolean) => {
+      const currentMap = state.profileFieldVisibility || {};
+      state = {
+        ...state,
+        profileFieldVisibility: {
+          ...currentMap,
+          [fieldKey]: visible,
+        },
+      };
       notify();
     },
 
