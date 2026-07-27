@@ -26,6 +26,7 @@ export type RoomSource = 'device' | 'manual';
 
 export interface Room {
   source: RoomSource;
+  sourceType?: 'careinn15' | 'caresign';
   deviceId?: string; // present only when source === 'device'
   roomNumber: string;
   bed: string;
@@ -159,7 +160,7 @@ export const nurseStationService = {
   },
 
   /** Attach an existing Device Manager device to a station as a room. */
-  assignDevice(stationId: string, device: DeviceRow): Station | undefined {
+  assignDevice(stationId: string, device: DeviceRow, sourceType: 'careinn15' | 'caresign' = 'careinn15'): Station | undefined {
     const stations = readStations();
     let updated: Station | undefined;
     const next = stations.map((s) => {
@@ -170,6 +171,7 @@ export const nurseStationService = {
       }
       const room: Room = {
         source: 'device',
+        sourceType,
         deviceId: device.deviceId,
         roomNumber: device.roomNo,
         bed: device.bedNo,

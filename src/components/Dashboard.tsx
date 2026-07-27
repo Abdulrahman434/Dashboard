@@ -26,6 +26,7 @@ import ChannelsPage from './ChannelsPage';
 import ChannelTypePage from './ChannelTypePage';
 import ChannelManagerPage from './ChannelManagerPage';
 import CareInnPage from './CareInnPage';
+import CareSignPage from './CareSignPage';
 import FeedbackManagerPage from './FeedbackManagerPage';
 import FeedbackReportPage from './FeedbackReportPage';
 import SurveyResponsesPage from './SurveyResponsesPage';
@@ -249,7 +250,7 @@ export default function Dashboard({ onLogout }: DashboardProps) {
       case 'careinn':
         return <CareInnPage filters={navigationState} />;
       case 'caresign':
-        return <EmptyState title="CareSign" />;
+        return <CareSignPage />;
       case 'android-tv':
         return <EmptyState title="Android TV" />;
       case 'bacnet-integration':

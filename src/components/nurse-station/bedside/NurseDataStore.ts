@@ -214,6 +214,8 @@ export interface CarePlanItem {
   labelKey: string;
   label?: string; // custom label (used for nurse-added items)
   labelAr?: string; // custom arabic label
+  desc?: string; // short activity description (optional)
+  source?: 'his' | 'manual'; // origin: synced from HIS (read-only) or nurse-added
   done: boolean;
   active?: boolean;
   status?: 'unchecked' | 'in-progress' | 'done';
@@ -560,12 +562,14 @@ function createDefaultState(): NurseStoreState {
     painScore: 5,
 
     carePlan: [
-      { id: "cp-1", labelKey: "care.plan.initialAssessment", label: "Initial Assessment", labelAr: "التقييم الأولي", done: true, status: 'done', time: "08:00 AM", period: 30, day: 1, date: getShiftedISO(0) },
-      { id: "cp-2", labelKey: "care.plan.bloodWork", label: "Routine Blood Work", labelAr: "تحاليل الدم الروتينية", done: true, status: 'done', time: "09:00 AM", period: 15, day: 1, date: getShiftedISO(0) },
-      { id: "cp-3", labelKey: "care.plan.medicationRound", label: "Morning Medication Round", labelAr: "جولة أدوية الصباح", done: false, active: true, status: 'in-progress', time: "10:30 AM", period: 45, day: 1, date: getShiftedISO(0), autoFlag: true },
-      { id: "cp-4", labelKey: "care.plan.checkup", label: "Doctor Checkup", labelAr: "فحص الطبيب", done: false, status: 'unchecked', time: "11:30 AM", period: 15, day: 2, date: getShiftedISO(1) },
-      { id: "cp-5", labelKey: "care.plan.physicalTherapy", label: "Physical Therapy", labelAr: "العلاج الطبيعي", done: false, status: 'unchecked', time: "02:00 PM", period: 60, day: 3, date: getShiftedISO(2) },
-      { id: "cp-6", labelKey: "care.plan.doctorReview", label: "Medical Director Review", labelAr: "مراجعة المدير الطبي", done: false, status: 'unchecked', time: "04:30 PM", period: 20, day: 4, date: getShiftedISO(3) },
+      { id: "cp-1", labelKey: "care.plan.initialAssessment", label: "Initial Assessment", labelAr: "التقييم الأولي", desc: "Baseline assessment completed", source: 'his', done: true, status: 'done', time: "08:00 AM", period: 30, day: 1, date: getShiftedISO(0) },
+      { id: "cp-2", labelKey: "care.plan.bloodWork", label: "Routine Blood Work", labelAr: "تحاليل الدم الروتينية", desc: "CBC, Electrolytes", source: 'his', done: true, status: 'done', time: "09:00 AM", period: 15, day: 1, date: getShiftedISO(0) },
+      { id: "cp-3", labelKey: "care.plan.medicationRound", label: "Morning Medication Round", labelAr: "جولة أدوية الصباح", desc: "Scheduled medications", source: 'his', done: false, active: true, status: 'in-progress', time: "10:30 AM", period: 45, day: 1, date: getShiftedISO(0), autoFlag: true },
+      { id: "cp-7", labelKey: "care.plan.nutritionReview", label: "Nutrition Review", labelAr: "مراجعة التغذية", desc: "Diet & intake evaluation", source: 'manual', done: false, status: 'unchecked', time: "02:00 PM", period: 30, day: 1, date: getShiftedISO(0) },
+      { id: "cp-8", labelKey: "care.plan.mobilityCheck", label: "Mobility Check", labelAr: "فحص الحركة", desc: "Assist with mobility & safety", source: 'manual', done: false, status: 'unchecked', time: "04:00 PM", period: 20, day: 1, date: getShiftedISO(0) },
+      { id: "cp-4", labelKey: "care.plan.checkup", label: "Doctor Checkup", labelAr: "فحص الطبيب", desc: "Attending physician round", source: 'his', done: false, status: 'unchecked', time: "11:30 AM", period: 15, day: 2, date: getShiftedISO(1) },
+      { id: "cp-5", labelKey: "care.plan.physicalTherapy", label: "Physical Therapy", labelAr: "العلاج الطبيعي", desc: "Guided rehabilitation session", source: 'his', done: false, status: 'unchecked', time: "02:00 PM", period: 60, day: 3, date: getShiftedISO(2) },
+      { id: "cp-6", labelKey: "care.plan.doctorReview", label: "Medical Director Review", labelAr: "مراجعة المدير الطبي", desc: "Care plan review & sign-off", source: 'his', done: false, status: 'unchecked', time: "04:30 PM", period: 20, day: 4, date: getShiftedISO(3) },
     ],
     carePlanMode: "daily",
     carePlanSelectedDate: getTodayISO(),

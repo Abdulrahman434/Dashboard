@@ -1,31 +1,36 @@
 import { useState, useEffect } from "react";
-import { ClipboardList, Plus, Trash2, Check, Clock, Edit2, Save, Eye, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
-import { useTheme } from "../../ThemeContext";
+import {
+  Plus, Clock, Pencil, Trash2, MoreVertical, ChevronLeft, ChevronRight,
+  Eye, CheckCircle2, Circle, Check, Loader2, CalendarDays, Info,
+  ClipboardList, FlaskConical, Pill, Apple, Footprints, Stethoscope,
+  Activity, HeartPulse, Thermometer, StickyNote, Monitor, RefreshCw,
+  ShieldCheck, FileText,
+} from "lucide-react";
 import { useLocale } from "../../i18n";
 import { useNurseStore, nurseActions, type CarePlanItem } from "../../NurseDataStore";
+import {
+  PageHeader, StatusBadge, SectionCard, Button, IconButton, Toggle,
+  ConfirmDialog, EmptyState, Segmented, cx, TONE,
+} from "../ui";
 
-type CarePlanMode = "daily" | "overall";
-
+/* ── Date helpers (preserved) ────────────────────────────────────────── */
 function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
-
 function shiftDay(d: Date, delta: number): Date {
   const next = new Date(d);
   next.setDate(d.getDate() + delta);
   return next;
 }
-
 const toISO = (d: Date) => d.toISOString().split("T")[0];
 const fromISO = (s: string) => new Date(s);
+const timeShort = (t?: string) => (t ? t.replace(/\s*(AM|PM)$/i, "") : "");
 
-// Parse timeStr like "14:30" or "11:00 AM" or "09:00 AM" to determine auto status
+/* ── getAutoStatus — PRESERVED VERBATIM ──────────────────────────────── */
 function getAutoStatus(timeStr: string, periodMinutes: number): 'unchecked' | 'in-progress' | 'done' {
   if (!timeStr) return 'unchecked';
-  
   let hours = 0;
   let minutes = 0;
-  
   const ampmMatch = timeStr.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
   if (ampmMatch) {
     hours = parseInt(ampmMatch[1], 10);
@@ -42,59 +47,106 @@ function getAutoStatus(timeStr: string, periodMinutes: number): 'unchecked' | 'i
       return 'unchecked';
     }
   }
-  
   const now = new Date();
   const scheduled = new Date(now);
   scheduled.setHours(hours, minutes, 0, 0);
-  
   const end = new Date(scheduled);
   end.setMinutes(scheduled.getMinutes() + (periodMinutes || 30));
-  
-  if (now < scheduled) {
-    return 'unchecked';
-  } else if (now >= scheduled && now < end) {
-    return 'in-progress';
-  } else {
-    return 'done';
-  }
+  if (now < scheduled) return 'unchecked';
+  if (now >= scheduled && now < end) return 'in-progress';
+  return 'done';
 }
 
+/* ── Source (HIS vs Manual) — explicit field, falls back to id prefix ── */
+const sourceOf = (it: CarePlanItem): "HIS" | "Manual" =>
+  it.source === "manual" ? "Manual" : it.source === "his" ? "HIS" : it.id?.startsWith("man-") ? "Manual" : "HIS";
+
+/* ── Effective 3-state status ────────────────────────────────────────── */
+function statusOf(item?: CarePlanItem | null): 'unchecked' | 'in-progress' | 'done' {
+  if (!item) return 'unchecked';
+  if (item.autoFlag && item.time) return getAutoStatus(item.time, item.period || 30);
+  if (item.status) return item.status;
+  if (item.done) return 'done';
+  if (item.active) return 'in-progress';
+  return 'unchecked';
+}
+
+/* ── Minutes-of-day for ordering; blank sorts last ───────────────────── */
+function timeToMinutes(timeStr?: string): number {
+  if (!timeStr) return 24 * 60 + 1;
+  const m = timeStr.match(/^(\d+):(\d+)\s*(AM|PM)?$/i);
+  if (!m) return 24 * 60 + 1;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ap = (m[3] || "").toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+const STATUS_META = {
+  done: { tone: "success" as const, label: "Completed" },
+  "in-progress": { tone: "info" as const, label: "In Progress" },
+  unchecked: { tone: "neutral" as const, label: "Pending" },
+};
+
+/* ── Type icon heuristic (display-only) ──────────────────────────────── */
+function taskIcon(name: string) {
+  const n = (name || "").toLowerCase();
+  if (/assess/.test(n)) return <ClipboardList size={17} />;
+  if (/blood|lab|cbc|test|sample|electrolyt/.test(n)) return <FlaskConical size={17} />;
+  if (/medic|med round|drug|dose|infus/.test(n)) return <Pill size={17} />;
+  if (/nutrit|diet|meal|food|intake/.test(n)) return <Apple size={17} />;
+  if (/mobil|therap|physical|walk|ambulat/.test(n)) return <Footprints size={17} />;
+  if (/review|checkup|check-up|doctor|physician|round|consult/.test(n)) return <Stethoscope size={17} />;
+  return <ClipboardList size={17} />;
+}
+
+// DEV-ONLY MOCK — display-only clinical snapshot, NOT bound to the store.
+const MOCK_SNAPSHOT = {
+  bp: "120/80",
+  hr: "72 bpm",
+  temp: "36.8°C",
+  lastRecorded: "09:15 AM",
+  note: "Resting comfortably; pain score 1/10",
+};
+// DEV-ONLY MOCK — sync metadata surfaced from the HIS integration layer.
+const MOCK_SYNC = { lastSync: "09:45 AM", source: "Hospital HIS" };
+
 export function CarePlanTab({ role }: { role: "nurse" | "doctor" }) {
-  const { theme: t } = useTheme();
   const { t: tr } = useLocale();
   const store = useNurseStore();
   const isNurse = role === "nurse";
 
-  // Form states
-  const [newLabel, setNewLabel] = useState("");
-  const [newLabelAr, setNewLabelAr] = useState("");
-  const [newTime, setNewTime] = useState("10:00 AM");
-  const [newMinutes, setNewMinutes] = useState("30");
-  const [newDay, setNewDay] = useState("1");
-  const [newAutoFlag, setNewAutoFlag] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addDay, setAddDay] = useState<number | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
 
-  // Edit states
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editLabel, setEditLabel] = useState("");
-  const [editLabelAr, setEditLabelAr] = useState("");
-  const [editTime, setEditTime] = useState("");
-  const [editMinutes, setEditMinutes] = useState("");
-  const [editAutoFlag, setEditAutoFlag] = useState(false);
+  const mode = store.carePlanMode;
 
-  // Re-run status simulation every 10 seconds to keep UI live
+  // Editor form fields (compact — matches design)
+  const [fLabel, setFLabel] = useState("");
+  const [fTime, setFTime] = useState("05:00 PM");
+  const [fMinutes, setFMinutes] = useState("30");
+  const [fAuto, setFAuto] = useState(false);
+
+  // Delete confirmation
+  const [confirmDelete, setConfirmDelete] = useState<CarePlanItem | null>(null);
+
+  // Session-local shift notes (DEV-ONLY — no store/backend field yet)
+  const [notes, setNotes] = useState<{ id: string; text: string }[]>([]);
+  const [addingNote, setAddingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+
+  // Re-run status simulation every 10 seconds to keep UI live (PRESERVED)
   const [, setTick] = useState(0);
   useEffect(() => {
-    const timer = setInterval(() => setTick(prev => prev + 1), 10000);
+    const timer = setInterval(() => setTick((prev) => prev + 1), 10000);
     return () => clearInterval(timer);
   }, []);
 
-  const mode = store.carePlanMode;
   const selectedDate = fromISO(store.carePlanSelectedDate);
-
-  const handleModeChange = (newMode: "daily" | "overall") => {
-    nurseActions.setCarePlanMode(newMode);
-  };
-
   const today = new Date();
   const yesterday = shiftDay(today, -1);
   const tomorrow = shiftDay(today, 1);
@@ -103,466 +155,470 @@ export function CarePlanTab({ role }: { role: "nurse" | "doctor" }) {
   if (isSameDay(selectedDate, today)) dateLabel = tr("careplan.today") || "Today";
   else if (isSameDay(selectedDate, yesterday)) dateLabel = tr("careplan.yesterday") || "Yesterday";
   else if (isSameDay(selectedDate, tomorrow)) dateLabel = tr("careplan.tomorrow") || "Tomorrow";
-  else dateLabel = selectedDate.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+  else dateLabel = selectedDate.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
+  const fullDate = selectedDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
-  const handleAdd = () => {
-    if (!newLabel.trim()) return;
+  /* ── Filtered sets ────────────────────────────────────────────────── */
+  const dailyItems = store.carePlan
+    .filter((item) => item.date === store.carePlanSelectedDate)
+    .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+  const overallItems = store.carePlan.filter((item) => item.day !== undefined);
+
+  // Metrics reflect the active view.
+  const metricItems = mode === "overall" ? overallItems : dailyItems;
+  const total = metricItems.length;
+  const completed = metricItems.filter((i) => statusOf(i) === "done").length;
+  const inProgress = metricItems.filter((i) => statusOf(i) === "in-progress").length;
+  const pending = total - completed - inProgress;
+  const pct = total ? Math.round((completed / total) * 100) : 0;
+  const manualCount = store.carePlan.filter((i) => sourceOf(i) === "Manual").length;
+
+  /* ── Editor lifecycle ─────────────────────────────────────────────── */
+  const resetForm = () => { setFLabel(""); setFTime("05:00 PM"); setFMinutes("30"); setFAuto(false); };
+  const openAdd = () => {
+    setEditId(null); setMenuOpenId(null); resetForm();
+    if (mode === "overall") { setShowAdd(false); setAddDay(1); }
+    else { setAddDay(null); setShowAdd(true); }
+  };
+  const openAddDay = (day: number) => { setEditId(null); setMenuOpenId(null); setShowAdd(false); resetForm(); setAddDay(day); };
+  const openEdit = (item: CarePlanItem) => {
+    setMenuOpenId(null);
+    setShowAdd(false); setAddDay(null);
+    setFLabel(item.label || (item.labelKey ? tr(item.labelKey) : ""));
+    setFTime(item.time || "05:00 PM");
+    setFMinutes(String(item.period || item.minutes || 30));
+    setFAuto(!!item.autoFlag);
+    setEditId(item.id);
+  };
+  const closeEditor = () => { setShowAdd(false); setAddDay(null); setEditId(null); resetForm(); };
+
+  const commitAdd = (extra: Partial<CarePlanItem>) => {
+    if (!fLabel.trim()) return;
+    const mins = Number(fMinutes) || 30;
     nurseActions.addCarePlanItem({
-      id: `cp-${Date.now().toString(36)}`,
+      id: `man-${Date.now().toString(36)}`,
       labelKey: "",
-      label: newLabel.trim(),
-      labelAr: newLabelAr.trim(),
+      label: fLabel.trim(),
+      desc: "",
+      source: "manual",
       done: false,
-      minutes: mode === "daily" ? (Number(newMinutes) || 30) : undefined,
-      period: Number(newMinutes) || 30,
-      time: mode === "daily" ? newTime.trim() : undefined,
-      autoFlag: mode === "daily" ? newAutoFlag : false,
-      day: mode === "overall" ? (Number(newDay) || 1) : undefined,
-      date: mode === "daily" ? store.carePlanSelectedDate : undefined,
-    });
-    setNewLabel("");
-    setNewLabelAr("");
-    setNewTime("10:00 AM");
-    setNewMinutes("30");
-    setNewDay("1");
-    setNewAutoFlag(false);
+      time: fTime.trim() || undefined,
+      minutes: mins,
+      period: mins,
+      autoFlag: fAuto,
+      ...extra,
+    } as CarePlanItem);
+    closeEditor();
   };
-
-  const handleSaveEdit = (id: string) => {
+  const commitEdit = (id: string) => {
+    if (!fLabel.trim()) return;
+    const mins = Number(fMinutes) || 30;
     nurseActions.updateCarePlanItem(id, {
-      label: editLabel.trim(),
-      labelAr: editLabelAr.trim(),
-      time: mode === "daily" ? editTime.trim() : undefined,
-      period: Number(editMinutes) || 30,
-      minutes: Number(editMinutes) || 30,
-      autoFlag: mode === "daily" ? editAutoFlag : false,
+      label: fLabel.trim(),
+      time: fTime.trim() || undefined,
+      period: mins,
+      minutes: mins,
+      autoFlag: fAuto,
     });
-    setEditingId(null);
+    closeEditor();
   };
 
-  const filteredItems = store.carePlan.filter(item => {
-    if (mode === "overall") return item.day !== undefined;
-    return item.date === store.carePlanSelectedDate;
-  });
-
-  // Calculate live computed statuses for auto-flagged items
-  const itemsToRender = filteredItems.map(item => {
-    if (item.autoFlag && item.time) {
-      const autoStatus = getAutoStatus(item.time, item.period || 30);
-      return {
-        ...item,
-        status: autoStatus,
-        done: autoStatus === 'done',
-        active: autoStatus === 'in-progress'
-      };
-    }
-    return item;
-  });
-
-  const handleToggleStatus = (item: CarePlanItem) => {
+  /* ── Status advance (direct, per design) ──────────────────────────── */
+  const advance = (item: CarePlanItem) => {
     if (!isNurse) return;
-    
-    // If the item is on auto-flag, we turn it off so they can manually cycle
-    if (item.autoFlag) {
-      nurseActions.updateCarePlanItem(item.id, { autoFlag: false });
-    }
-    
+    setMenuOpenId(null);
+    if (item.autoFlag) nurseActions.updateCarePlanItem(item.id, { autoFlag: false });
     nurseActions.toggleCarePlanItem(item.id);
   };
 
-  return (
-    <div className="space-y-5">
-      {isNurse && (
-        <div className="nurse-card flex items-center justify-between" style={{ marginBottom: 0 }}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: t.primarySubtle }}>
-              <Eye size={18} style={{ color: t.primary }} />
-            </div>
-            <div>
-              <span style={{ fontSize: "14px", fontWeight: 700, color: t.textHeading, display: "block" }}>Show Section to Patient</span>
-              <span style={{ fontSize: "12px", color: t.textMuted }}>Toggle visibility for "Care Plan" on the bedside screen</span>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
+  const addNote = () => {
+    if (!noteDraft.trim()) return;
+    setNotes((n) => [...n, { id: `n-${Date.now().toString(36)}`, text: noteDraft.trim() }]);
+    setNoteDraft("");
+    setAddingNote(false);
+  };
+
+  /* ── Reusable compact editor form ─────────────────────────────────── */
+  const editorForm = (onSubmit: () => void, submitLabel: string) => (
+    <div className="rounded-[10px] border border-dashed border-[#bfe6f3] bg-[#f7fbfe] p-4">
+      <div className="flex items-center gap-2 mb-3 text-[13px] font-semibold text-[#1d7da3]">
+        <Plus size={15} /> {submitLabel === "Save" ? "Edit care item" : "Add care item"}
+      </div>
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="flex-1 min-w-[220px]">
+          <label className="text-[11.5px] font-semibold text-[#6B7280]">Care item</label>
+          <input
+            autoFocus
+            value={fLabel}
+            onChange={(e) => setFLabel(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") onSubmit(); if (e.key === "Escape") closeEditor(); }}
+            placeholder="Search care items (e.g. Vital Signs, Pain Assessment)"
+            className="mt-1 w-full h-[40px] px-3 rounded-lg border border-[#d6dae6] text-[13.5px] text-[#16274D] outline-none focus:border-[#4EBEE3] focus-visible:ring-2 focus-visible:ring-[#4EBEE3]/30"
+          />
+        </div>
+        <div>
+          <label className="text-[11.5px] font-semibold text-[#6B7280] block">Time</label>
+          <div className="mt-1 relative">
             <input
-              type="checkbox"
-              checked={store.sectionVisibility.carePlan}
-              onChange={(e) => nurseActions.setSectionVisible("carePlan", e.target.checked)}
-              className="sr-only peer"
+              value={fTime}
+              onChange={(e) => setFTime(e.target.value)}
+              placeholder="05:00 PM"
+              className="w-32 h-[40px] pl-3 pr-8 rounded-lg border border-[#d6dae6] text-[13.5px] text-[#16274D] outline-none focus:border-[#4EBEE3] focus-visible:ring-2 focus-visible:ring-[#4EBEE3]/30"
             />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"
-              style={{ backgroundColor: store.sectionVisibility.carePlan ? t.primary : "#E5E7EB" }} />
-          </label>
+            <Clock size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#98a2b3] pointer-events-none" />
+          </div>
         </div>
-      )}
+        <div>
+          <label className="text-[11.5px] font-semibold text-[#6B7280] block">Duration (min)</label>
+          <input
+            type="number"
+            value={fMinutes}
+            onChange={(e) => setFMinutes(e.target.value)}
+            placeholder="30"
+            className="mt-1 w-24 h-[40px] px-3 rounded-lg border border-[#d6dae6] text-[13.5px] text-[#16274D] outline-none focus:border-[#4EBEE3] focus-visible:ring-2 focus-visible:ring-[#4EBEE3]/30"
+          />
+        </div>
+        <div className="flex flex-col gap-1 pb-1">
+          <span className="text-[11.5px] font-semibold text-[#6B7280] inline-flex items-center gap-1">
+            Auto trigger <Info size={12} className="text-[#98a2b3]" />
+          </span>
+          <Toggle size="sm" checked={fAuto} onChange={(v: boolean) => setFAuto(v)} label="Auto-trigger status from schedule" />
+        </div>
+        <div className="flex items-center gap-2 ml-auto pb-0.5">
+          <Button variant="primary" size="sm" icon={<Plus size={15} />} disabled={!fLabel.trim()} onClick={onSubmit}>
+            {submitLabel}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={closeEditor}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
 
-      <div className="nurse-card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 style={{ color: t.textHeading, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-            <ClipboardList size={18} style={{ color: t.primary }} /> {tr("care.plan.title") || "My Care Plan"}
-          </h3>
-          
-          {/* Daily / Overall Toggle */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => handleModeChange("daily")}
-              className="px-4 py-1.5 rounded-md text-[13px] font-semibold transition-all"
-              style={{
-                backgroundColor: mode === "daily" ? t.primary : "transparent",
-                color: mode === "daily" ? "#fff" : t.textMuted,
-                border: "none",
-                cursor: "pointer"
-              }}
-            >
-              {tr("careplan.toggle.daily") || "Daily"}
-            </button>
-            <button
-              onClick={() => handleModeChange("overall")}
-              className="px-4 py-1.5 rounded-md text-[13px] font-semibold transition-all"
-              style={{
-                backgroundColor: mode === "overall" ? t.primary : "transparent",
-                color: mode === "overall" ? "#fff" : t.textMuted,
-                border: "none",
-                cursor: "pointer"
-              }}
-            >
-              {tr("careplan.toggle.overall") || "Overall"}
-            </button>
+  /* ── Timeline row ─────────────────────────────────────────────────── */
+  const TaskRow = ({ item, isLast }: any) => {
+    const s = statusOf(item);
+    const meta = STATUS_META[s];
+    const c = TONE[meta.tone];
+    const src = sourceOf(item);
+    const isHIS = src === "HIS";
+    const name = item.label || (item.labelKey ? tr(item.labelKey) : "");
+
+    if (editId === item.id) {
+      return <div className="py-2">{editorForm(() => commitEdit(item.id), "Save")}</div>;
+    }
+
+    return (
+      <div className="flex items-center gap-3 sm:gap-4 py-3">
+        {/* Time */}
+        <div className="w-12 sm:w-14 shrink-0 text-right text-[13px] font-semibold text-[#16274D] tabular-nums">
+          {timeShort(item.time) || "—"}
+        </div>
+
+        {/* Connector + status dot */}
+        <div className="relative shrink-0 self-stretch flex flex-col items-center" style={{ width: 26 }}>
+          {!isLast && <span className="absolute top-1/2 bottom-[-14px] w-[2px] bg-[#E8ECF2]" />}
+          <span
+            className="relative z-10 my-auto w-[22px] h-[22px] rounded-full flex items-center justify-center"
+            style={{
+              background: s === "unchecked" ? "#fff" : c.dot,
+              border: s === "unchecked" ? "2px solid #cbd5e1" : `2px solid ${c.dot}`,
+              color: "#fff",
+            }}
+          >
+            {s === "done" && <Check size={13} strokeWidth={3} />}
+            {s === "in-progress" && <Loader2 size={13} className="animate-spin" />}
+          </span>
+        </div>
+
+        {/* Type icon */}
+        <div
+          className="shrink-0 w-9 h-9 rounded-[9px] flex items-center justify-center"
+          style={{ background: "#eef4fb", color: "#3f77a8" }}
+        >
+          {taskIcon(name)}
+        </div>
+
+        {/* Name + description */}
+        <div className="flex-1 min-w-0">
+          <div
+            className="text-[14px] font-semibold text-[#16274D] truncate"
+            style={s === "done" ? { color: "#5d6b82" } : undefined}
+          >
+            {name || "—"}
+          </div>
+          <div className="text-[12.5px] text-[#6B7280] truncate">
+            {item.desc || (item.autoFlag ? "Auto-triggered from schedule" : `${item.period || item.minutes || 30} min`)}
           </div>
         </div>
 
-        {/* Period Row */}
-        <div className="flex items-center justify-center mb-6 py-2" style={{ borderBottom: `1px solid ${t.borderDefault}` }}>
-          {mode === "daily" ? (
-            <div className="flex items-center gap-4">
-              <button onClick={() => nurseActions.setCarePlanSelectedDate(toISO(shiftDay(selectedDate, -1)))} className="p-1 rounded-full hover:bg-gray-100 cursor-pointer" style={{ border: "none", background: "none" }}>
-                <ChevronLeft size={20} style={{ color: t.textHeading }} />
-              </button>
-              <span style={{ fontSize: "16px", fontWeight: 700, color: t.textHeading, minWidth: "120px", textAlign: "center" }}>
-                {dateLabel}
-              </span>
-              <button onClick={() => nurseActions.setCarePlanSelectedDate(toISO(shiftDay(selectedDate, 1)))} className="p-1 rounded-full hover:bg-gray-100 cursor-pointer" style={{ border: "none", background: "none" }}>
-                <ChevronRight size={20} style={{ color: t.textHeading }} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-4">
-              <span style={{ fontSize: "16px", fontWeight: 700, color: t.textHeading, minWidth: "120px", textAlign: "center" }}>
-                {tr("careplan.overallTitle") || "Overall Plan"}
-              </span>
+        {/* Right controls */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span
+            className="hidden sm:inline-flex items-center rounded-md px-2 py-[3px] text-[11px] font-semibold text-[#475467] bg-[#f2f4f7] border border-[#e4e7ec]"
+          >
+            {src}
+          </span>
+          <StatusBadge tone={meta.tone} icon={s === "done" ? <CheckCircle2 size={13} /> : undefined} className="text-[11px]">
+            {meta.label}
+          </StatusBadge>
+
+          {isNurse && s !== "done" && (
+            <Button variant="secondary" size="sm" onClick={() => advance(item)}>
+              {s === "in-progress" ? "Complete" : "Start"}
+            </Button>
+          )}
+
+          {isNurse && (
+            <div className="relative">
+              <IconButton label="More actions" icon={<MoreVertical size={17} />} onClick={() => setMenuOpenId(menuOpenId === item.id ? null : item.id)} />
+              {menuOpenId === item.id && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setMenuOpenId(null)} />
+                  <div className="absolute right-0 top-9 z-20 w-48 rounded-lg border border-[#e4e7ec] bg-white shadow-lg py-1">
+                    {isHIS ? (
+                      <div className="px-3 py-2 text-[12px] text-[#98a2b3]">Managed by HIS — read only</div>
+                    ) : (
+                      <>
+                        <button onClick={() => openEdit(item)} className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#16274D] hover:bg-[#f2f4f7] cursor-pointer">
+                          <Pencil size={14} /> Edit task
+                        </button>
+                        <button onClick={() => { setMenuOpenId(null); setConfirmDelete(item); }} className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#b42318] hover:bg-[#fdeceb] cursor-pointer">
+                          <Trash2 size={14} /> Delete task
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>
+      </div>
+    );
+  };
 
-        {/* Today Card (Mocked) */}
-        {mode === "daily" && (
-          <div className="mb-6 p-4 rounded-xl" style={{ backgroundColor: "#F9FAFB", border: `1px solid ${t.borderDefault}` }}>
-            <h4 style={{ fontSize: "14px", fontWeight: 700, color: t.textHeading, marginBottom: "12px" }}>
-              {dateLabel}
-            </h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span style={{ fontSize: "12px", color: t.textMuted, display: "block", marginBottom: "4px" }}>Vitals</span>
-                <p style={{ fontSize: "14px", fontWeight: 600, color: t.textHeading, margin: 0 }}>BP: 120/80, HR: 72</p>
-              </div>
-              <div>
-                <span style={{ fontSize: "12px", color: t.textMuted, display: "block", marginBottom: "4px" }}>Notes</span>
-                <p style={{ fontSize: "14px", fontWeight: 600, color: t.textHeading, margin: 0 }}>Resting comfortably.</p>
-              </div>
-            </div>
-          </div>
-        )}
+  /* ── Sidebar definition row ───────────────────────────────────────── */
+  const InfoRow = ({ label, value }: any) => (
+    <div className="flex items-center justify-between gap-3 py-1.5">
+      <span className="text-[12.5px] text-[#6B7280]">{label}</span>
+      <span className="text-[12.5px] font-semibold text-[#16274D] text-right">{value}</span>
+    </div>
+  );
 
-        {/* Proper Table for Care Plan items */}
-        <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white mb-6">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-[13px] font-semibold text-gray-700">CarePlan Item (En)</th>
-                <th className="px-4 py-3 text-[13px] font-semibold text-gray-700">CarePlan Item (Ar)</th>
-                <th className="px-4 py-3 text-[13px] font-semibold text-gray-700">Time (Optional)</th>
-                <th className="px-4 py-3 text-[13px] font-semibold text-gray-700">Period</th>
-                <th className="px-4 py-3 text-[13px] font-semibold text-gray-700">Auto Flag</th>
-                <th className="px-4 py-3 text-[13px] font-semibold text-gray-700">Status</th>
-                {isNurse && <th className="px-4 py-3 text-[13px] font-semibold text-gray-700 w-24 text-center">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {itemsToRender.length === 0 ? (
-                <tr>
-                  <td colSpan={isNurse ? 7 : 6} className="px-4 py-8 text-center text-[14px] text-gray-400">
-                    No care plan items scheduled for this period.
-                  </td>
-                </tr>
-              ) : (
-                itemsToRender.map((item) => {
-                  const isEditing = editingId === item.id;
-                  
-                  // Calculate active status text & color
-                  let itemStatus: 'unchecked' | 'in-progress' | 'done' = 'unchecked';
-                  if (item.status) {
-                    itemStatus = item.status;
-                  } else if (item.done) {
-                    itemStatus = 'done';
-                  } else if (item.active) {
-                    itemStatus = 'in-progress';
-                  }
+  const visibleOn = store.sectionVisibility.carePlan;
 
-                  return (
-                    <tr key={item.id} className="border-b border-gray-150 hover:bg-gray-50/50 transition-colors">
-                      {/* English Item */}
-                      <td className="px-4 py-3 text-[14px]">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editLabel}
-                            onChange={(e) => setEditLabel(e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#4EBEE3]"
-                          />
-                        ) : (
-                          <span style={{ textDecoration: item.done ? "line-through" : "none", color: item.done ? t.textMuted : t.textHeading }}>
-                            {item.label || (item.labelKey ? tr(item.labelKey) : "")}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Arabic Item */}
-                      <td className="px-4 py-3 text-[14px]" dir="rtl">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editLabelAr}
-                            onChange={(e) => setEditLabelAr(e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#4EBEE3]"
-                          />
-                        ) : (
-                          <span style={{ textDecoration: item.done ? "line-through" : "none", color: item.done ? t.textMuted : t.textHeading }}>
-                            {item.labelAr || "—"}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Time */}
-                      <td className="px-4 py-3 text-[14px]">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            value={editTime}
-                            onChange={(e) => setEditTime(e.target.value)}
-                            placeholder="e.g. 10:00 AM"
-                            className="w-full px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#4EBEE3]"
-                          />
-                        ) : (
-                          <span>{item.time || "—"}</span>
-                        )}
-                      </td>
-
-                      {/* Period */}
-                      <td className="px-4 py-3 text-[14px]">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={editMinutes}
-                            onChange={(e) => setEditMinutes(e.target.value)}
-                            placeholder="Min"
-                            className="w-20 px-2 py-1 border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#4EBEE3]"
-                          />
-                        ) : (
-                          <span>
-                            {mode === "overall"
-                              ? `${tr("careplan.dayLabel")} ${item.day || 1}`
-                              : `${item.period || item.minutes || 30} min`
-                            }
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Auto Flag */}
-                      <td className="px-4 py-3 text-[14px]">
-                        {isEditing ? (
-                          <input
-                            type="checkbox"
-                            checked={editAutoFlag}
-                            onChange={(e) => setEditAutoFlag(e.target.checked)}
-                            className="w-4 h-4 rounded border-gray-300 text-[#4EBEE3] focus:ring-[#4EBEE3]/20 cursor-pointer accent-[#4EBEE3]"
-                          />
-                        ) : (
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold ${
-                            item.autoFlag ? "bg-indigo-50 text-indigo-600 border border-indigo-100" : "bg-gray-100 text-gray-500"
-                          }`}>
-                            {item.autoFlag ? "Enabled" : "Off"}
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Status Checkbox Button (3 States: unchecked -> in-progress -> done) */}
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleToggleStatus(item)}
-                          disabled={!isNurse}
-                          className="flex items-center gap-2 text-left focus:outline-none group"
-                        >
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border-2 transition-all ${
-                            itemStatus === 'done' 
-                              ? "bg-green-500 border-green-500 text-white" 
-                              : itemStatus === 'in-progress' 
-                              ? "bg-blue-500 border-blue-500 text-white animate-pulse" 
-                              : "border-gray-300 bg-white hover:border-[#4EBEE3]"
-                          }`}>
-                            {itemStatus === 'done' && <Check size={14} strokeWidth={3} />}
-                            {itemStatus === 'in-progress' && <Clock size={12} strokeWidth={3} />}
-                            {itemStatus === 'unchecked' && <div className="w-1.5 h-1.5 rounded-full bg-transparent" />}
-                          </div>
-                          
-                          <span className={`text-[12px] font-semibold ${
-                            itemStatus === 'done'
-                              ? "text-green-600"
-                              : itemStatus === 'in-progress'
-                              ? "text-blue-600"
-                              : "text-gray-500"
-                          }`}>
-                            {itemStatus === 'done' && "Done"}
-                            {itemStatus === 'in-progress' && "In Progress"}
-                            {itemStatus === 'unchecked' && "Pending"}
-                          </span>
-                        </button>
-                      </td>
-
-                      {/* Actions */}
-                      {isNurse && (
-                        <td className="px-4 py-3 text-center">
-                          {isEditing ? (
-                            <button
-                              onClick={() => handleSaveEdit(item.id)}
-                              className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors cursor-pointer"
-                              title="Save"
-                            >
-                              <Save size={14} />
-                            </button>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1">
-                              <button
-                                onClick={() => {
-                                  setEditingId(item.id);
-                                  setEditLabel(item.label || (item.labelKey ? tr(item.labelKey) : ""));
-                                  setEditLabelAr(item.labelAr || "");
-                                  setEditTime(item.time || "");
-                                  setEditMinutes(String(item.period || item.minutes || 30));
-                                  setEditAutoFlag(!!item.autoFlag);
-                                }}
-                                className="p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-                                title="Edit"
-                              >
-                                <Edit2 size={13} />
-                              </button>
-                              <button
-                                onClick={() => nurseActions.deleteCarePlanItem(item.id)}
-                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                title="Delete"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+  /* ── Overall (full-admission) main card ───────────────────────────── */
+  const renderOverallMain = () => {
+    const maxDay = overallItems.reduce((mx, it) => Math.max(mx, it.day || 1), 1);
+    const days = Array.from({ length: maxDay }, (_, i) => i + 1);
+    return (
+      <SectionCard padded={false}>
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-[#eef1f6]">
+          <CalendarDays size={16} className="text-[#4EBEE3] shrink-0" />
+          <span className="text-[15px] font-bold text-[#16274D]">Care Timeline</span>
+          <span className="text-[12px] text-[#98a2b3]">· Full admission plan</span>
         </div>
+        <div className="p-4 space-y-5">
+          {overallItems.length === 0 && (
+            <EmptyState icon={<CalendarDays size={22} />} title="No care activities yet" description="Add the first planned task to build the admission timeline." />
+          )}
+          {days.map((day) => {
+            const dayItems = overallItems
+              .filter((it) => (it.day || 1) === day)
+              .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+            return (
+              <div key={day}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="inline-flex items-center justify-center h-6 px-2.5 rounded-full bg-[#16274D] text-white text-[11.5px] font-bold">
+                    {tr("careplan.dayLabel") || "Day"} {day}
+                  </span>
+                  <span className="text-[12px] text-[#98a2b3]">{dayItems.length} task{dayItems.length === 1 ? "" : "s"}</span>
+                </div>
+                <div className="rounded-[10px] border border-[#eef1f6] px-4">
+                  {dayItems.length === 0 ? (
+                    <div className="py-3 text-[12.5px] text-[#98a2b3]">No tasks scheduled for this day.</div>
+                  ) : (
+                    <div className="divide-y divide-[#f2f4f7]">
+                      {dayItems.map((item, i) => <TaskRow key={item.id} item={item} isLast={i === dayItems.length - 1} />)}
+                    </div>
+                  )}
+                </div>
+                {isNurse && (
+                  addDay === day ? (
+                    <div className="mt-2">{editorForm(() => commitAdd({ day }), "Add")}</div>
+                  ) : (
+                    <button onClick={() => openAddDay(day)} className="mt-1.5 inline-flex items-center gap-1.5 py-1.5 text-[12.5px] font-semibold text-[#1d7da3] hover:text-[#16274D] cursor-pointer">
+                      <Plus size={14} /> Add item to {tr("careplan.dayLabel") || "Day"} {day}
+                    </button>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </SectionCard>
+    );
+  };
 
-        {/* Add Section */}
-        {isNurse && (
-          <div className="p-4 rounded-xl border border-gray-200 bg-gray-50/50 space-y-4">
-            <h4 className="text-[14px] font-bold text-gray-700 mb-2">Create New CarePlan Task</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input 
-                value={newLabel} 
-                onChange={(e) => setNewLabel(e.target.value)} 
-                placeholder="CarePlan item (English)..."
-                className="w-full outline-none px-3 py-2 rounded-lg text-[14px] border border-gray-300 bg-white focus:border-[#4EBEE3]"
-              />
-              <input 
-                value={newLabelAr} 
-                onChange={(e) => setNewLabelAr(e.target.value)} 
-                placeholder="الإضافة باللغة العربية..." 
-                dir="rtl"
-                className="w-full outline-none px-3 py-2 rounded-lg text-[14px] border border-gray-300 bg-white focus:border-[#4EBEE3]"
-              />
+  return (
+    <div>
+      <PageHeader
+        title={tr("care.plan.title") || "My Care Plan"}
+        subtitle="Track the patient's planned care activities and completion status."
+        badges={
+          <>
+            <StatusBadge tone="info" icon={<Eye size={13} />} className="uppercase tracking-wide text-[11px]">Visible to Patient</StatusBadge>
+            <StatusBadge tone="success" icon={<ShieldCheck size={13} />} className="uppercase tracking-wide text-[11px]">HIS Synced</StatusBadge>
+          </>
+        }
+        actions={isNurse && <Button variant="primary" icon={<Plus size={16} />} onClick={openAdd}>Add Care Task</Button>}
+      />
+
+      {/* Daily / Overall toggle */}
+      <div className="mb-4">
+        <Segmented
+          options={[
+            { value: "daily", label: tr("careplan.toggle.daily") || "Daily" },
+            { value: "overall", label: tr("careplan.toggle.overall") || "Overall" },
+          ]}
+          value={mode}
+          onChange={(v: "daily" | "overall") => { closeEditor(); nurseActions.setCarePlanMode(v); }}
+        />
+      </div>
+
+
+
+      {/* Two-column layout */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 items-start">
+        {/* Main: timeline */}
+        <div className="xl:col-span-2">
+          {mode === "overall" ? renderOverallMain() : (
+          <SectionCard padded={false}>
+            {/* Date header */}
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-[#eef1f6] flex-wrap">
+              <div className="flex items-center gap-2 min-w-0">
+                <CalendarDays size={16} className="text-[#4EBEE3] shrink-0" />
+                <span className="text-[15px] font-bold text-[#16274D] truncate">{dateLabel} · {fullDate}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <IconButton label="Previous day" icon={<ChevronLeft size={18} />} onClick={() => nurseActions.setCarePlanSelectedDate(toISO(shiftDay(selectedDate, -1)))} />
+                <Button variant="secondary" size="sm" onClick={() => nurseActions.setCarePlanSelectedDate(toISO(today))}>Today</Button>
+                <IconButton label="Next day" icon={<ChevronRight size={18} />} onClick={() => nurseActions.setCarePlanSelectedDate(toISO(shiftDay(selectedDate, 1)))} />
+              </div>
             </div>
-            
-            <div className="flex flex-wrap items-center gap-4">
-              {mode === "daily" ? (
-                <>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[12px] font-semibold text-gray-600">Time:</label>
-                    <input 
-                      value={newTime} 
-                      onChange={(e) => setNewTime(e.target.value)} 
-                      placeholder="e.g. 10:00 AM" 
-                      className="w-32 px-3 py-1.5 rounded-lg text-[14px] border border-gray-300 bg-white"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-[12px] font-semibold text-gray-600">Period (Min):</label>
-                    <input 
-                      value={newMinutes} 
-                      onChange={(e) => setNewMinutes(e.target.value)} 
-                      placeholder="Min" 
-                      type="number"
-                      className="w-20 px-3 py-1.5 rounded-lg text-[14px] border border-gray-300 bg-white"
-                    />
-                  </div>
-                  <label className="flex items-center gap-2 cursor-pointer py-1.5 px-3 rounded-lg border border-gray-300 bg-white hover:border-[#4EBEE3] transition-colors">
-                    <input 
-                      type="checkbox"
-                      checked={newAutoFlag}
-                      onChange={(e) => setNewAutoFlag(e.target.checked)}
-                      className="w-4 h-4 rounded text-[#4EBEE3] focus:ring-[#4EBEE3]/20 cursor-pointer accent-[#4EBEE3]"
-                    />
-                    <span className="text-[12px] font-medium text-gray-700">Auto Trigger Status</span>
-                  </label>
-                </>
+
+            {/* Vitals strip (DEV-ONLY MOCK) */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[#eef1f6] border-b border-[#eef1f6] bg-[#fafbfc]">
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-1.5 text-[11.5px] text-[#6B7280]"><HeartPulse size={13} className="text-[#EF4444]" /> Latest vitals</div>
+                <div className="mt-1 text-[13px] font-semibold text-[#16274D]">BP {MOCK_SNAPSHOT.bp} · HR {MOCK_SNAPSHOT.hr.replace(" bpm", "")} · Temp {MOCK_SNAPSHOT.temp}</div>
+              </div>
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-1.5 text-[11.5px] text-[#6B7280]"><Clock size={13} className="text-[#4EBEE3]" /> Last recorded</div>
+                <div className="mt-1 text-[13px] font-semibold text-[#16274D]">{MOCK_SNAPSHOT.lastRecorded}</div>
+              </div>
+              <div className="px-4 py-3">
+                <div className="flex items-center gap-1.5 text-[11.5px] text-[#6B7280]"><StickyNote size={13} className="text-[#F59E0B]" /> Nursing note</div>
+                <div className="mt-1 text-[13px] font-semibold text-[#16274D] truncate">{MOCK_SNAPSHOT.note}</div>
+              </div>
+            </div>
+
+            {/* Timeline */}
+            <div className="px-4">
+              {dailyItems.length === 0 ? (
+                <EmptyState icon={<CalendarDays size={22} />} title="No tasks for this day" description="Nothing is scheduled. Add an activity below." />
               ) : (
-                <div className="flex items-center gap-2">
-                  <label className="text-[12px] font-semibold text-gray-600">Day:</label>
-                  <select 
-                    value={newDay} 
-                    onChange={(e) => setNewDay(e.target.value)}
-                    className="outline-none appearance-none px-3 py-1.5 rounded-lg text-[14px] border border-gray-300 bg-white"
-                  >
-                    {[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map(d => (
-                      <option key={d} value={d}>{tr("careplan.dayLabel")} {d}</option>
-                    ))}
-                  </select>
+                <div className="divide-y divide-[#f2f4f7]">
+                  {dailyItems.map((item, i) => <TaskRow key={item.id} item={item} isLast={i === dailyItems.length - 1} />)}
                 </div>
               )}
-              
-              <button 
-                onClick={handleAdd} 
-                className="flex items-center gap-2 px-5 py-2 rounded-lg cursor-pointer transition-all active:scale-95 ml-auto"
-                style={{ backgroundColor: t.primary, color: "#fff", fontSize: "13px", fontWeight: 700, border: "none" }}
-              >
-                <Plus size={16} /> Add to Plan
-              </button>
             </div>
-          </div>
-        )}
 
-        {/* HIS Source Sync Warning/Notification */}
-        <div className="mt-6 flex items-start gap-3 p-3.5 rounded-xl bg-gray-50 border border-gray-200">
-          <AlertCircle size={18} className="text-gray-400 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-[12.5px] text-gray-600 font-medium font-['Poppins',sans-serif] leading-relaxed">
-              <strong>HIS Integration Notice:</strong> All care plan items, scheduled times, periods, and execution statuses shown here are synchronized identically from the Hospital Information System (HIS).
-            </p>
-          </div>
+            {/* Add item */}
+            {isNurse && (
+              <div className="px-4 pb-4 pt-1">
+                {showAdd ? (
+                  editorForm(() => commitAdd({ date: store.carePlanSelectedDate, day: 1 }), "Add")
+                ) : (
+                  <button onClick={openAdd} className="w-full flex items-center gap-2 py-3 rounded-[10px] border border-dashed border-[#cfe4f0] text-[13px] font-semibold text-[#1d7da3] hover:bg-[#f5fbfe] justify-center cursor-pointer">
+                    <Plus size={15} /> Add item for today
+                  </button>
+                )}
+              </div>
+            )}
+          </SectionCard>
+          )}
         </div>
 
+        {/* Sidebar */}
+        <div className="space-y-5">
+          {/* Patient Visibility */}
+          <SectionCard title="Patient Visibility" icon={<Monitor size={16} />}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[13.5px] font-semibold text-[#16274D]">Show Care Plan to Patient</div>
+                <p className="text-[12px] text-[#6B7280] mt-0.5">Display approved care-plan tasks on this patient's bedside terminal.</p>
+              </div>
+              {isNurse ? (
+                <Toggle checked={visibleOn} onChange={(v: boolean) => nurseActions.setSectionVisible("carePlan", v)} label="Show Care Plan on patient terminal" />
+              ) : (
+                <StatusBadge tone={visibleOn ? "success" : "neutral"}>{visibleOn ? "On" : "Off"}</StatusBadge>
+              )}
+            </div>
+            <div className="mt-3 pt-3 border-t border-[#f2f4f7]">
+              <InfoRow label="Scope" value="Current admission" />
+              <InfoRow label="Language" value="English & Arabic" />
+              <InfoRow label="Updates" value="Automatically synchronized" />
+            </div>
+          </SectionCard>
+
+
+
+          {/* Today's Notes */}
+          <SectionCard title="Today's Notes" subtitle="Shift notes and observations for today." icon={<FileText size={16} />}>
+            {notes.length === 0 && !addingNote && (
+              <div className="text-[13px] text-[#6B7280]">No notes added for today.</div>
+            )}
+            {notes.length > 0 && (
+              <ul className="space-y-2 mb-3">
+                {notes.map((n) => (
+                  <li key={n.id} className="text-[13px] text-[#16274D] bg-[#fafbfc] border border-[#eef1f6] rounded-lg px-3 py-2">{n.text}</li>
+                ))}
+              </ul>
+            )}
+            {isNurse && (
+              addingNote ? (
+                <div className="mt-2">
+                  <textarea
+                    autoFocus
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    rows={2}
+                    placeholder="Add a shift note…"
+                    className="w-full px-3 py-2 rounded-lg border border-[#d6dae6] text-[13px] text-[#16274D] outline-none focus:border-[#4EBEE3] focus-visible:ring-2 focus-visible:ring-[#4EBEE3]/30 resize-none"
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button variant="primary" size="sm" disabled={!noteDraft.trim()} onClick={addNote}>Save note</Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setAddingNote(false); setNoteDraft(""); }}>Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="secondary" size="sm" className="mt-3" icon={<Plus size={14} />} onClick={() => setAddingNote(true)}>Add note</Button>
+              )
+            )}
+          </SectionCard>
+        </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Delete care task?"
+        message="This will permanently remove the task from the care plan."
+        tone="danger"
+        confirmLabel="Delete"
+        onConfirm={() => { if (confirmDelete) nurseActions.deleteCarePlanItem(confirmDelete.id); setConfirmDelete(null); }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }
