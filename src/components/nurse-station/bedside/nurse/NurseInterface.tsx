@@ -3,8 +3,9 @@ import {
   X, ClipboardList, Stethoscope, User, Heart, DollarSign,
   FlaskConical, Image as ImageIcon, Baby, LogOut, Activity,
   Hash, DoorOpen, Clock, Plus, Bed, ExternalLink,
-  Crown, Gem, BedDouble, BookOpen, ChevronLeft,
+  Crown, Gem, BedDouble, BookOpen, ChevronLeft, RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner@2.0.3";
 import { nurseStationService } from "../../../../services/nurseStationService";
 import { useTheme } from "../ThemeContext";
 import { useLocale } from "../i18n";
@@ -30,14 +31,14 @@ interface TabDef {
 const TABS: TabDef[] = [
   { key: "profile", label: "Patient Profile", icon: User, hasVisibility: false },
   { key: "careOverview", label: "Care Overview", icon: Heart, hasVisibility: true },
+  { key: "observations", label: "Observations", icon: Activity, hasVisibility: true },
   { key: "carePlan", label: "My Care Plan", icon: ClipboardList, hasVisibility: true },
-  { key: "financial", label: "Financial", icon: DollarSign, hasVisibility: true },
   { key: "labs", label: "Lab Results", icon: FlaskConical, hasVisibility: true },
   { key: "imaging", label: "Imaging", icon: ImageIcon, hasVisibility: true },
+  { key: "education", label: "Education", icon: BookOpen, hasVisibility: true },
   { key: "baby", label: "Baby Camera", icon: Baby, hasVisibility: true },
   { key: "discharge", label: "Discharge Plan", icon: LogOut, hasVisibility: true },
-  { key: "observations", label: "Observations", icon: Activity, hasVisibility: true },
-  { key: "education", label: "Education", icon: BookOpen, hasVisibility: true },
+  { key: "financial", label: "Financial", icon: DollarSign, hasVisibility: true },
 ];
 
 interface NurseInterfaceProps {
@@ -121,11 +122,11 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         <div className="ms-auto flex items-center gap-3 shrink-0">
           {role === "nurse" && (
             <button
-              onClick={() => setActiveTab("observations")}
+              onClick={() => toast.success("Patient Terminal synced successfully")}
               className="flex items-center gap-2 px-5 h-[42px] rounded-xl text-white font-bold text-[14px] cursor-pointer transition-colors hover:bg-[#3DA5CA] active:scale-95"
               style={{ background: "#4EBEE3", border: "none" }}
             >
-              <Plus size={18} /> Add Observation
+              <RefreshCw size={17} /> Sync Terminal
             </button>
           )}
           <button

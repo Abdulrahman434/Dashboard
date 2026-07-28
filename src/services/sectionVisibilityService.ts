@@ -25,14 +25,14 @@ export interface SectionMeta {
 
 export const SECTIONS_META: SectionMeta[] = [
   { key: 'careOverview', label: 'Care Overview', description: 'Patient care team, admission overview, and vitals' },
+  { key: 'observations', label: 'Observations', description: 'Nursing notes, pain logs, and clinical logs' },
   { key: 'carePlan', label: 'My Care Plan', description: 'Scheduled clinical tasks and activities' },
-  { key: 'financial', label: 'Financial', description: 'Hospital bill breakdown and insurance coverage' },
   { key: 'labs', label: 'Lab Results', description: 'Laboratory test findings and diagnostic reports' },
   { key: 'imaging', label: 'Imaging', description: 'X-Ray, MRI, CT scan results and radiology reports' },
+  { key: 'education', label: 'Education', description: 'Patient education materials and videos' },
   { key: 'baby', label: 'Baby Camera', description: 'Nursery live camera feed for newborn monitoring' },
   { key: 'discharge', label: 'Discharge Plan', description: 'Post-discharge instructions and follow-up tasks' },
-  { key: 'observations', label: 'Observations', description: 'Nursing notes, pain logs, and clinical logs' },
-  { key: 'education', label: 'Education', description: 'Patient education materials and videos' },
+  { key: 'financial', label: 'Financial', description: 'Hospital bill breakdown and insurance coverage' },
 ];
 
 export type SectionVisibilityMap = Record<SectionKey, boolean>;
