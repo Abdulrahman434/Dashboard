@@ -291,64 +291,6 @@ function RoomCard({
                     </div>
                   )}
                 </div>
-
-                {/* Quick Action Button */}
-                <div className="mt-2 pt-1.5 border-t border-gray-100 flex items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    {vcInfo.status === "pending_approval" ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toast.success(`VC Request Approved for Room ${roomNumber}`);
-                        }}
-                        className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white text-[9.5px] font-bold transition-colors w-full text-center shadow-sm"
-                      >
-                        Approve VC
-                      </button>
-                    ) : vcInfo.status === "scheduled" ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toast.info(`Joining Virtual Consultation for Room ${roomNumber}...`);
-                        }}
-                        className="px-2 py-1 rounded bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white text-[9.5px] font-bold transition-colors w-full text-center shadow-sm"
-                      >
-                        Join Call (4:50 PM)
-                      </button>
-                    ) : vcInfo.status === "active" ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toast.info(`Connecting to Live Session for Room ${roomNumber}...`);
-                        }}
-                        className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-bold transition-colors w-full text-center shadow-sm"
-                      >
-                        View Live Session
-                      </button>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toast.info(`Initiating VC Request for Room ${roomNumber}...`);
-                        }}
-                        className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 text-[9.5px] font-bold transition-colors w-full text-center"
-                      >
-                        + Schedule VC
-                      </button>
-                    )}
-                  </div>
-                  {variant === "profile" && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpen?.();
-                      }}
-                      className="inline-flex items-center gap-0.5 text-[11px] font-bold text-[#0078d4] hover:text-[#16274D] shrink-0"
-                    >
-                      Open <ChevronRight size={14} />
-                    </button>
-                  )}
-                </div>
               </div>
             )}
 
