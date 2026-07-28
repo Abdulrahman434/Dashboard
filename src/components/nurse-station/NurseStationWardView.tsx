@@ -828,7 +828,6 @@ export default function NurseStationWardView({
             { id: "all", label: "All Beds", icon: BedSingle },
             { id: "attention", label: "Needs Attention", icon: ShieldAlert },
             { id: "services", label: "Service Requests", icon: Monitor },
-            { id: "caresign", label: "CareSign View", icon: Sparkles },
           ].map((f) => {
             const on = bedFilter === (f.id as any);
             const Ico = f.icon;
