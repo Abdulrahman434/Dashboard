@@ -29,7 +29,9 @@ import {
   X,
   Sparkles,
   UserCheck,
+  Sliders,
 } from "lucide-react";
+import GlobalVisibilityConfigureModal from "./GlobalVisibilityConfigureModal";
 import { useNurseStations } from "../../hooks/useNurseStations";
 import { nurseStationService } from "../../services/nurseStationService";
 import { NurseInterface } from "./bedside/nurse/NurseInterface";
@@ -549,6 +551,7 @@ export default function NurseStationWardView({
     setUsers(userService.listUsers());
   }, []);
   const [activeBottomTab, setActiveBottomTab] = useState<string>("Patient Profile");
+  const [showConfigureModal, setShowConfigureModal] = useState(false);
 
   // Sync state if focusStationId changes
   useEffect(() => {
@@ -844,14 +847,12 @@ export default function NurseStationWardView({
             );
           })}
         </div>
-        {onManageClick && (
-          <button
-            onClick={onManageClick}
-            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#d5deea] bg-white text-[#16274D] text-[13px] font-medium hover:bg-[#f4f8fc] transition-colors"
-          >
-            <Settings2 size={16} /> Manage
-          </button>
-        )}
+        <button
+          onClick={() => setShowConfigureModal(true)}
+          className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
+        >
+          <Sliders size={16} className="text-[#0284C7]" /> Configure
+        </button>
       </div>
 
       {/* Main workspace: grid + right panel */}
@@ -1008,6 +1009,11 @@ export default function NurseStationWardView({
           onUpdate={() => setActionRoom(null)}
         />
       )}
+
+      <GlobalVisibilityConfigureModal
+        isOpen={showConfigureModal}
+        onClose={() => setShowConfigureModal(false)}
+      />
     </div>
   );
 }
