@@ -346,11 +346,16 @@ function RoomCard({
 /* =========================================================================
    Metric tile
    ========================================================================= */
-function Metric({ label, value, icon: Icon, tone }: { label: string; value: string; icon: any; tone: string }) {
+function Metric({ label, value, icon: Icon, tone, onClick, isActive }: { label: string; value: string; icon: any; tone: string; onClick?: () => void; isActive?: boolean }) {
   const bg =
     tone === "amber" ? C.amber : tone === "red" ? C.red : tone === "green" ? C.green : C.cyan;
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
+    <div
+      onClick={onClick}
+      className={`flex items-center gap-3 px-4 py-3 transition-all cursor-pointer select-none ${
+        isActive ? "ring-2 ring-inset ring-[#4EBEE3] bg-[#f0f9ff]" : "hover:bg-[#f8fafc]"
+      }`}
+    >
       <span className="w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: bg }}>
         <Icon size={17} />
       </span>
@@ -614,7 +619,7 @@ export default function NurseStationWardView({
   const [selectedKitchenOrder, setSelectedKitchenOrder] = useState<any | null>(null);
   const [actionRoom, setActionRoom] = useState<any | null>(null);
   const [careSignModalRoom, setCareSignModalRoom] = useState<any | null>(null);
-  const [bedFilter, setBedFilter] = useState<"all" | "attention" | "services" | "caresign">("all");
+  const [bedFilter, setBedFilter] = useState<"all" | "occupied" | "requests" | "awaiting" | "offline" | "caresign">("all");
   const [eventFilter, setEventFilter] = useState<"all" | "pending" | "urgent">("all");
 
   const { library, requests, workflow, teams } = useCareSuite();
@@ -819,6 +824,7 @@ export default function NurseStationWardView({
   const terminalRooms = contextRooms.filter((r) => r.hasDevice);
   const terminalsOnline = terminalRooms.filter((r) => r.terminalOnline).length;
   const terminalsTotal = terminalRooms.length;
+  const terminalsOffline = terminalsTotal - terminalsOnline;
   const activeRequestsCount = activeReqs.length + activeKitchen.length;
   const urgentCount = activeReqs.filter((r) => r.priority === "High").length;
   const awaitingCount =
@@ -853,8 +859,13 @@ export default function NurseStationWardView({
     // Patient View, Kitchen View, Housekeeping View (non-CareSign views): HIDE CareSign devices!
     if (r.isCareSign) return false;
 
-    if (bedFilter === "attention") return roomNeedsAttention(r.no);
-    if (bedFilter === "services") return roomHasService(r.no);
+    if (bedFilter === "occupied") return r.state === "occupied";
+    if (bedFilter === "requests") return roomActiveReqs(r.no).length > 0 || !!roomKitchen(r.no);
+    if (bedFilter === "awaiting") {
+      return roomActiveReqs(r.no).some((req) => req.status === firstStatus) ||
+        !!(roomKitchen(r.no) && (roomKitchen(r.no) as any).status === "Submitted");
+    }
+    if (bedFilter === "offline") return r.hasDevice && !r.terminalOnline;
     return true;
   });
 
@@ -890,56 +901,31 @@ export default function NurseStationWardView({
 
   return (
     <div className={`${isFullView ? "fixed inset-0 z-[9999] h-screen" : "min-h-full"} w-full bg-[#f8fafc] font-['Poppins',sans-serif] text-[#1C1B1F] flex flex-col`}>
-      {/* Metrics */}
+      {/* Metrics — clickable filter tiles */}
       <div className="mx-6 mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 rounded-xl border border-[#e7e9f0] bg-white overflow-hidden divide-x divide-[#eef1f6]">
-        <Metric label="Occupied" value={`${occupiedCount} / ${total}`} icon={BedSingle} tone="blue" />
-        <Metric label="Active Requests" value={String(activeRequestsCount)} icon={Bell} tone="blue" />
-        <Metric label="Awaiting Response" value={String(awaitingCount)} icon={Activity} tone="amber" />
-        <Metric label="Urgent" value={String(urgentCount)} icon={ShieldAlert} tone="red" />
-        <Metric label="Terminals Online" value={terminalsTotal > 0 ? `${terminalsOnline} / ${terminalsTotal}` : "—"} icon={Wifi} tone="green" />
+        <Metric label="Total Beds" value={String(total)} icon={BedSingle} tone="blue" onClick={() => setBedFilter("all")} isActive={bedFilter === "all"} />
+        <Metric label="Occupied Beds" value={String(occupiedCount)} icon={BedDouble} tone="blue" onClick={() => setBedFilter("occupied")} isActive={bedFilter === "occupied"} />
+        <Metric label="Active Requests" value={String(activeRequestsCount)} icon={Bell} tone="amber" onClick={() => setBedFilter("requests")} isActive={bedFilter === "requests"} />
+        <Metric label="Awaiting Response" value={String(awaitingCount)} icon={Activity} tone="red" onClick={() => setBedFilter("awaiting")} isActive={bedFilter === "awaiting"} />
+        <Metric label="Offline Devices" value={terminalsTotal > 0 ? `${terminalsOffline} / ${terminalsTotal}` : "—"} icon={WifiOff} tone="green" onClick={() => setBedFilter("offline")} isActive={bedFilter === "offline"} />
       </div>
 
-      {/* Toolbar — bed filter */}
-      <div className="px-6 pt-4 pb-1 flex items-center justify-between gap-3 flex-wrap">
-        <div className="inline-flex rounded-lg border border-[#d8e1ec] overflow-hidden bg-white">
-          {[
-            { id: "all", label: "All Beds", icon: BedSingle },
-            { id: "attention", label: "Needs Attention", icon: ShieldAlert },
-            { id: "services", label: "Service Requests", icon: Monitor },
-          ].map((f) => {
-            const on = bedFilter === (f.id as any);
-            const Ico = f.icon;
-            return (
-              <button
-                key={f.id}
-                onClick={() => setBedFilter(f.id as any)}
-                className={
-                  "inline-flex items-center gap-2 h-[36px] px-4 text-[12px] border-r border-[#e1e7ef] last:border-r-0 transition-colors " +
-                  (on ? "text-[#7B113A] bg-[#fde8ef] font-bold shadow-[inset_0_-2px_#7B113A]" : "text-[#53637f] hover:bg-[#f7fbff]")
-                }
-              >
-                <Ico size={15} />
-                {f.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsFullView(!isFullView)}
-            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#16274D]/20 bg-[#f0f2f5] text-[#16274D] text-[13px] font-bold hover:bg-[#e2e6ec] hover:border-[#16274D]/40 shadow-sm transition-all"
-            title={isFullView ? "Exit Full View" : "Full View"}
-          >
-            {isFullView ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            {isFullView ? "Exit Full View" : "Full View"}
-          </button>
-          <button
-            onClick={() => setShowConfigureModal(true)}
-            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
-          >
-            <Sliders size={16} className="text-[#0284C7]" /> Configure
-          </button>
-        </div>
+      {/* Toolbar — Full View + Configure */}
+      <div className="px-6 pt-4 pb-1 flex items-center justify-end gap-2 flex-wrap">
+        <button
+          onClick={() => setIsFullView(!isFullView)}
+          className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#16274D]/20 bg-[#f0f2f5] text-[#16274D] text-[13px] font-bold hover:bg-[#e2e6ec] hover:border-[#16274D]/40 shadow-sm transition-all"
+          title={isFullView ? "Exit Full View" : "Full View"}
+        >
+          {isFullView ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          {isFullView ? "Exit Full View" : "Full View"}
+        </button>
+        <button
+          onClick={() => setShowConfigureModal(true)}
+          className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
+        >
+          <Sliders size={16} className="text-[#0284C7]" /> Configure
+        </button>
       </div>
 
       {/* Main workspace: grid + right panel */}
