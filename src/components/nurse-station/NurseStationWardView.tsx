@@ -227,7 +227,7 @@ function RoomCard({
                   <span className="px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wide uppercase bg-[#f1f3f6] text-[#9099ab]">No VC</span>
                 )
               ) : (
-                <span className="inline-flex items-center px-2 py-1 rounded-md bg-[#f3f5f8] text-[#2e3d59] text-[9px] font-extrabold tracking-wide">
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[9.5px] font-extrabold tracking-wide uppercase bg-[#fcebe9] text-[#c0392b] border border-[#f5c6cb]">
                   OCCUPIED
                 </span>
               )}
@@ -1336,7 +1336,7 @@ function PatientActionsPanel({
       <div className="p-4">
         {/* Summary */}
         <div className="rounded-xl border border-[#dbe4ee] p-4">
-          <span className="inline-flex items-center px-2 py-1 rounded-md bg-[#f3f5f8] text-[#2e3d59] text-[9px] font-extrabold tracking-wide">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-[9.5px] font-extrabold tracking-wide uppercase bg-[#fcebe9] text-[#c0392b] border border-[#f5c6cb]">
             OCCUPIED
           </span>
           <h3 className="mt-3 text-[16px] font-semibold text-[#16274D]">Age {String(room.age || "").replace("y", "") || "—"}</h3>

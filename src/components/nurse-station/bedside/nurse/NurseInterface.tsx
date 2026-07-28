@@ -156,8 +156,8 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
             <div className="text-[13px]" style={{ color: "#5d6678" }}>
               {patient.sex || "—"}{patient.age ? ` · ${patient.age} years` : ""}
             </div>
-            <div className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-extrabold tracking-wide" style={{ color: "#1f9e75" }}>
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#1f9e75" }} /> OCCUPIED
+            <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-extrabold tracking-wide bg-[#fcebe9] text-[#c0392b] border border-[#f5c6cb]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#c0392b]" /> OCCUPIED
             </div>
           </div>
         </div>
