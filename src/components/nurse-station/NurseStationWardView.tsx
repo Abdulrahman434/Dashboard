@@ -1006,7 +1006,7 @@ export default function NurseStationWardView({
   }
 
   return (
-    <div className={`${isFullView ? "fixed inset-0 z-[9999] h-screen" : "min-h-full"} w-full bg-[#f8fafc] font-['Poppins',sans-serif] text-[#1C1B1F] flex flex-col`}>
+    <div className={`${isFullView ? "fixed inset-0 z-[9999] h-screen" : "h-full max-h-full overflow-hidden"} w-full bg-[#f8fafc] font-['Poppins',sans-serif] text-[#1C1B1F] flex flex-col`}>
       {/* Metrics — clickable filter tiles */}
       <div className="mx-6 mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Metric label="Total Beds" value={String(total)} icon={BedSingle} tone="blue" onClick={() => setBedFilter("all")} isActive={bedFilter === "all"} />
@@ -1231,7 +1231,7 @@ function WardOverviewPanel({
 }) {
   const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   return (
-    <aside className="w-[320px] shrink-0 bg-white border border-[#e7e9f0] rounded-xl flex flex-col self-start max-h-[calc(100vh-220px)] overflow-hidden">
+    <aside className="w-[320px] shrink-0 bg-white border border-[#e7e9f0] rounded-xl flex flex-col h-full max-h-full overflow-hidden">
       <div className="px-4 pt-4 pb-3 border-b border-[#eef1f6]">
         <h2 className="text-[18px] font-semibold text-[#16274D]">Ward Overview</h2>
         <p className="text-[12px] text-[#607391] mt-0.5">Live events from Ward {wardName}</p>
