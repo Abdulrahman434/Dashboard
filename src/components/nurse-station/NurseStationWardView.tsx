@@ -244,6 +244,100 @@ function RoomCard({
               </div>
             )}
 
+            {/* CareConnect (Virtual Consultation) detail */}
+            {variant === "careconnect" && vcInfo && (
+              <div className="mt-2 pt-2 border-t border-[#eef1f6] flex flex-col justify-between flex-1">
+                <div>
+                  {vcInfo.status === "pending_approval" ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-extrabold bg-amber-50 text-amber-800 border border-amber-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        VC Request Pending Approval
+                      </span>
+                      <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
+                        {vcInfo.doctorName || "Dr. Sarah Johnson"}
+                      </p>
+                      <p className="text-[9px] text-[#9099ab]">Requested at {vcInfo.requestedTime || "4:15 PM"}</p>
+                    </div>
+                  ) : vcInfo.status === "scheduled" ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-extrabold bg-sky-50 text-sky-800 border border-sky-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                        VC Scheduled at {vcInfo.scheduledTime || "4:50 PM"}
+                      </span>
+                      <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
+                        {vcInfo.doctorName || "Dr. Ahmed Al-Mansoor"}
+                      </p>
+                    </div>
+                  ) : vcInfo.status === "active" ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Active VC (Live)
+                      </span>
+                      <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
+                        {vcInfo.doctorName || "Dr. Fatima Al-Zahrani"}
+                      </p>
+                      <p className="text-[9px] text-emerald-700 font-bold">Live • {vcInfo.duration || "08m 15s"}</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9.5px] font-extrabold bg-gray-100 text-gray-600 border border-gray-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                        No Active VC
+                      </span>
+                      <p className="text-[9.5px] text-[#9099ab] mt-0.5">Terminal ready for VC call</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Action Button */}
+                <div className="mt-2 pt-1.5 border-t border-gray-100">
+                  {vcInfo.status === "pending_approval" ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.success(`VC Request Approved for Room ${roomNumber}`);
+                      }}
+                      className="px-2 py-1 rounded bg-amber-500 hover:bg-amber-600 text-white text-[9.5px] font-bold transition-colors w-full text-center shadow-sm"
+                    >
+                      Approve VC
+                    </button>
+                  ) : vcInfo.status === "scheduled" ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.info(`Joining Virtual Consultation for Room ${roomNumber}...`);
+                      }}
+                      className="px-2 py-1 rounded bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white text-[9.5px] font-bold transition-colors w-full text-center shadow-sm"
+                    >
+                      Join Call (4:50 PM)
+                    </button>
+                  ) : vcInfo.status === "active" ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.info(`Connecting to Live Session for Room ${roomNumber}...`);
+                      }}
+                      className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[9.5px] font-bold transition-colors w-full text-center shadow-sm"
+                    >
+                      View Live Session
+                    </button>
+                  ) : (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toast.info(`Initiating VC Request for Room ${roomNumber}...`);
+                      }}
+                      className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-700 text-[9.5px] font-bold transition-colors w-full text-center"
+                    >
+                      + Schedule VC
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Patient-profile request line + Open */}
             {variant === "profile" && (
               <>
@@ -709,11 +803,11 @@ export default function NurseStationWardView({
 
   const switchTab = (label: string) => {
     setActionRoom(null);
-    if (label === "CareSign") {
-      setBedFilter("caresign");
-      setActiveBottomTab("CareSign");
+    if (label === "CareConnect") {
+      setActiveBottomTab("CareConnect");
+      setBedFilter("careconnect" as any);
     } else if (label === "Patient Profile" || label === "Kitchen" || label === "CARESUITE") {
-      if (bedFilter === "caresign") setBedFilter("all");
+      if (bedFilter === ("careconnect" as any)) setBedFilter("all");
       setActiveBottomTab(label);
     } else {
       toast.info(`${label} will be updated soon`);
@@ -889,7 +983,20 @@ export default function NurseStationWardView({
                 });
                 const kitchenOrder = roomKitchen(r.no);
                 const summary = roomRequestSummary(r.no);
-                const variant = activeBottomTab === "CARESUITE" ? "caresuite" : activeBottomTab === "Kitchen" ? "kitchen" : "profile";
+                const variant = activeBottomTab === "CARESUITE" ? "caresuite" : activeBottomTab === "Kitchen" ? "kitchen" : activeBottomTab === "CareConnect" ? "careconnect" : "profile";
+
+                const getVCInfo = (roomNo: string) => {
+                  if (roomNo.endsWith("A") || roomNo.endsWith("0")) {
+                    return { status: "pending_approval", doctorName: "Dr. Sarah Johnson (Cardiology)", requestedTime: "4:15 PM" };
+                  }
+                  if (roomNo.endsWith("B") || roomNo.endsWith("1")) {
+                    return { status: "scheduled", doctorName: "Dr. Ahmed Al-Mansoor (Neurology)", scheduledTime: "4:50 PM" };
+                  }
+                  if (roomNo.endsWith("C") || roomNo.endsWith("2")) {
+                    return { status: "active", doctorName: "Dr. Fatima Al-Zahrani (Internal Med)", duration: "08m 15s" };
+                  }
+                  return { status: "no_active" };
+                };
 
                 return (
                   <RoomCard
@@ -907,6 +1014,7 @@ export default function NurseStationWardView({
                     requestTone={summary.tone}
                     careSuiteRequests={roomReqs}
                     kitchenOrder={kitchenOrder}
+                    vcInfo={getVCInfo(r.no)}
                     isCareSign={r.isCareSign}
                     onCareSignClick={() => setCareSignModalRoom(r)}
                     onOpen={() => {
@@ -954,7 +1062,7 @@ export default function NurseStationWardView({
             onFilter={setEventFilter}
             counts={{ all: sortedEvents.length, pending: pendingEventCount, urgent: urgentEventCount }}
             emptyLabel={
-              activeBottomTab === "CARESUITE" ? "No active requests" : activeBottomTab === "Kitchen" ? "No active orders" : "No live events"
+              activeBottomTab === "CARESUITE" ? "No active requests" : activeBottomTab === "Kitchen" ? "No active orders" : activeBottomTab === "CareConnect" ? "No VC consultations" : "No live events"
             }
           />
         )}
@@ -964,7 +1072,7 @@ export default function NurseStationWardView({
       <div className="px-6 py-3 flex gap-2 items-center bg-white border-t border-gray-100 shrink-0 flex-wrap">
         {[
           { label: "Patient View", value: "Patient Profile" },
-          { label: "CareSign", value: "CareSign" },
+          { label: "CareConnect View", value: "CareConnect" },
           { label: "Kitchen View", value: "Kitchen" },
           { label: "Housekeeping View", value: "CARESUITE" },
         ].map(({ label, value }) => {
