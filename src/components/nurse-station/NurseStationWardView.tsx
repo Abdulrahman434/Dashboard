@@ -1041,9 +1041,9 @@ export default function NurseStationWardView({
       </div>
 
       {/* Main workspace: grid + right panel */}
-      <div className="flex-1 flex gap-4 px-6 py-4 min-h-0">
+      <div className="flex-1 flex gap-4 px-6 py-4 min-h-0 overflow-hidden">
         {/* Grid */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 h-full overflow-y-auto pr-1">
           {mappedRooms.length === 0 ? (
             <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center flex flex-col items-center justify-center min-h-[300px]">
               <BedDouble className="w-12 h-12 text-gray-300 mb-4" />
@@ -1067,7 +1067,7 @@ export default function NurseStationWardView({
               <button onClick={() => setBedFilter("all")} className="mt-2 text-[13px] text-[#4EBEE3] font-medium">Show all beds</button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3">
               {visibleRooms.map((r, i) => {
                 const roomReqs = roomActiveReqs(r.no).map((req) => {
                   const libItem = library.find((l) => l.id === req.libraryItemId);
@@ -1154,7 +1154,7 @@ export default function NurseStationWardView({
       </div>
 
       {/* Bottom tabs (mode switch) */}
-      <div className="px-6 py-3 flex gap-2 items-center bg-white border-t border-gray-100 shrink-0 flex-wrap">
+      <div className="px-6 py-3 flex gap-2 items-center bg-white border-t border-gray-100 shrink-0 flex-wrap z-10 relative shadow-sm">
         {[
           { label: "Patient View", value: "Patient Profile" },
           { label: "CareSign", value: "CareSign" },
