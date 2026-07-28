@@ -1067,7 +1067,7 @@ export default function NurseStationWardView({
               <button onClick={() => setBedFilter("all")} className="mt-2 text-[13px] text-[#4EBEE3] font-medium">Show all beds</button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-5 gap-3">
               {visibleRooms.map((r, i) => {
                 const roomReqs = roomActiveReqs(r.no).map((req) => {
                   const libItem = library.find((l) => l.id === req.libraryItemId);
