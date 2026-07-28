@@ -295,15 +295,13 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
   const canManage = isNurse && manageMode;
 
   return (
-    <div>
+    <div className="space-y-5 font-['Poppins',sans-serif]">
       <PageHeader
         title="Care Overview"
         subtitle="Key care information, clinical risks, and assigned care team."
         badges={
           <>
-            <StatusBadge tone={store.sectionVisibility.careOverview ? "info" : "neutral"} icon={store.sectionVisibility.careOverview ? <Eye size={13} /> : <EyeOff size={13} />}>
-              {store.sectionVisibility.careOverview ? "Visible to patient" : "Hidden from patient"}
-            </StatusBadge>
+            <StatusBadge tone={store.sectionVisibility.careOverview ? "info" : "neutral"}>Visible to Patient</StatusBadge>
             <StatusBadge tone="success" dot>
               EMR Synced
             </StatusBadge>
@@ -317,6 +315,15 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
           )
         }
       />
+
+      {isNurse && (
+        <VisibilityControl
+          checked={store.sectionVisibility.careOverview}
+          onChange={(v: boolean) => nurseActions.setSectionVisible("careOverview", v)}
+          title="Show Section to Patient"
+          description='Toggle visibility for "Care Overview" on the bedside screen'
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
         {/* LEFT COLUMN ------------------------------------------------- */}
@@ -535,16 +542,6 @@ export function CareOverviewTab({ role }: { role: "nurse" | "doctor" }) {
 
         {/* RIGHT COLUMN ------------------------------------------------ */}
         <div className="space-y-4 min-w-0">
-          {/* Patient Visibility — master control */}
-          <VisibilityControl
-            checked={store.sectionVisibility.careOverview}
-            onChange={(v: boolean) => nurseActions.setSectionVisible("careOverview", v)}
-            disabled={!isNurse}
-            title="Show on Patient Terminal"
-            description="Controls whether the Care Overview section — allergies, diet, and visible care team — appears on the bedside terminal."
-            scope="Care Overview"
-            languages="English · العربية"
-          />
 
           {/* Data Sources */}
           <SectionCard icon={<Shield size={18} />} title="Data Sources">

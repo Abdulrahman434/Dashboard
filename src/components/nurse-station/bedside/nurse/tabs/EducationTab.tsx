@@ -187,15 +187,13 @@ export function EducationTab({ role }: { role: "nurse" | "doctor" }) {
   const sectionVisible = store.sectionVisibility.education;
 
   return (
-    <div>
+    <div className="space-y-5 font-['Poppins',sans-serif]">
       <PageHeader
         title="Education"
         subtitle="Educational materials assigned to this patient's bedside terminal."
         badges={
           <>
-            <StatusBadge tone={sectionVisible ? "success" : "neutral"} dot>
-              {sectionVisible ? "Visible to Patient" : "Hidden from Patient"}
-            </StatusBadge>
+            <StatusBadge tone={sectionVisible ? "info" : "neutral"}>Visible to Patient</StatusBadge>
             <StatusBadge tone="success" dot>Synced</StatusBadge>
           </>
         }
@@ -206,17 +204,16 @@ export function EducationTab({ role }: { role: "nurse" | "doctor" }) {
         )}
       />
 
-      <div className="space-y-5">
-        {/* Master visibility */}
-        {isNurse && (
-          <VisibilityControl
-            checked={sectionVisible}
-            onChange={(v: boolean) => nurseActions.setSectionVisible("education", v)}
-            title="Show Education Section to Patient"
-            description={'Toggle visibility for "Education Materials" on the bedside screen.'}
-          />
-        )}
+      {isNurse && (
+        <VisibilityControl
+          checked={sectionVisible}
+          onChange={(v: boolean) => nurseActions.setSectionVisible("education", v)}
+          title="Show Section to Patient"
+          description='Toggle visibility for "Education" on the bedside screen'
+        />
+      )}
 
+      <div className="space-y-5">
         {/* General Materials */}
         <SectionCard title="General Materials" icon={<BookOpen size={17} />}>
           {generalMaterials.length === 0 ? (

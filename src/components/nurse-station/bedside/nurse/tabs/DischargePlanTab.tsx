@@ -3,7 +3,7 @@ import { LogOut, Plus, Trash2, Check, Clock, GripVertical, Pencil, Eye, X } from
 import { useLocale } from "../../i18n";
 import { useNurseStore, nurseActions } from "../../NurseDataStore";
 import {
-  PageHeader, StatusBadge, SectionCard, Toggle, Button, IconButton,
+  PageHeader, StatusBadge, SectionCard, VisibilityControl, Toggle, Button, IconButton,
   ConfirmDialog, EmptyState, CheckIcon, cx, TONE,
 } from "../ui";
 
@@ -71,26 +71,13 @@ export function DischargePlanTab({ role }: { role: "nurse" | "doctor" }) {
   const items = store.dischargePlan;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 font-['Poppins',sans-serif]">
       <PageHeader
         title="Discharge Plan"
         subtitle="Steps required before the patient can be safely discharged."
         badges={
           <>
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#bfe6f3] bg-[#f5fcff] px-2.5 py-1">
-              <Eye size={14} className="text-[#1d7da3]" />
-              <span className="text-[12px] font-semibold text-[#16274D]">Visible to Patient</span>
-              {isNurse ? (
-                <Toggle
-                  size="sm"
-                  checked={visible}
-                  onChange={(v: boolean) => nurseActions.setSectionVisible("discharge", v)}
-                  label="Show Discharge Plan on patient terminal"
-                />
-              ) : (
-                <StatusBadge tone={visible ? "success" : "neutral"}>{visible ? "On" : "Off"}</StatusBadge>
-              )}
-            </span>
+            <StatusBadge tone={visible ? "info" : "neutral"}>Visible to Patient</StatusBadge>
             <StatusBadge tone="success" dot>HIS Synced</StatusBadge>
           </>
         }
@@ -102,6 +89,15 @@ export function DischargePlanTab({ role }: { role: "nurse" | "doctor" }) {
           )
         }
       />
+
+      {isNurse && (
+        <VisibilityControl
+          checked={visible}
+          onChange={(v: boolean) => nurseActions.setSectionVisible("discharge", v)}
+          title="Show Section to Patient"
+          description='Toggle visibility for "Discharge Plan" on the bedside screen'
+        />
+      )}
 
       <SectionCard title="Discharge Checklist" subtitle="Ordered steps toward safe discharge" icon={<LogOut size={16} />}>
         {items.length === 0 && !adding ? (

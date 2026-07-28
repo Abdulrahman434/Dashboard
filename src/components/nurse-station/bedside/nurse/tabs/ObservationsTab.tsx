@@ -23,7 +23,7 @@ import {
 import { useLocale } from "../../i18n";
 import { useNurseStore, nurseActions, type ClinicalObservation } from "../../NurseDataStore";
 import {
-  PageHeader, StatusBadge, SectionCard, MetricSummary, Drawer, Button,
+  PageHeader, StatusBadge, SectionCard, VisibilityControl, MetricSummary, Drawer, Button,
   IconButton, Segmented, ConfirmDialog, EmptyState, Toggle, cx, TONE,
 } from "../ui";
 
@@ -267,7 +267,12 @@ export function ObservationsTab({ role }: { role: "nurse" | "doctor" }) {
       <PageHeader
         title="Observations"
         subtitle="Record and review patient observations during the current admission."
-        badges={<StatusBadge tone="success" dot>EMR Synced</StatusBadge>}
+        badges={
+          <>
+            <StatusBadge tone={store.sectionVisibility.observations ? "info" : "neutral"}>Visible to Patient</StatusBadge>
+            <StatusBadge tone="success" dot>EMR Synced</StatusBadge>
+          </>
+        }
         actions={
           isNurse && (
             <Button variant="primary" icon={<Plus size={16} />} onClick={() => setDrawerOpen(true)}>
@@ -277,21 +282,13 @@ export function ObservationsTab({ role }: { role: "nurse" | "doctor" }) {
         }
       />
 
-      {/* Patient-visibility control (nurse only) — preserved store write */}
       {isNurse && (
-        <SectionCard className="mb-5" padded>
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <div className="text-[14px] font-bold text-[#16274D]">Show Section to Patient</div>
-              <div className="text-[12.5px] text-[#6B7280] mt-0.5">Toggle visibility for “Observations” on the bedside screen</div>
-            </div>
-            <Toggle
-              checked={store.sectionVisibility.observations}
-              onChange={(val: boolean) => nurseActions.setSectionVisible("observations", val)}
-              label="Show Observations on patient terminal"
-            />
-          </div>
-        </SectionCard>
+        <VisibilityControl
+          checked={store.sectionVisibility.observations}
+          onChange={(val: boolean) => nurseActions.setSectionVisible("observations", val)}
+          title="Show Section to Patient"
+          description='Toggle visibility for "Observations" on the bedside screen'
+        />
       )}
 
       <MetricSummary items={metrics} cols={4} className="mb-5" />

@@ -9,7 +9,7 @@ import {
 import { useLocale } from "../../i18n";
 import { useNurseStore, nurseActions, type CarePlanItem } from "../../NurseDataStore";
 import {
-  PageHeader, StatusBadge, SectionCard, Button, IconButton, Toggle,
+  PageHeader, StatusBadge, SectionCard, VisibilityControl, Button, IconButton, Toggle,
   ConfirmDialog, EmptyState, Segmented, cx, TONE,
 } from "../ui";
 
@@ -461,18 +461,27 @@ export function CarePlanTab({ role }: { role: "nurse" | "doctor" }) {
   };
 
   return (
-    <div>
+    <div className="space-y-5 font-['Poppins',sans-serif]">
       <PageHeader
         title={tr("care.plan.title") || "My Care Plan"}
         subtitle="Track the patient's planned care activities and completion status."
         badges={
           <>
-            <StatusBadge tone="info" icon={<Eye size={13} />} className="uppercase tracking-wide text-[11px]">Visible to Patient</StatusBadge>
-            <StatusBadge tone="success" icon={<ShieldCheck size={13} />} className="uppercase tracking-wide text-[11px]">HIS Synced</StatusBadge>
+            <StatusBadge tone={visibleOn ? "info" : "neutral"}>Visible to Patient</StatusBadge>
+            <StatusBadge tone="success" dot>HIS Synced</StatusBadge>
           </>
         }
         actions={isNurse && <Button variant="primary" icon={<Plus size={16} />} onClick={openAdd}>Add Care Task</Button>}
       />
+
+      {isNurse && (
+        <VisibilityControl
+          checked={visibleOn}
+          onChange={(v: boolean) => nurseActions.setSectionVisible("carePlan", v)}
+          title="Show Section to Patient"
+          description='Toggle visibility for "My Care Plan" on the bedside screen'
+        />
+      )}
 
       {/* Daily / Overall toggle */}
       <div className="mb-4">
@@ -552,25 +561,6 @@ export function CarePlanTab({ role }: { role: "nurse" | "doctor" }) {
 
         {/* Sidebar */}
         <div className="space-y-5">
-          {/* Patient Visibility */}
-          <SectionCard title="Patient Visibility" icon={<Monitor size={16} />}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[13.5px] font-semibold text-[#16274D]">Show Care Plan to Patient</div>
-                <p className="text-[12px] text-[#6B7280] mt-0.5">Display approved care-plan tasks on this patient's bedside terminal.</p>
-              </div>
-              {isNurse ? (
-                <Toggle checked={visibleOn} onChange={(v: boolean) => nurseActions.setSectionVisible("carePlan", v)} label="Show Care Plan on patient terminal" />
-              ) : (
-                <StatusBadge tone={visibleOn ? "success" : "neutral"}>{visibleOn ? "On" : "Off"}</StatusBadge>
-              )}
-            </div>
-            <div className="mt-3 pt-3 border-t border-[#f2f4f7]">
-              <InfoRow label="Scope" value="Current admission" />
-              <InfoRow label="Language" value="English & Arabic" />
-              <InfoRow label="Updates" value="Automatically synchronized" />
-            </div>
-          </SectionCard>
 
 
 

@@ -208,17 +208,15 @@ export function BabyCameraTab({ role }: { role: "nurse" | "doctor" }) {
   /* ── Header badges ────────────────────────────────────────────────────── */
   const badges = (
     <>
+      <StatusBadge tone={patientAccessOn ? "info" : "neutral"}>Visible to Patient</StatusBadge>
       <StatusBadge tone={connected ? "success" : "neutral"} dot>
         {connected ? "Camera Connected" : "Disconnected"}
-      </StatusBadge>
-      <StatusBadge tone={patientAccessOn ? "info" : "neutral"} icon={patientAccessOn ? <Video size={13} /> : <VideoOff size={13} />}>
-        {patientAccessOn ? "Visible to Patient" : "Hidden from Patient"}
       </StatusBadge>
     </>
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 font-['Poppins',sans-serif]">
       <PageHeader
         title="Baby Camera"
         subtitle="Manage the camera assigned to this patient and control bedside access."
@@ -235,6 +233,18 @@ export function BabyCameraTab({ role }: { role: "nurse" | "doctor" }) {
           ) : undefined
         }
       />
+
+      {isNurse && (
+        <VisibilityControl
+          checked={patientAccessOn}
+          onChange={(v: boolean) => {
+            if (camera.id) nurseActions.setBabyCameraVisible(camera.id, v);
+            nurseActions.setSectionVisible("babyCamera", v);
+          }}
+          title="Show Section to Patient"
+          description='Toggle visibility for "Baby Camera" on the bedside screen'
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* ── A. Camera Assignment ───────────────────────────────────────── */}
