@@ -146,13 +146,6 @@ export function PatientProfileTab({ role }: { role: "nurse" | "doctor" }) {
             );
           })}
         </nav>
-        <button
-          onClick={() => {}}
-          className="mt-auto pt-4 flex items-center gap-2 px-1 text-[13px] font-semibold text-[#1d7da3] hover:text-[#16274D] cursor-pointer"
-          title="Open this patient in the hospital EMR"
-        >
-          <ExternalLink size={15} /> Go to Hospital EMR
-        </button>
       </aside>
 
       {/* ── Right: content card ── */}

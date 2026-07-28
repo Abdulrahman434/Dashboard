@@ -310,22 +310,6 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         </div>
       </div>
 
-      {/* â”€â”€ Footer Link â”€â”€ */}
-      {role === "nurse" && (
-        <div className="flex justify-end px-8 pb-4 shrink-0">
-          <a
-            href="https://client.careinn.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline font-semibold flex items-center gap-1.5 cursor-pointer"
-            style={{ color: t.primary }}
-          >
-            <ExternalLink size={14} />
-            {tr("careteam.gotoEmr")}
-          </a>
-        </div>
-      )}
-
       <style>{`
         .nurse-card {
           background: #fff;
