@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 
 // ============================================
@@ -23,25 +24,55 @@ export function SingleSelectDropdown({
   disabled = false
 }: SingleSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  // Menu is portalled to <body> so an ancestor with overflow:hidden/auto — a
+  // modal body, a scrolling card — can't clip it. Position is measured from the
+  // trigger and the menu flips above when there isn't room below.
+  const [menuRect, setMenuRect] = useState<{ top: number; bottom: number; left: number; width: number } | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const compact = className.includes('text-[12px]');
+  const maxMenuH = compact ? 200 : 280;
+
+  const measure = () => {
+    const el = dropdownRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setMenuRect({ top: r.top, bottom: r.bottom, left: r.left, width: r.width });
+  };
+
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (!isOpen) measure();
+    setIsOpen(o => !o);
+  };
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
+    if (!isOpen) return;
 
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    const handleClickOutside = (event: MouseEvent) => {
+      const t = event.target as Node;
+      // The menu lives outside dropdownRef now, so it must be checked too —
+      // otherwise mousedown closes the menu before the option's click lands.
+      if (dropdownRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setIsOpen(false);
+    };
+    // Any scroll (including the modal body's) would detach the fixed menu from
+    // its trigger, so close instead of trying to track it.
+    const handleScroll = () => setIsOpen(false);
+
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
     };
   }, [isOpen]);
 
-  const normalizedOptions = options.map(opt => 
+  const normalizedOptions = options.map(opt =>
     typeof opt === 'string' ? { value: opt, label: opt } : opt
   );
 
@@ -53,12 +84,18 @@ export function SingleSelectDropdown({
     setIsOpen(false);
   };
 
+  // Flip up when the space below can't hold the menu but the space above can.
+  const spaceBelow = menuRect ? window.innerHeight - menuRect.bottom - 8 : 0;
+  const spaceAbove = menuRect ? menuRect.top - 8 : 0;
+  const openUp = !!menuRect && spaceBelow < Math.min(maxMenuH, 160) && spaceAbove > spaceBelow;
+  const availableH = Math.max(120, Math.min(maxMenuH, openUp ? spaceAbove : spaceBelow));
+
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       {/* Trigger Button */}
       <button
         type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={toggleOpen}
         disabled={disabled}
         className={`w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
           disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-400'
@@ -71,13 +108,25 @@ export function SingleSelectDropdown({
         />
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div className={`absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden font-['Poppins',sans-serif] ${className.includes('text-[12px]') ? 'max-h-[200px]' : 'max-h-[280px]'}`}>
-          <div className={`overflow-y-auto ${className.includes('text-[12px]') ? 'max-h-[200px]' : 'max-h-[280px]'}`}>
+      {/* Dropdown Menu — portalled so it overlays, never clipped */}
+      {isOpen && menuRect && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            left: menuRect.left,
+            width: menuRect.width,
+            ...(openUp
+              ? { bottom: window.innerHeight - menuRect.top + 4 }
+              : { top: menuRect.bottom + 4 }),
+            maxHeight: availableH,
+          }}
+          className="z-[60] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden font-['Poppins',sans-serif]"
+        >
+          <div className="overflow-y-auto" style={{ maxHeight: availableH }}>
             {normalizedOptions.map((option) => {
               const isSelected = option.value === value;
-              
+
               return (
                 <button
                   key={option.value}
@@ -87,15 +136,16 @@ export function SingleSelectDropdown({
                     isSelected ? 'bg-[#4EBEE3]/5' : ''
                   }`}
                 >
-                  <span className={`${className.includes('text-[12px]') ? 'text-[12px]' : 'text-[14px]'} ${isSelected ? 'text-[#4EBEE3] font-medium' : 'text-[#16274D]'}`}>
+                  <span className={`${compact ? 'text-[12px]' : 'text-[14px]'} ${isSelected ? 'text-[#4EBEE3] font-medium' : 'text-[#16274D]'}`}>
                     {option.label}
                   </span>
-                  {isSelected && <Check size={className.includes('text-[12px]') ? 14 : 16} className="text-[#4EBEE3]" strokeWidth={2.5} />}
+                  {isSelected && <Check size={compact ? 14 : 16} className="text-[#4EBEE3]" strokeWidth={2.5} />}
                 </button>
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Plus, Copy, Eye, Settings, ClipboardList, ListChecks, ListTree,
   RefreshCw, Clock, CheckCircle2, ChevronRight, ChevronLeft, X, CheckCheck,
-  Lightbulb, Rocket, Calendar, Building2, Search, Check,
+  Lightbulb, Rocket, Calendar, Search, Check, Trash2, Edit2,
   AlertTriangle, Salad, GripVertical, Download, Upload,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
@@ -44,6 +44,17 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
   const [newDishEn, setNewDishEn] = useState('');
   const [newDishAr, setNewDishAr] = useState('');
   const [showAddDish, setShowAddDish] = useState(false);
+
+  // Sets list — search, status filter, bulk selection and inline name editing,
+  // matching the Menu Dishes and Reference Lists tables.
+  const [setSearch, setSetSearch] = useState('');
+  const [setStatuses, setSetStatuses] = useState<string[]>([]);
+  const [selectedSets, setSelectedSets] = useState<string[]>([]);
+  const [editingSet, setEditingSet] = useState<string | null>(null);
+  const [editSetValue, setEditSetValue] = useState('');
+  // Set when the editor opens on a freshly duplicated row, so its name comes up
+  // highlighted and the first keystroke replaces it.
+  const [editSelectAll, setEditSelectAll] = useState(false);
 
   const onCtx = (key: string, val: string) => {
     setCtx((c) => ({ ...c, [key]: val }));
@@ -92,49 +103,324 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
   // ============================================================
   // SETS LIST
   // ============================================================
+
+  // Same table chrome as the Menu Dishes and Reference Lists pages.
+  const thLeft = "py-3 px-4 text-left text-[12px] font-semibold text-[#16274D] font-['Poppins',sans-serif]";
+  const thCenter = "py-3 px-4 text-center text-[12px] font-semibold text-[#16274D] font-['Poppins',sans-serif]";
+  const tdCls = 'py-3.5 px-4';
+  const checkboxCls =
+    'w-4 h-4 rounded border-2 border-gray-300 text-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20 cursor-pointer';
+  const inlineInputCls =
+    "w-full px-2 py-1 border border-[#4EBEE3] rounded text-[13px] font-['Poppins',sans-serif] text-[#19233a] focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/20";
+
+  const statusOptions = [
+    { value: 'Published', label: 'Published' },
+    { value: 'Draft', label: 'Draft' },
+    { value: 'Scheduled', label: 'Scheduled' },
+  ];
+
+  const setQ = setSearch.trim().toLowerCase();
+  const setRows = db.sets.filter((s: any) => {
+    if (setQ && !(s.name || '').toLowerCase().includes(setQ)) return false;
+    if (setStatuses.length > 0 && !setStatuses.includes(s.status)) return false;
+    return true;
+  });
+  const setsFiltered = setQ.length > 0 || setStatuses.length > 0;
+
+  const toggleSetRow = (id: string) =>
+    setSelectedSets((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const toggleAllSets = () =>
+    setSelectedSets((prev) => (prev.length === setRows.length ? [] : setRows.map((s: any) => s.id)));
+
+  const deleteSets = (ids: string[]) => {
+    updateFood((d: any) => {
+      d.sets = d.sets.filter((s: any) => !ids.includes(s.id));
+    });
+    setSelectedSets([]);
+    setEditingSet(null);
+    // The open set may have just been removed — fall back to whatever remains.
+    if (ids.includes(setId)) {
+      const left = db.sets.find((s: any) => !ids.includes(s.id));
+      if (left) setSetId(left.id);
+    }
+  };
+
+  // Duplicating from the list stays on the list. The copy lands at the top of
+  // the table already in edit mode with its name selected, so it can be renamed
+  // without a second click.
+  const dupSetInline = (sourceId: string) => {
+    const source = db.sets.find((s: any) => s.id === sourceId);
+    if (!source) return;
+    const id = 'dup' + Date.now();
+    const name = `${source.name} (copy)`;
+    updateFood((d: any) => {
+      const src = d.sets.find((s: any) => s.id === sourceId) || d.sets[0];
+      d.sets.unshift({
+        ...structuredClone(src),
+        id,
+        name,
+        status: 'Draft',
+        sub: 'Duplicated · edit and publish',
+        edited: 'just now',
+      });
+    });
+    // A copy is always a Draft, so an active filter could hide the row we're
+    // about to focus — drop only the filter that would have excluded it.
+    if (setQ && !name.toLowerCase().includes(setQ)) setSetSearch('');
+    if (setStatuses.length > 0 && !setStatuses.includes('Draft')) setSetStatuses([]);
+    setSelectedSets([]);
+    setEditSelectAll(true);
+    setEditSetValue(name);
+    setEditingSet(id);
+    toast('Menu set duplicated');
+  };
+
+  // Clicking anywhere in a row that isn't a control opens the set. The exception
+  // is a click that dismisses an open inline editor — mousedown runs before the
+  // input's blur, so that's where the pre-blur state is still readable.
+  const setEditorWasOpen = useRef(false);
+  const openSetFromRow = (id: string) => {
+    if (setEditorWasOpen.current) {
+      setEditorWasOpen.current = false;
+      return;
+    }
+    setSetId(id);
+    setSub('overview');
+  };
+
+  const startSetEdit = (s: any) => {
+    setEditSelectAll(false);
+    setEditingSet(s.id);
+    setEditSetValue(s.name || '');
+  };
+
+  const saveSetEdit = () => {
+    if (!editingSet) return;
+    const id = editingSet;
+    const val = editSetValue.trim();
+    const prev = db.sets.find((s: any) => s.id === id)?.name || '';
+    setEditingSet(null);
+    setEditSetValue('');
+    setEditSelectAll(false);
+    if (!val) {
+      toast.error('Menu set name is required');
+      return;
+    }
+    if (val === prev) return;
+    updateFood((d: any) => {
+      const target = d.sets.find((s: any) => s.id === id);
+      if (target) target.name = val;
+    });
+    toast.success('Updated successfully');
+  };
+
   function viewSets() {
     return (
-      <Card>
-        <CardHead
-          title="Menu sets"
-          sub={`${db.sets.length} sets`}
-          right={
+      <>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-[24px] font-semibold text-[#16274D] font-['Poppins',sans-serif]">Menu Sets</h1>
+            <div className="text-[14px] text-[#6B7280]">
+              {db.sets.length} set{db.sets.length === 1 ? '' : 's'} in the library
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {selectedSets.length > 0 && (
+              <button
+                onClick={() => {
+                  const count = selectedSets.length;
+                  deleteSets(selectedSets);
+                  toast(`${count} menu set${count > 1 ? 's' : ''} deleted`);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[14px] font-medium shadow-sm"
+              >
+                <Trash2 size={16} strokeWidth={2} />
+                Delete ({selectedSets.length})
+              </button>
+            )}
             <Btn variant="primary" onClick={createSet}>
               <Plus size={16} /> Create menu set
             </Btn>
-          }
-        />
-        <div className="flex gap-2.5 px-5 py-3.5">
-          <Tag><Building2 size={14} /> Fakeeh Hospital</Tag>
-          <div className="flex-1 flex items-center gap-2 h-[34px] px-3 border border-[#e7e9f0] rounded-[10px] text-[13px] text-[#9099ab]">
-            <Search size={14} /> Search menu sets
           </div>
         </div>
-        {db.sets.map((s: any) => (
-          <div key={s.id} className={cx(rowCls, 'cursor-pointer')} onClick={() => { setSetId(s.id); setSub('overview'); }}>
-            <div className="flex-1">
-              <div className="font-medium text-[#19233a]">{s.name}</div>
-              <div className="text-[13px] text-[#5d6678]">{s.sub}</div>
-            </div>
-            <StatusBadge status={s.status} />
-            <div className="text-[12px] text-[#5d6678] text-right" style={{ width: 70 }}>{s.edited}</div>
+
+        {/* Filters Bar */}
+        <div className="flex items-center gap-3 mb-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={setSearch}
+              onChange={(e) => {
+                setSetSearch(e.target.value);
+                setSelectedSets([]);
+              }}
+              placeholder="Search menu sets by name..."
+              className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all text-[14px] font-['Poppins',sans-serif]"
+            />
           </div>
-        ))}
-        <Bar>
-          <Copy size={16} className="text-[#9099ab]" />
-          <span className="text-[13px] text-[#5d6678]">Duplicate a published set to start next season in seconds.</span>
-        </Bar>
-      </Card>
+          <div className="flex-1" />
+          <MultiSelectDropdown
+            options={statusOptions}
+            selectedValues={setStatuses}
+            onChange={(v: string[]) => {
+              setSetStatuses(v);
+              setSelectedSets([]);
+            }}
+            placeholder="Status"
+            className="min-w-[140px]"
+            showSelectAll={false}
+          />
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden shadow-sm">
+          {setRows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center py-14 px-5">
+              <div className="w-14 h-14 rounded-full bg-[#f7f8fb] flex items-center justify-center text-[#9099ab] mb-3">
+                <Salad size={26} />
+              </div>
+              <div className="font-semibold text-[#16274D] font-['Poppins',sans-serif]">
+                {setsFiltered ? 'No menu sets match your filters' : 'No menu sets yet'}
+              </div>
+              <div className="text-[13px] text-[#5d6678] mt-1">
+                {setsFiltered
+                  ? 'Try adjusting filters, or clear the search.'
+                  : 'Create your first menu set to get started.'}
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
+                  <tr>
+                    <th className={thLeft} style={{ width: '50px' }}>
+                      <input
+                        type="checkbox"
+                        checked={setRows.length > 0 && selectedSets.length === setRows.length}
+                        onChange={toggleAllSets}
+                        className={checkboxCls}
+                      />
+                    </th>
+                    <th className={thLeft}>Menu Set</th>
+                    <th className={thCenter}>Diets</th>
+                    <th className={thCenter}>Meals</th>
+                    <th className={thCenter}>Groups</th>
+                    <th className={thCenter}>Status</th>
+                    <th className={thCenter}>Last Edited</th>
+                    <th className={thCenter} style={{ width: '128px' }}>
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#E5E7EB]">
+                  {setRows.map((s: any) => (
+                    <tr
+                      key={s.id}
+                      onMouseDown={() => { setEditorWasOpen.current = editingSet != null; }}
+                      onClick={() => openSetFromRow(s.id)}
+                      className="hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+                    >
+                      <td className={tdCls}>
+                        <input
+                          type="checkbox"
+                          checked={selectedSets.includes(s.id)}
+                          onChange={() => toggleSetRow(s.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className={checkboxCls}
+                        />
+                      </td>
+                      <td className={tdCls}>
+                        {editingSet === s.id ? (
+                          <input
+                            type="text"
+                            value={editSetValue}
+                            onChange={(e) => setEditSetValue(e.target.value)}
+                            onBlur={saveSetEdit}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={(e) => {
+                              if (editSelectAll) e.currentTarget.select();
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveSetEdit();
+                              if (e.key === 'Escape') {
+                                setEditingSet(null);
+                                setEditSetValue('');
+                                setEditSelectAll(false);
+                              }
+                            }}
+                            autoFocus
+                            className={inlineInputCls}
+                          />
+                        ) : (
+                          <span
+                            onClick={(e) => { e.stopPropagation(); startSetEdit(s); }}
+                            className="cursor-pointer hover:text-[#4EBEE3] transition-colors font-medium text-[#19233a] text-[13.5px] font-['Poppins',sans-serif]"
+                          >
+                            {s.name}
+                          </span>
+                        )}
+                      </td>
+                      <td className={cx(tdCls, 'text-center')}>
+                        <span className="text-[13px] text-[#5d6678]">{(s.diets || []).length}</span>
+                      </td>
+                      <td className={cx(tdCls, 'text-center')}>
+                        <span className="text-[13px] text-[#5d6678]">{(s.meals || []).length}</span>
+                      </td>
+                      <td className={cx(tdCls, 'text-center')}>
+                        <Tag>{groupsLabel(s.groups)}</Tag>
+                      </td>
+                      <td className={cx(tdCls, 'text-center')}>
+                        <StatusBadge status={s.status} />
+                      </td>
+                      <td className={cx(tdCls, 'text-center')}>
+                        <span className="text-[12px] text-[#5d6678]">{s.edited}</span>
+                      </td>
+                      <td className={tdCls}>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSetId(s.id); setSub('overview'); }}
+                            className="p-1.5 hover:bg-[#4EBEE3]/10 rounded-lg transition-colors cursor-pointer"
+                            title="Edit"
+                          >
+                            <Edit2 size={14} className="text-[#4EBEE3]" strokeWidth={2} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); dupSetInline(s.id); }}
+                            className="p-1.5 hover:bg-[#4EBEE3]/10 rounded-lg transition-colors cursor-pointer"
+                            title="Duplicate"
+                          >
+                            <Copy size={14} className="text-[#5d6678]" strokeWidth={2} />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteSets([s.id]); toast(`${s.name} deleted`); }}
+                            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} className="text-red-500" strokeWidth={2} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </>
     );
   }
 
   // ============================================================
   // SET OVERVIEW
   // ============================================================
-  function dupSet() {
+  // `sourceId` is explicit so the list can duplicate a row without first
+  // switching setId — a state update that wouldn't have landed yet.
+  function dupSet(sourceId: string = setId) {
     const id = 'dup' + Date.now();
     updateFood((d: any) => {
-      const source = d.sets.find((s: any) => s.id === setId) || d.sets[0];
+      const source = d.sets.find((s: any) => s.id === sourceId) || d.sets[0];
       d.sets.unshift({
         ...structuredClone(source),
         id,
@@ -175,7 +461,7 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
           sub={`${groupsLabel(set.groups)} · edited ${set.edited}`}
           right={
             <>
-              <Btn variant="neutral" onClick={dupSet}><Copy size={16} /> Duplicate</Btn>
+              <Btn variant="neutral" onClick={() => dupSet()}><Copy size={16} /> Duplicate</Btn>
               <Btn variant="accent" onClick={() => onNavigate('food-kiosk')}><Eye size={16} /> Preview</Btn>
             </>
           }

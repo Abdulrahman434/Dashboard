@@ -34,6 +34,25 @@ function SEED(): any {
   return {
     allergens: ['Milk', 'Egg', 'Gluten', 'Nuts', 'Fish', 'Shellfish', 'Soy', 'Sesame', 'Peanut'],
     meals: ['Breakfast', 'Lunch', 'Dinner'],
+    // Allergens and meals are identified by their English name everywhere else
+    // (dish tags, patient allergy records, menu sets), so the Arabic label is a
+    // lookup keyed on that name rather than a second field on a renamed object.
+    allergensAr: {
+      Milk: 'حليب',
+      Egg: 'بيض',
+      Gluten: 'جلوتين',
+      Nuts: 'مكسرات',
+      Fish: 'أسماك',
+      Shellfish: 'محار وقشريات',
+      Soy: 'صويا',
+      Sesame: 'سمسم',
+      Peanut: 'فول سوداني',
+    } as Record<string, string>,
+    mealsAr: {
+      Breakfast: 'فطور',
+      Lunch: 'غداء',
+      Dinner: 'عشاء',
+    } as Record<string, string>,
     win: { serviceDay: 'Tomorrow only', open: '4:00 PM', close: '8:00 PM', sameAll: true, autoDefault: true, allowEdit: true },
     sections: [
       { en: 'Cereals', ar: 'حبوب الإفطار', on: true },
@@ -135,7 +154,10 @@ export function buildMenu(db: any): any {
   db.diets.forEach((dt: any) => {
     m[dt.en] = {};
     db.meals.forEach((meal: string) => {
-      m[dt.en][meal] = MEAL_SECTIONS[meal].map((sn) => {
+      // MEAL_SECTIONS is keyed by the seeded meal names, so a meal added or
+      // renamed in the reference lists has no entry here — it starts empty
+      // rather than throwing.
+      m[dt.en][meal] = (MEAL_SECTIONS[meal] || []).map((sn) => {
         const r = rulesFor(sn, dt.en);
         const items = dishesSeed(db, sn, dt.en);
         const days: any = {};
@@ -172,7 +194,10 @@ export function getLiveSet(db: any): any {
 // Flatten a diet/meal/day into concrete sections + their items + default for
 // that day. `menu` is a single set's menu tree (e.g. `someSet.menu`), not db.
 export function resolve(menu: any, diet: string, meal: string, day: string): any[] {
-  const base = menu[diet] && menu[diet][meal] ? menu[diet][meal] : menu['Regular'][meal];
+  // Falls back to Regular, then to nothing — 'Regular' can be renamed or
+  // deleted from the reference lists, so it isn't guaranteed to exist.
+  const base =
+    (menu[diet] && menu[diet][meal]) || (menu['Regular'] && menu['Regular'][meal]) || [];
   return base.map((s: any) => {
     const dd = s.days[day] || { items: [], def: null };
     return { ...s, items: dd.items, def: dd.def };

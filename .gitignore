@@ -1,5 +1,7 @@
 node_modules
-.claude/
+# Local Claude config stays untracked, but project skills are shared.
+.claude/*
+!.claude/skills/
 src/.claude/
 build/
 dist/

@@ -244,22 +244,6 @@ export const rowCls = 'flex items-center gap-3 px-5 py-[13px] border-t border-[#
 // The sidebar is the only navigation between food sections now — no in-page
 // step tracker duplicating it. Just a small, unobtrusive reset affordance.
 
-export function ResetDemoLink() {
-  return (
-    <div className="flex justify-end mb-3">
-      <button
-        onClick={() => {
-          resetFood();
-          toast('Demo data reset');
-        }}
-        className="inline-flex items-center gap-1.5 text-[12.5px] text-[#9099ab] hover:text-[#16274D] px-1 py-1 cursor-pointer whitespace-nowrap transition-colors"
-      >
-        <RefreshCw size={13} />
-        Reset demo
-      </button>
-    </div>
-  );
-}
 
 // ---- context bar (diet / meal / day selector) ------------------------------
 
@@ -285,7 +269,6 @@ export function FoodPage({ children }: any) {
   return (
     <div className="p-6 font-['Poppins',sans-serif]">
       <div className="mx-auto w-full max-w-full">
-        <ResetDemoLink />
         {children}
       </div>
     </div>
