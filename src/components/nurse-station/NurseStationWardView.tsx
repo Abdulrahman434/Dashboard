@@ -133,6 +133,7 @@ function RoomCard({
   variant,
   careSuiteRequests,
   kitchenOrder,
+  vcInfo,
   onCardClick,
   isCareSign,
   onCareSignClick,
@@ -803,11 +804,14 @@ export default function NurseStationWardView({
 
   const switchTab = (label: string) => {
     setActionRoom(null);
-    if (label === "CareConnect") {
+    if (label === "CareSign") {
+      setBedFilter("caresign");
+      setActiveBottomTab("CareSign");
+    } else if (label === "CareConnect") {
       setActiveBottomTab("CareConnect");
-      setBedFilter("careconnect" as any);
+      if (bedFilter === "caresign") setBedFilter("all");
     } else if (label === "Patient Profile" || label === "Kitchen" || label === "CARESUITE") {
-      if (bedFilter === ("careconnect" as any)) setBedFilter("all");
+      if (bedFilter === "caresign") setBedFilter("all");
       setActiveBottomTab(label);
     } else {
       toast.info(`${label} will be updated soon`);
@@ -1072,6 +1076,7 @@ export default function NurseStationWardView({
       <div className="px-6 py-3 flex gap-2 items-center bg-white border-t border-gray-100 shrink-0 flex-wrap">
         {[
           { label: "Patient View", value: "Patient Profile" },
+          { label: "CareSign", value: "CareSign" },
           { label: "CareConnect View", value: "CareConnect" },
           { label: "Kitchen View", value: "Kitchen" },
           { label: "Housekeeping View", value: "CARESUITE" },
