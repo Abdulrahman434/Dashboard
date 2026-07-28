@@ -30,6 +30,8 @@ import {
   Sparkles,
   UserCheck,
   Sliders,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import GlobalVisibilityConfigureModal from "./GlobalVisibilityConfigureModal";
 import { useNurseStations } from "../../hooks/useNurseStations";
@@ -209,6 +211,20 @@ function RoomCard({
                 ) : (
                   <span className="px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wide uppercase bg-[#e7f6f0] text-[#1f9e75]">Clear</span>
                 )
+              ) : variant === "careconnect" ? (
+                vcInfo ? (
+                  <span
+                    className="px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wide uppercase"
+                    style={{
+                      color: vcInfo.status === "active" ? "#065f46" : vcInfo.status === "scheduled" ? "#0c4a6e" : vcInfo.status === "pending_approval" ? "#92400e" : "#6b7280",
+                      background: vcInfo.status === "active" ? "#d1fae5" : vcInfo.status === "scheduled" ? "#e0f2fe" : vcInfo.status === "pending_approval" ? "#fef3c7" : "#f3f4f6",
+                    }}
+                  >
+                    {vcInfo.status === "active" ? "Live VC" : vcInfo.status === "scheduled" ? "VC Scheduled" : vcInfo.status === "pending_approval" ? "VC Pending" : "No VC"}
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-[9px] font-extrabold tracking-wide uppercase bg-[#f1f3f6] text-[#9099ab]">No VC</span>
+                )
               ) : (
                 <span className="inline-flex items-center px-2 py-1 rounded-md bg-[#f3f5f8] text-[#2e3d59] text-[9px] font-extrabold tracking-wide">
                   OCCUPIED
@@ -255,9 +271,11 @@ function RoomCard({
                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                         VC Request Pending Approval
                       </span>
-                      <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
-                        {vcInfo.doctorName || "Dr. Sarah Johnson"}
-                      </p>
+                      {variant === "careconnect" && (
+                        <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
+                          {vcInfo.doctorName || "Dr. Sarah Johnson"}
+                        </p>
+                      )}
                       <p className="text-[9px] text-[#9099ab]">Requested at {vcInfo.requestedTime || "4:15 PM"}</p>
                     </div>
                   ) : vcInfo.status === "scheduled" ? (
@@ -266,9 +284,11 @@ function RoomCard({
                         <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                         VC Scheduled at {vcInfo.scheduledTime || "4:50 PM"}
                       </span>
-                      <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
-                        {vcInfo.doctorName || "Dr. Ahmed Al-Mansoor"}
-                      </p>
+                      {variant === "careconnect" && (
+                        <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
+                          {vcInfo.doctorName || "Dr. Ahmed Al-Mansoor"}
+                        </p>
+                      )}
                     </div>
                   ) : vcInfo.status === "active" ? (
                     <div className="flex flex-col gap-1">
@@ -276,9 +296,11 @@ function RoomCard({
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         Active VC (Live)
                       </span>
-                      <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
-                        {vcInfo.doctorName || "Dr. Fatima Al-Zahrani"}
-                      </p>
+                      {variant === "careconnect" && (
+                        <p className="text-[10px] text-[#5d6678] mt-0.5 truncate font-semibold" title={vcInfo.doctorName}>
+                          {vcInfo.doctorName || "Dr. Fatima Al-Zahrani"}
+                        </p>
+                      )}
                       <p className="text-[9px] text-emerald-700 font-bold">Live • {vcInfo.duration || "08m 15s"}</p>
                     </div>
                   ) : (
@@ -287,7 +309,9 @@ function RoomCard({
                         <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
                         No Active VC
                       </span>
-                      <p className="text-[9.5px] text-[#9099ab] mt-0.5">Terminal ready for VC call</p>
+                      {variant === "careconnect" && (
+                        <p className="text-[9.5px] text-[#9099ab] mt-0.5">Terminal ready for VC call</p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -602,6 +626,7 @@ export default function NurseStationWardView({
   }, []);
   const [activeBottomTab, setActiveBottomTab] = useState<string>("Patient Profile");
   const [showConfigureModal, setShowConfigureModal] = useState(false);
+  const [isFullView, setIsFullView] = useState(false);
 
   // Sync state if focusStationId changes
   useEffect(() => {
@@ -864,7 +889,7 @@ export default function NurseStationWardView({
   }
 
   return (
-    <div className="min-h-full w-full bg-[#f8fafc] font-['Poppins',sans-serif] text-[#1C1B1F] flex flex-col">
+    <div className={`${isFullView ? "fixed inset-0 z-[9999] h-screen" : "min-h-full"} w-full bg-[#f8fafc] font-['Poppins',sans-serif] text-[#1C1B1F] flex flex-col`}>
       {/* Metrics */}
       <div className="mx-6 mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 rounded-xl border border-[#e7e9f0] bg-white overflow-hidden divide-x divide-[#eef1f6]">
         <Metric label="Occupied" value={`${occupiedCount} / ${total}`} icon={BedSingle} tone="blue" />
@@ -899,12 +924,22 @@ export default function NurseStationWardView({
             );
           })}
         </div>
-        <button
-          onClick={() => setShowConfigureModal(true)}
-          className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
-        >
-          <Sliders size={16} className="text-[#0284C7]" /> Configure
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsFullView(!isFullView)}
+            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#16274D]/20 bg-[#f0f2f5] text-[#16274D] text-[13px] font-bold hover:bg-[#e2e6ec] hover:border-[#16274D]/40 shadow-sm transition-all"
+            title={isFullView ? "Exit Full View" : "Full View"}
+          >
+            {isFullView ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            {isFullView ? "Exit Full View" : "Full View"}
+          </button>
+          <button
+            onClick={() => setShowConfigureModal(true)}
+            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
+          >
+            <Sliders size={16} className="text-[#0284C7]" /> Configure
+          </button>
+        </div>
       </div>
 
       {/* Main workspace: grid + right panel */}
@@ -982,6 +1017,12 @@ export default function NurseStationWardView({
                     onCardClick={() => {
                       if (r.isCareSign || bedFilter === "caresign") {
                         setCareSignModalRoom(r);
+                      } else if (activeBottomTab === "CareConnect") {
+                        if (r.state === "occupied") {
+                          handleRoomClick(r);
+                        } else {
+                          toast.info("Room is available — no VC session.");
+                        }
                       } else if (activeBottomTab === "CARESUITE") {
                         const first = roomActiveReqs(r.no)[0];
                         if (first) setSelectedRequest(first);
