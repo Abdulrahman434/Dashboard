@@ -69,10 +69,10 @@ export default function GlobalVisibilityConfigureModal({
             </div>
             <div>
               <h2 className="text-[17px] font-extrabold text-[#16274D]">
-                Configure Global Patient Terminal Visibility
+                Configure Visibility
               </h2>
               <p className="text-[12px] text-[#637381]">
-                Set default section visibility across all patient terminals
+                Set section visibility for patient terminals
               </p>
             </div>
           </div>
@@ -82,14 +82,6 @@ export default function GlobalVisibilityConfigureModal({
           >
             <X size={18} />
           </button>
-        </div>
-
-        {/* Info Banner */}
-        <div className="bg-[#F0F9FF] border-b border-[#BAE6FD] px-6 py-3 flex items-start gap-2.5 text-[12.5px] text-[#0369A1]">
-          <Info size={16} className="text-[#0284C7] shrink-0 mt-0.5" />
-          <p>
-            <strong>Global Policy Notice:</strong> Saving settings here applies globally to all patients. If a nurse previously customized visibility for a specific patient, saving global settings will <strong>reset that patient back to this global selection</strong>.
-          </p>
         </div>
 
         {/* Toolbar controls */}
@@ -169,10 +161,9 @@ export default function GlobalVisibilityConfigureModal({
           </button>
           <button
             onClick={handleSave}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white text-[13px] font-bold shadow-md transition-all"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white text-[13px] font-bold shadow-md transition-all"
           >
-            <Sliders size={16} />
-            Apply Global Settings to All Patients
+            Apply
           </button>
         </div>
       </div>
