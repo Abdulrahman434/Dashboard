@@ -352,8 +352,10 @@ function Metric({ label, value, icon: Icon, tone, onClick, isActive }: { label: 
   return (
     <div
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3 transition-all cursor-pointer select-none ${
-        isActive ? "ring-2 ring-inset ring-[#4EBEE3] bg-[#f0f9ff]" : "hover:bg-[#f8fafc]"
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all cursor-pointer select-none ${
+        isActive
+          ? "border-[#4EBEE3] bg-[#EBF8FC] shadow-sm ring-2 ring-[#4EBEE3]/40"
+          : "border-[#e7e9f0] bg-white hover:bg-[#f8fafc] hover:border-[#cbd5e1]"
       }`}
     >
       <span className="w-9 h-9 rounded-full flex items-center justify-center text-white shrink-0" style={{ background: bg }}>
@@ -902,7 +904,7 @@ export default function NurseStationWardView({
   return (
     <div className={`${isFullView ? "fixed inset-0 z-[9999] h-screen" : "min-h-full"} w-full bg-[#f8fafc] font-['Poppins',sans-serif] text-[#1C1B1F] flex flex-col`}>
       {/* Metrics — clickable filter tiles */}
-      <div className="mx-6 mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 rounded-xl border border-[#e7e9f0] bg-white overflow-hidden divide-x divide-[#eef1f6]">
+      <div className="mx-6 mt-5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <Metric label="Total Beds" value={String(total)} icon={BedSingle} tone="blue" onClick={() => setBedFilter("all")} isActive={bedFilter === "all"} />
         <Metric label="Occupied Beds" value={String(occupiedCount)} icon={BedDouble} tone="blue" onClick={() => setBedFilter("occupied")} isActive={bedFilter === "occupied"} />
         <Metric label="Active Requests" value={String(activeRequestsCount)} icon={Bell} tone="amber" onClick={() => setBedFilter("requests")} isActive={bedFilter === "requests"} />
