@@ -114,6 +114,7 @@ const EVENT_TONE: Record<string, { chipBg: string; chipColor: string; iconBg: st
   urgent: { chipBg: "#fcebe9", chipColor: "#c0392b", iconBg: "#c0392b" },
   pending: { chipBg: "#fbf1de", chipColor: "#b9770b", iconBg: "#b9770b" },
   active: { chipBg: "#eaf7fc", chipColor: "#1d7da3", iconBg: "#4EBEE3" },
+  vc: { chipBg: "#e0f2fe", chipColor: "#0284C7", iconBg: "#0284C7" },
   completed: { chipBg: "#e7f6f0", chipColor: "#1f9e75", iconBg: "#1f9e75" },
 };
 
@@ -635,6 +636,87 @@ export default function NurseStationWardView({
   const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [isFullView, setIsFullView] = useState(false);
 
+  // Live simulation state for VC calls and real-time Ward Overview feed
+  const [liveVcMap, setLiveVcMap] = useState<Record<string, { status: string; doctorName?: string; requestedTime?: string; scheduledTime?: string; seconds?: number }>>({
+    "300A": { status: "pending_approval", doctorName: "Dr. Sarah Johnson (Cardiology)", requestedTime: "4:15 PM" },
+    "300B": { status: "scheduled", doctorName: "Dr. Ahmed Al-Mansoor (Neurology)", scheduledTime: "4:50 PM" },
+    "300C": { status: "active", doctorName: "Dr. Fatima Al-Zahrani (Internal Med)", seconds: 495 },
+    "300E": { status: "no_active" },
+    "301A": { status: "pending_approval", doctorName: "Dr. Sarah Johnson (Cardiology)", requestedTime: "4:20 PM" },
+    "301B": { status: "scheduled", doctorName: "Dr. Ahmed Al-Mansoor (Neurology)", scheduledTime: "4:50 PM" },
+    "301C": { status: "active", doctorName: "Dr. Fatima Al-Zahrani (Internal Med)", seconds: 125 },
+    "302A": { status: "pending_approval", doctorName: "Dr. Tariq Al-Ghamdi (Pulmonology)", requestedTime: "4:35 PM" },
+    "302B": { status: "scheduled", doctorName: "Dr. Mona Al-Hassan (Endocrinology)", scheduledTime: "5:10 PM" },
+  });
+
+  const [simulatedEvents, setSimulatedEvents] = useState<Array<{ key: string; room: string; title: string; status: string; time: string; tone: string; ts: number }>>([
+    { key: "sim_init_1", room: "300C", title: "Active VC Session (Live)", status: "In Progress", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), tone: "vc", ts: Date.now() - 60000 },
+    { key: "sim_init_2", room: "301C", title: "Active VC Session (Live)", status: "In Progress", time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), tone: "vc", ts: Date.now() - 120000 },
+    { key: "sim_init_3", room: "300B", title: "VC Request Scheduled", status: "Scheduled", time: "04:50 PM", tone: "active", ts: Date.now() - 180000 },
+  ]);
+
+  const simStepRef = React.useRef(0);
+
+  // Live simulation ticker (runs continuously every 3s)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      simStepRef.current += 1;
+      const step = simStepRef.current;
+      const nowTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      setLiveVcMap((prev) => {
+        const next = { ...prev };
+        // 1. Advance duration counter on all active VC calls
+        Object.keys(next).forEach((roomNo) => {
+          if (next[roomNo]?.status === "active") {
+            const currentSec = next[roomNo].seconds || 0;
+            next[roomNo] = { ...next[roomNo], seconds: currentSec + 3 };
+          }
+        });
+
+        // 2. Dynamic status transitions every 3 steps (~9s)
+        if (step % 3 === 0) {
+          const subStep = Math.floor(step / 3) % 5;
+          if (subStep === 1) {
+            next["300A"] = { status: "scheduled", doctorName: "Dr. Sarah Johnson (Cardiology)", scheduledTime: "5:15 PM" };
+            setSimulatedEvents((evs) => [
+              { key: "ev_" + Date.now(), room: "300A", title: "VC Approved & Scheduled", status: "Scheduled", time: nowTime, tone: "vc", ts: Date.now() },
+              ...evs,
+            ]);
+          } else if (subStep === 2) {
+            next["300B"] = { status: "active", doctorName: "Dr. Ahmed Al-Mansoor (Neurology)", seconds: 15 };
+            setSimulatedEvents((evs) => [
+              { key: "ev_" + Date.now(), room: "300B", title: "Active VC Call Joined", status: "Live Call", time: nowTime, tone: "vc", ts: Date.now() },
+              ...evs,
+            ]);
+          } else if (subStep === 3) {
+            next["300E"] = { status: "pending_approval", doctorName: "Dr. Reem Al-Dossary (Dermatology)", requestedTime: nowTime };
+            setSimulatedEvents((evs) => [
+              { key: "ev_" + Date.now(), room: "300E", title: "VC Consultation Requested", status: "Pending", time: nowTime, tone: "pending", ts: Date.now() },
+              ...evs,
+            ]);
+          } else if (subStep === 4) {
+            next["302A"] = { status: "scheduled", doctorName: "Dr. Tariq Al-Ghamdi (Pulmonology)", scheduledTime: "5:45 PM" };
+            setSimulatedEvents((evs) => [
+              { key: "ev_" + Date.now(), room: "302A", title: "VC Request Approved", status: "Scheduled", time: nowTime, tone: "vc", ts: Date.now() },
+              ...evs,
+            ]);
+          } else if (subStep === 0) {
+            next["301A"] = { status: "active", doctorName: "Dr. Sarah Johnson (Cardiology)", seconds: 10 };
+            setSimulatedEvents((evs) => [
+              { key: "ev_" + Date.now(), room: "301A", title: "Active VC Call Joined", status: "Live Call", time: nowTime, tone: "vc", ts: Date.now() },
+              ...evs,
+            ]);
+          }
+        }
+
+        return next;
+      });
+    }, 3000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   // Sync state if focusStationId changes
   useEffect(() => {
     if (focusStationId) setSelectedStationId(focusStationId);
@@ -890,11 +972,33 @@ export default function NurseStationWardView({
     return { key: "k" + o.id, room: o.room + o.bed, title: "Meal order", status: o.status, time: o.time || "", tone, ts: 0 };
   });
   const allEvents =
-    activeBottomTab === "CARESUITE" ? careSuiteEvents : activeBottomTab === "Kitchen" ? kitchenEvents : [...careSuiteEvents, ...kitchenEvents];
+    activeBottomTab === "CARESUITE"
+      ? careSuiteEvents
+      : activeBottomTab === "Kitchen"
+      ? kitchenEvents
+      : [...simulatedEvents, ...careSuiteEvents, ...kitchenEvents];
   const sortedEvents = [...allEvents].sort((a, b) => (b.ts || 0) - (a.ts || 0));
   const visibleEvents = sortedEvents.filter((e) => (eventFilter === "all" ? true : e.tone === eventFilter));
   const pendingEventCount = sortedEvents.filter((e) => e.tone === "pending").length;
   const urgentEventCount = sortedEvents.filter((e) => e.tone === "urgent").length;
+
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return "00m 00s";
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`;
+  };
+
+  const getVCInfo = (roomNo: string) => {
+    const info = liveVcMap[roomNo];
+    if (info) {
+      if (info.status === "active") {
+        return { ...info, duration: formatDuration(info.seconds) };
+      }
+      return info;
+    }
+    return { status: "no_active" };
+  };
 
   // Bedside interface takes over the whole view (unchanged)
   if (selectedRoom) {
@@ -912,22 +1016,28 @@ export default function NurseStationWardView({
         <Metric label="Offline Devices" value={terminalsTotal > 0 ? `${terminalsOffline} / ${terminalsTotal}` : "—"} icon={WifiOff} tone="green" onClick={() => setBedFilter("offline")} isActive={bedFilter === "offline"} />
       </div>
 
-      {/* Toolbar — Full View + Configure */}
-      <div className="px-6 pt-4 pb-1 flex items-center justify-end gap-2 flex-wrap">
-        <button
-          onClick={() => setIsFullView(!isFullView)}
-          className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#16274D]/20 bg-[#f0f2f5] text-[#16274D] text-[13px] font-bold hover:bg-[#e2e6ec] hover:border-[#16274D]/40 shadow-sm transition-all"
-          title={isFullView ? "Exit Full View" : "Full View"}
-        >
-          {isFullView ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-          {isFullView ? "Exit Full View" : "Full View"}
-        </button>
-        <button
-          onClick={() => setShowConfigureModal(true)}
-          className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
-        >
-          <Sliders size={16} className="text-[#0284C7]" /> Configure
-        </button>
+      {/* Toolbar — Live simulation status + Full View + Configure */}
+      <div className="px-6 pt-4 pb-1 flex items-center justify-between gap-2 flex-wrap">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#e7f6f0] border border-[#1f9e75]/30 text-[#1f9e75] text-[11px] font-extrabold shadow-sm">
+          <span className="w-2 h-2 rounded-full bg-[#1f9e75] animate-pulse" />
+          LIVE DATA FEED ACTIVE
+        </span>
+        <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => setIsFullView(!isFullView)}
+            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#16274D]/20 bg-[#f0f2f5] text-[#16274D] text-[13px] font-bold hover:bg-[#e2e6ec] hover:border-[#16274D]/40 shadow-sm transition-all"
+            title={isFullView ? "Exit Full View" : "Full View"}
+          >
+            {isFullView ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            {isFullView ? "Exit Full View" : "Full View"}
+          </button>
+          <button
+            onClick={() => setShowConfigureModal(true)}
+            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
+          >
+            <Sliders size={16} className="text-[#0284C7]" /> Configure
+          </button>
+        </div>
       </div>
 
       {/* Main workspace: grid + right panel */}
@@ -966,19 +1076,6 @@ export default function NurseStationWardView({
                 const kitchenOrder = roomKitchen(r.no);
                 const summary = roomRequestSummary(r.no);
                 const variant = activeBottomTab === "CARESUITE" ? "caresuite" : activeBottomTab === "Kitchen" ? "kitchen" : activeBottomTab === "CareConnect" ? "careconnect" : "profile";
-
-                const getVCInfo = (roomNo: string) => {
-                  if (roomNo.endsWith("A") || roomNo.endsWith("0")) {
-                    return { status: "pending_approval", doctorName: "Dr. Sarah Johnson (Cardiology)", requestedTime: "4:15 PM" };
-                  }
-                  if (roomNo.endsWith("B") || roomNo.endsWith("1")) {
-                    return { status: "scheduled", doctorName: "Dr. Ahmed Al-Mansoor (Neurology)", scheduledTime: "4:50 PM" };
-                  }
-                  if (roomNo.endsWith("C") || roomNo.endsWith("2")) {
-                    return { status: "active", doctorName: "Dr. Fatima Al-Zahrani (Internal Med)", duration: "08m 15s" };
-                  }
-                  return { status: "no_active" };
-                };
 
                 return (
                   <RoomCard
