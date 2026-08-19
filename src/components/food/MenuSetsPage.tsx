@@ -1,21 +1,29 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import {
-  Plus, Copy, Eye, Settings, ClipboardList, ListChecks, ListTree,
-  RefreshCw, Clock, CheckCircle2, ChevronRight, ChevronLeft, X, CheckCheck,
-  Lightbulb, Rocket, Calendar, Building2, Search, Check,
-  AlertTriangle, Salad, GripVertical, Download, Upload,
+  Plus, Copy, Eye, Settings, ClipboardList, ListTree,
+  Clock, CheckCircle2, ChevronRight, ChevronLeft, ChevronDown, X, CheckCheck,
+  Lightbulb, Rocket, Building2, Search, Check,
+  AlertTriangle, Salad, Download, Upload, Filter, Pencil, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import {
-  useFood, updateFood, resolve, ruleText, DAYS, buildMenu,
+  useFood, updateFood, resolve, ruleText, DAYS, buildMenu, sectionRule,
 } from './foodStore';
 import {
-  cx, Btn, Toggle, Chip, StatusBadge, Tag, Note, Metric, Stepper,
+  cx, Btn, Toggle, Chip, StatusBadge, Tag, Badge, Note, Metric, Stepper,
   MiniSeg, Card, CardHead, Bar, rowCls, ContextBar, FoodPage,
 } from './foodAtoms';
 import { MultiSelectDropdown, SingleSelectDropdown } from '../UnifiedDropdown';
 
 const GROUP_OPTIONS = ['Kids', 'Adults', 'VIP'];
+const PER_PAGE = 10;
+const DAY_LABELS: Record<string, string> = {
+  Sat: 'Saturday', Sun: 'Sunday', Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday',
+};
+const SECTION_DOT: Record<string, string> = {
+  Mains: '#4EBEE3', 'Side orders': '#8b5cf6', Dessert: '#ec4899', Soup: '#22c55e', Salad: '#eab308', Drinks: '#0ea5e9',
+  Cereals: '#f97316', Eggs: '#f59e0b', 'Baked breads': '#a855f7', Dairy: '#06b6d4',
+};
 
 function groupsLabel(groups: string[] | undefined): string {
   const g = groups || [];
@@ -31,23 +39,22 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
   const [setId, setSetId] = useState('standard');
   const [step, setStep] = useState(1);
   const [ctx, setCtx] = useState<{ diet: string; meal: string; day: string }>({ diet: 'Regular', meal: 'Lunch', day: 'Wed' });
-  const [itemSec, setItemSec] = useState(0);
   const [applyTargets, setApplyTargets] = useState<Record<string, boolean> | null>(null);
   const [applyDays, setApplyDays] = useState<Record<string, boolean> | null>(null);
   const [applyMode, setApplyMode] = useState<'days' | 'diets'>('days');
 
-  // Drag and drop state
-  const [dragItem, setDragItem] = useState<number | null>(null);
-  const [dragOverItem, setDragOverItem] = useState<number | null>(null);
-
-  // Add dish state
-  const [newDishEn, setNewDishEn] = useState('');
-  const [newDishAr, setNewDishAr] = useState('');
-  const [showAddDish, setShowAddDish] = useState(false);
+  // Items table state (step 4)
+  const [page, setPage] = useState(1);
+  const [addingRow, setAddingRow] = useState(false);
+  const [draft, setDraft] = useState<{ day: string; meal: string; diet: string; item: string }>({ day: DAYS[0], meal: '', diet: '', item: '' });
+  const [editRuleKey, setEditRuleKey] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterDay, setFilterDay] = useState('All');
+  const [filterMeal, setFilterMeal] = useState('All');
+  const [filterDiet, setFilterDiet] = useState('All');
 
   const onCtx = (key: string, val: string) => {
     setCtx((c) => ({ ...c, [key]: val }));
-    setItemSec(0);
   };
 
   // Every menu set owns its own independent menu tree — this is the one
@@ -155,8 +162,7 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
     const rows = [
       { icon: Settings, name: 'Basics', sub: `${set.name}${set.activeFrom ? ' · active from ' + set.activeFrom : ' · no active date set'}`, step: 1 },
       { icon: ClipboardList, name: 'Diets and meals', sub: `${(set.diets || []).length} conditions · ${(set.meals || []).join(', ')}`, step: 2 },
-      { icon: ListChecks, name: 'Sections and rules', sub: 'Per diet and meal · choose-one, choose-two, required', step: 3 },
-      { icon: ListTree, name: 'Items and defaults', sub: 'Dishes assigned per section · defaults set', step: 4 },
+      { icon: ListTree, name: 'Sections, items and defaults', sub: 'Add sections, set rules, and choose dishes per day', step: 4 },
       { icon: Clock, name: 'Ordering window', sub: `Opens ${db.win.open}, closes ${db.win.close}`, step: 6 },
       {
         icon: CheckCircle2,
@@ -212,130 +218,97 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
   // ============================================================
   // WIZARD — step handlers
   // ============================================================
-  const menuMutate = (fn: (cfg: any[], d: any) => void) => {
-    updateFood((d: any) => {
-      const dSet = d.sets.find((s: any) => s.id === setId);
-      const cfg = dSet.menu[ctx.diet][ctx.meal];
-      fn(cfg, d);
-    });
-  };
-
-  function menuMode(i: number, forAll: boolean) {
-    menuMutate((cfg) => {
-      const s = cfg[i];
-      s.forAll = forAll;
-    });
-  }
-
-  function menuStep(i: number, field: 'min' | 'max', delta: number) {
-    menuMutate((cfg) => {
-      const s = cfg[i];
-      if (field === 'min') {
-        const next = Math.max(0, Math.min((s.max || 1), s.min + delta));
-        s.min = next;
-      } else {
-        const next = Math.max(1, Math.min(5, s.max + delta));
-        s.max = next;
-        if (s.min > next) s.min = next;
-      }
-    });
-  }
-
-  function menuRemove(i: number) {
-    menuMutate((cfg) => { cfg.splice(i, 1); });
-    // read back after commit via functional state
-    const cfg = currentMenu[ctx.diet][ctx.meal];
-    if (itemSec >= cfg.length - 1) setItemSec(0);
-  }
-
-  function menuMove(i: number, dir: -1 | 1) {
-    menuMutate((cfg) => {
-      if (i + dir < 0 || i + dir >= cfg.length) return;
-      const temp = cfg[i];
-      cfg[i] = cfg[i + dir];
-      cfg[i + dir] = temp;
-    });
-  }
-
-  function applyMealAcrossDiets() {
-    let n = 0;
-    updateFood((d: any) => {
-      const dSet = d.sets.find((s: any) => s.id === setId);
-      d.diets.forEach((dt: any) => {
-        if (dt.en === ctx.diet) return;
-        n++;
-        dSet.menu[dt.en][ctx.meal] = structuredClone(dSet.menu[ctx.diet][ctx.meal]);
-      });
-    });
-    toast(`Copied ${ctx.meal} rules to ${n} other diets`);
-  }
-
-  function menuAdd(name: string) {
-    menuMutate((cfg, d) => {
-      const items = d.dishes.filter((x: any) => x.section === name && x.on).map((x: any) => x.en);
+  // Items table mutators (step 4) — all address a section by its name within
+  // a given diet+meal, not by array index, so they stay correct even as rows
+  // move between days/meals/diets and sections get created on first use.
+  function ensureSection(dSet: any, diet: string, meal: string, sectionName: string, refDb: any): any {
+    const cfg = dSet.menu[diet][meal];
+    let sec = cfg.find((s: any) => s.sec === sectionName);
+    if (!sec) {
       const days: any = {};
-      DAYS.forEach((dy: string) => { days[dy] = { items: [...items], def: items[0] || null }; });
-      cfg.push({ sec: name, min: 1, max: 1, forAll: false, days });
-    });
-  }
-
-  function toggleItem(i: number, en: string) {
-    menuMutate((cfg) => {
-      const dc = cfg[i].days[ctx.day];
-      const idx = dc.items.indexOf(en);
-      if (idx >= 0) {
-        dc.items.splice(idx, 1);
-        if (dc.def === en) dc.def = null;
-      } else {
-        dc.items.push(en);
-      }
-    });
-  }
-
-  function setDef(i: number, en: string) {
-    menuMutate((cfg) => {
-      const dc = cfg[i].days[ctx.day];
-      if (!dc.items.includes(en)) dc.items.push(en);
-      dc.def = en;
-    });
-  }
-
-  function addDishToSection(sectionName: string, secIdx: number) {
-    if (!newDishEn.trim()) {
-      toast.error('English name is required');
-      return;
+      DAYS.forEach((dy: string) => { days[dy] = { items: [], def: null }; });
+      const r = sectionRule(refDb, sectionName);
+      sec = { sec: sectionName, min: r.min, max: r.max, forAll: r.forAll, days };
+      cfg.push(sec);
     }
-    
-    const exists = db.dishes.some((x: any) => x.en.toLowerCase() === newDishEn.trim().toLowerCase());
-    if (exists) {
-      toast.error('Dish already exists');
-      return;
-    }
+    return sec;
+  }
 
+  function addRowItem(diet: string, meal: string, day: string, en: string) {
+    const dish = db.dishes.find((x: any) => x.en === en);
+    if (!dish) return;
     updateFood((d: any) => {
-      const trimmedEn = newDishEn.trim();
-      const trimmedAr = newDishAr.trim();
-      
-      d.dishes.push({
-        en: trimmedEn,
-        ar: trimmedAr,
-        section: sectionName,
-        allergens: [],
-        on: true
-      });
-
       const dSet = d.sets.find((s: any) => s.id === setId);
-      const cfg = dSet.menu[ctx.diet][ctx.meal];
-      const sec = cfg[secIdx];
-      if (sec && sec.days && sec.days[ctx.day]) {
-        sec.days[ctx.day].items.push(trimmedEn);
-      }
+      const sec = ensureSection(dSet, diet, meal, dish.section, d);
+      if (!sec.days[day].items.includes(en)) sec.days[day].items.push(en);
     });
+  }
 
-    toast.success(`Added ${newDishEn} to ${sectionName}`);
-    setNewDishEn('');
-    setNewDishAr('');
-    setShowAddDish(false);
+  function moveRowItem(en: string, from: { diet: string; meal: string; day: string }, to: { diet: string; meal: string; day: string }) {
+    updateFood((d: any) => {
+      const dSet = d.sets.find((s: any) => s.id === setId);
+      const dish = d.dishes.find((x: any) => x.en === en);
+      if (!dish) return;
+      const srcCfg = dSet.menu[from.diet]?.[from.meal];
+      const srcSec = srcCfg?.find((s: any) => s.sec === dish.section);
+      if (srcSec && srcSec.days[from.day]) {
+        const idx = srcSec.days[from.day].items.indexOf(en);
+        if (idx >= 0) srcSec.days[from.day].items.splice(idx, 1);
+        if (srcSec.days[from.day].def === en) srcSec.days[from.day].def = null;
+      }
+      const dstSec = ensureSection(dSet, to.diet, to.meal, dish.section, d);
+      if (!dstSec.days[to.day].items.includes(en)) dstSec.days[to.day].items.push(en);
+    });
+  }
+
+  function setRowDefault(diet: string, meal: string, section: string, day: string, en: string, on: boolean) {
+    updateFood((d: any) => {
+      const dSet = d.sets.find((s: any) => s.id === setId);
+      const sec = dSet.menu[diet][meal].find((s: any) => s.sec === section);
+      if (!sec) return;
+      const dc = sec.days[day];
+      if (on) dc.def = en;
+      else if (dc.def === en) dc.def = null;
+    });
+  }
+
+  function deleteRowItem(diet: string, meal: string, section: string, day: string, en: string) {
+    updateFood((d: any) => {
+      const dSet = d.sets.find((s: any) => s.id === setId);
+      const sec = dSet.menu[diet][meal].find((s: any) => s.sec === section);
+      if (!sec) return;
+      const dc = sec.days[day];
+      const idx = dc.items.indexOf(en);
+      if (idx >= 0) dc.items.splice(idx, 1);
+      if (dc.def === en) dc.def = null;
+    });
+  }
+
+  function setSectionRule(diet: string, meal: string, section: string, patch: Record<string, any>) {
+    updateFood((d: any) => {
+      const dSet = d.sets.find((s: any) => s.id === setId);
+      const sec = dSet.menu[diet][meal].find((s: any) => s.sec === section);
+      if (!sec) return;
+      Object.assign(sec, patch);
+    });
+  }
+
+  function flattenRows() {
+    const rows: any[] = [];
+    (currentSet.diets || []).forEach((diet: string) => {
+      (currentSet.meals || []).forEach((meal: string) => {
+        const cfg = currentMenu[diet]?.[meal] || [];
+        cfg.forEach((sec: any) => {
+          DAYS.forEach((day: string) => {
+            const dc = sec.days[day];
+            (dc?.items || []).forEach((en: string) => {
+              rows.push({ diet, meal, day, section: sec.sec, item: en, isDefault: dc.def === en, rule: sec });
+            });
+          });
+        });
+      });
+    });
+    return rows;
   }
 
   function exportMenuToCSV() {
@@ -442,7 +415,8 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
             DAYS.forEach((dy) => {
               daysObj[dy] = { items: [], def: null };
             });
-            sec = { sec: actualSectionName, min: 1, max: 1, forAll: false, days: daysObj };
+            const r = sectionRule(d, actualSectionName);
+            sec = { sec: actualSectionName, min: r.min, max: r.max, forAll: r.forAll, days: daysObj };
             cfg.push(sec);
           }
 
@@ -472,11 +446,6 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
     };
 
     reader.readAsText(file);
-  }
-
-  function itemSecNav(delta: number) {
-    const cfg = currentMenu[ctx.diet][ctx.meal];
-    setItemSec((itemSec + delta + cfg.length) % cfg.length);
   }
 
   function applyAcrossDays() {
@@ -546,8 +515,7 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
   const STEP_TITLES: Record<number, string> = {
     1: 'Basics',
     2: 'Diets and meals',
-    3: 'Sections and rules',
-    4: 'Items and defaults',
+    4: 'Sections, items and defaults',
     5: 'Apply across',
     6: 'Ordering window',
     7: 'Review and publish',
@@ -656,216 +624,330 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
     );
   }
 
-  function step3() {
-    const cfg = currentMenu[ctx.diet][ctx.meal];
-    const used = new Set(cfg.map((s: any) => s.sec));
-    const meal = ctx.meal;
-    // unused active sections: derive from dishes' sections not already used
-    const allSections: string[] = Array.from(new Set(db.dishes.map((x: any) => x.section)));
-    const unused = allSections.filter((s) => !used.has(s));
-
-    const handleDragStart = (e: React.DragEvent, i: number) => {
-      setDragItem(i);
-      e.dataTransfer.effectAllowed = 'move';
-      // Make it slightly transparent while dragging
-      (e.target as HTMLElement).style.opacity = '0.5';
-    };
-
-    const handleDragEnter = (i: number) => {
-      setDragOverItem(i);
-    };
-
-    const handleDragEnd = (e: React.DragEvent) => {
-      (e.target as HTMLElement).style.opacity = '1';
-      if (dragItem !== null && dragOverItem !== null && dragItem !== dragOverItem) {
-        menuMutate((draft) => {
-          const item = draft.splice(dragItem, 1)[0];
-          draft.splice(dragOverItem, 0, item);
-        });
-      }
-      setDragItem(null);
-      setDragOverItem(null);
-    };
+  function step4() {
+    const dietOptions: string[] = currentSet.diets || [];
+    const mealOptions: string[] = currentSet.meals || [];
+    const allRows = flattenRows();
+    const rows = allRows.filter((r) =>
+      (filterDay === 'All' || r.day === filterDay)
+      && (filterMeal === 'All' || r.meal === filterMeal)
+      && (filterDiet === 'All' || r.diet === filterDiet)
+    );
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+    const pageSafe = Math.min(page, totalPages);
+    const pageRows = rows.slice((pageSafe - 1) * PER_PAGE, pageSafe * PER_PAGE);
+    const ruleKey = (r: any) => `${r.diet}|${r.meal}|${r.section}`;
+    const dayFromLabel = (label: string) => Object.keys(DAY_LABELS).find((k) => DAY_LABELS[k] === label);
+    const filtersActive = filterDay !== 'All' || filterMeal !== 'All' || filterDiet !== 'All';
 
     return (
       <div>
-        <ContextBar ctx={ctx} onCtx={onCtx} db={db} diets={currentSet.diets} meals={currentSet.meals} />
-        <div className="flex justify-end px-5 py-2">
-          <Btn variant="neutral" onClick={applyMealAcrossDiets}>
-            <Copy size={14} /> Apply to all diets for {ctx.meal}
-          </Btn>
-        </div>
-        {cfg.map((s: any, i: number) => (
-          <div 
-            key={i} 
-            draggable
-            onDragStart={(e) => handleDragStart(e, i)}
-            onDragEnter={() => handleDragEnter(i)}
-            onDragEnd={handleDragEnd}
-            onDragOver={(e) => e.preventDefault()}
-            className={cx(
-              "px-5 py-3.5 border-t border-[#e7e9f0] bg-white transition-all cursor-move",
-              dragOverItem === i ? "border-t-2 border-t-[#1d7da3] bg-[#f7f8fb]" : ""
-            )}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="text-[#9099ab] cursor-grab active:cursor-grabbing">
-                  <GripVertical size={16} />
-                </div>
-                <div className="font-medium text-[#19233a]">{s.sec}</div>
-              </div>
-              <button
-                className="p-1 rounded hover:bg-[#f7f8fb] text-[#9099ab]"
-                onClick={() => menuRemove(i)}
-                aria-label="Remove section"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-3.5 items-center mt-2.5">
-              <MiniSeg
-                options={[
-                  { value: 'choice', label: 'Patient choice' },
-                  { value: 'all', label: 'Served to all' },
-                ]}
-                value={s.forAll ? 'all' : 'choice'}
-                onChange={(v: string) => menuMode(i, v === 'all')}
-              />
-              {!s.forAll && (
-                <>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] text-[#5d6678]">Min</span>
-                    <Stepper value={s.min} onDec={() => menuStep(i, 'min', -1)} onInc={() => menuStep(i, 'min', 1)} />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] text-[#5d6678]">Max</span>
-                    <Stepper value={s.max} onDec={() => menuStep(i, 'max', -1)} onInc={() => menuStep(i, 'max', 1)} />
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="text-[13px] text-[#5d6678] mt-2">
-              {ruleText(s)}{s.forAll ? '' : ' · dishes set per day in the next step'}
-            </div>
+        <div className="flex items-center justify-between px-5 py-4 border-t border-[#e7e9f0]">
+          <div>
+            <div className="font-medium text-[#19233a]">Menu items</div>
+            <div className="text-[13px] text-[#5d6678]">Manage the menu items served for each day</div>
           </div>
-        ))}
-        {unused.length > 0 && (
-          <div className="px-5 py-3.5 border-t border-[#e7e9f0]">
-            <select
-              className="w-full h-[38px] px-3 rounded-[10px] border border-dashed border-[#d6dae6] bg-transparent text-[14px] text-[#5d6678]"
-              value=""
-              onChange={(e) => { if (e.target.value) menuAdd(e.target.value); }}
+          <div className="flex items-center gap-2">
+            <Btn
+              variant="primary"
+              onClick={() => {
+                setDraft({
+                  day: filterDay !== 'All' ? filterDay : DAYS[0],
+                  meal: filterMeal !== 'All' ? filterMeal : (mealOptions[0] || ''),
+                  diet: filterDiet !== 'All' ? filterDiet : (dietOptions[0] || ''),
+                  item: '',
+                });
+                setAddingRow(true);
+              }}
             >
-              <option value="">+ Add a section…</option>
-              {unused.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+              <Plus size={15} /> Add Row
+            </Btn>
+            <Btn variant="neutral">
+              Bulk Actions <ChevronDown size={14} />
+            </Btn>
+            <button
+              type="button"
+              className={cx(
+                'w-[38px] h-[38px] flex items-center justify-center rounded-[10px] border bg-white hover:bg-[#f7f8fb]',
+                filtersActive ? 'border-[#4EBEE3] text-[#1d7da3]' : 'border-[#d6dae6] text-[#5d6678]',
+              )}
+              aria-label="Filter"
+              onClick={() => setShowFilters((v) => !v)}
+            >
+              <Filter size={15} />
+            </button>
+          </div>
+        </div>
+
+        {showFilters && (
+          <div className="flex flex-wrap items-center gap-3 px-5 py-3 bg-[#f7f8fb] border-t border-[#e7e9f0]">
+            <div className="w-[150px]">
+              <SingleSelectDropdown
+                options={['All', ...DAYS.map((dy) => DAY_LABELS[dy])]}
+                value={filterDay === 'All' ? 'All' : DAY_LABELS[filterDay]}
+                onChange={(v: string) => { setFilterDay(v === 'All' ? 'All' : (dayFromLabel(v) || 'All')); setPage(1); }}
+              />
+            </div>
+            <div className="w-[130px]">
+              <SingleSelectDropdown
+                options={['All', ...mealOptions]}
+                value={filterMeal}
+                onChange={(v: string) => { setFilterMeal(v); setPage(1); }}
+              />
+            </div>
+            <div className="w-[150px]">
+              <SingleSelectDropdown
+                options={['All', ...dietOptions]}
+                value={filterDiet}
+                onChange={(v: string) => { setFilterDiet(v); setPage(1); }}
+              />
+            </div>
+            {filtersActive && (
+              <button
+                type="button"
+                className="text-[13px] text-[#5d6678] hover:text-[#16274D]"
+                onClick={() => { setFilterDay('All'); setFilterMeal('All'); setFilterDiet('All'); setPage(1); }}
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         )}
-      </div>
-    );
-  }
 
-  function step4() {
-    const cfg = currentMenu[ctx.diet][ctx.meal];
-    const sec = cfg[Math.min(itemSec, cfg.length - 1)];
-    const secIdx = Math.min(itemSec, cfg.length - 1);
-    const dc = sec.days[ctx.day];
-    const inSec = db.dishes.filter((x: any) => x.section === sec.sec);
-
-    return (
-      <div>
-        <ContextBar withDay ctx={ctx} onCtx={onCtx} db={db} diets={currentSet.diets} meals={currentSet.meals} />
-        <div className="flex items-center justify-between px-5 py-3 bg-[#f7f8fb] border-t border-[#e7e9f0]">
-          <Btn variant="neutral" onClick={() => itemSecNav(-1)}><ChevronLeft size={16} /></Btn>
-          <div className="text-[13px] text-center">
-            <span className="font-medium text-[#19233a]">{sec.sec}</span>
-            <span className="text-[#5d6678]">{` · ${secIdx + 1}/${cfg.length} · ${dc.items.length} on ${ctx.day}`}</span>
-          </div>
-          <Btn variant="neutral" onClick={() => itemSecNav(1)}><ChevronRight size={16} /></Btn>
-        </div>
-        {inSec.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-10 text-[#9099ab]">
+        {total === 0 && !addingRow ? (
+          <div className="flex flex-col items-center gap-2 py-10 text-[#9099ab] border-t border-[#e7e9f0]">
             <Salad size={28} />
-            <div className="text-[13px]">No dishes in this section — add some in the library.</div>
+            <div className="text-[13px]">No menu items yet — add a row to get started.</div>
           </div>
         ) : (
-          inSec.map((x: any) => {
-            const included = dc.items.includes(x.en);
-            const isDef = dc.def === x.en;
-            return (
-              <div key={x.en} className={rowCls}>
-                <Toggle on={included} onClick={() => toggleItem(secIdx, x.en)} />
-                <div className="flex-1">
-                  <div className="text-[#19233a] text-[14px]">{x.en}</div>
-                  <div className="text-[13px] text-[#5d6678]" dir="rtl">{x.ar || '—'}</div>
-                </div>
-                <div className="text-right" style={{ width: 84 }}>
-                  {included ? (
-                    <button
-                      className={cx(
-                        'text-[13px]',
-                        isDef ? 'text-[#1d7da3] font-semibold' : 'text-[#9099ab]'
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13.5px] border-collapse">
+              <thead>
+                <tr className="text-left text-[12px] text-[#9099ab] border-t border-b border-[#e7e9f0] bg-[#f7f8fb]">
+                  <th className="px-5 py-2.5 font-medium">Day</th>
+                  <th className="px-3 py-2.5 font-medium">Meal Type</th>
+                  <th className="px-3 py-2.5 font-medium">Diet</th>
+                  <th className="px-3 py-2.5 font-medium">Meal Item</th>
+                  <th className="px-3 py-2.5 font-medium">Section</th>
+                  <th className="px-3 py-2.5 font-medium">Allergies</th>
+                  <th className="px-3 py-2.5 font-medium">Default?</th>
+                  <th className="px-3 py-2.5 font-medium text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {addingRow && (
+                  <tr className="border-b border-[#e7e9f0] bg-[#eaf7fc]">
+                    <td className="px-5 py-2.5">
+                      <div className="w-[130px]">
+                        <SingleSelectDropdown
+                          options={DAYS.map((dy) => DAY_LABELS[dy])}
+                          value={DAY_LABELS[draft.day]}
+                          onChange={(v: string) => setDraft((p) => ({ ...p, day: dayFromLabel(v) || p.day }))}
+                        />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="w-[110px]">
+                        <SingleSelectDropdown options={mealOptions} value={draft.meal} onChange={(v: string) => setDraft((p) => ({ ...p, meal: v }))} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="w-[130px]">
+                        <SingleSelectDropdown options={dietOptions} value={draft.diet} onChange={(v: string) => setDraft((p) => ({ ...p, diet: v }))} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5" colSpan={2}>
+                      <div className="w-[220px]">
+                        <SingleSelectDropdown
+                          options={db.dishes.map((x: any) => x.en)}
+                          value={draft.item}
+                          onChange={(v: string) => setDraft((p) => ({ ...p, item: v }))}
+                          placeholder="Choose a dish…"
+                        />
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-[#9099ab]">—</td>
+                    <td className="px-3 py-2.5 text-[#9099ab]">—</td>
+                    <td className="px-3 py-2.5 text-right">
+                      <div className="flex justify-end gap-1.5">
+                        <Btn
+                          variant="primary"
+                          className="!h-[30px] !px-2.5 !text-[12px]"
+                          onClick={() => {
+                            if (!draft.item || !draft.diet || !draft.meal) {
+                              toast.error('Pick day, meal type, diet and a dish');
+                              return;
+                            }
+                            addRowItem(draft.diet, draft.meal, draft.day, draft.item);
+                            setAddingRow(false);
+                          }}
+                        >
+                          Save
+                        </Btn>
+                        <button type="button" className="p-1.5 rounded hover:bg-white text-[#9099ab]" onClick={() => setAddingRow(false)} aria-label="Cancel">
+                          <X size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                {pageRows.map((r) => {
+                  const dish = db.dishes.find((x: any) => x.en === r.item);
+                  const allergen = dish?.allergens?.[0];
+                  const key = `${r.diet}|${r.meal}|${r.day}|${r.section}|${r.item}`;
+                  return (
+                    <Fragment key={key}>
+                      <tr className="border-b border-[#e7e9f0] hover:bg-[#f7f8fb]">
+                        <td className="px-5 py-2.5">
+                          <div className="w-[130px]">
+                            <SingleSelectDropdown
+                              options={DAYS.map((dy) => DAY_LABELS[dy])}
+                              value={DAY_LABELS[r.day]}
+                              onChange={(v: string) => {
+                                const nd = dayFromLabel(v);
+                                if (nd && nd !== r.day) moveRowItem(r.item, { diet: r.diet, meal: r.meal, day: r.day }, { diet: r.diet, meal: r.meal, day: nd });
+                              }}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="w-[110px]">
+                            <SingleSelectDropdown
+                              options={mealOptions}
+                              value={r.meal}
+                              onChange={(v: string) => { if (v !== r.meal) moveRowItem(r.item, { diet: r.diet, meal: r.meal, day: r.day }, { diet: r.diet, meal: v, day: r.day }); }}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="w-[130px]">
+                            <SingleSelectDropdown
+                              options={dietOptions}
+                              value={r.diet}
+                              onChange={(v: string) => { if (v !== r.diet) moveRowItem(r.item, { diet: r.diet, meal: r.meal, day: r.day }, { diet: v, meal: r.meal, day: r.day }); }}
+                            />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-[34px] h-[34px] rounded-[8px] bg-[#f7f8fb] flex items-center justify-center flex-shrink-0">
+                              <Salad size={16} className="text-[#9099ab]" />
+                            </div>
+                            <span className="text-[#19233a]">{r.item}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <span className="inline-flex items-center gap-1.5 text-[#5d6678]">
+                            <span className="w-[7px] h-[7px] rounded-full flex-shrink-0" style={{ background: SECTION_DOT[r.section] || '#9099ab' }} />
+                            {r.section}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {allergen ? <Badge tone="warn">{allergen}</Badge> : <Badge tone="ok">None</Badge>}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <Toggle on={r.isDefault} onClick={() => setRowDefault(r.diet, r.meal, r.section, r.day, r.item, !r.isDefault)} />
+                            <span className="text-[13px] text-[#5d6678]">{r.isDefault ? 'Yes' : 'No'}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              className="p-1.5 rounded hover:bg-[#eaf7fc] text-[#5d6678]"
+                              onClick={() => setEditRuleKey(editRuleKey === ruleKey(r) ? null : ruleKey(r))}
+                              aria-label="Edit rule"
+                            >
+                              <Pencil size={15} />
+                            </button>
+                            <button
+                              type="button"
+                              className="p-1.5 rounded hover:bg-[#fcebe9] text-[#c0392b]"
+                              onClick={() => deleteRowItem(r.diet, r.meal, r.section, r.day, r.item)}
+                              aria-label="Remove item"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                      {editRuleKey === ruleKey(r) && (
+                        <tr className="bg-[#f7f8fb] border-b border-[#e7e9f0]">
+                          <td colSpan={8} className="px-5 py-3">
+                            <div className="flex flex-wrap items-center gap-3.5">
+                              <span className="text-[13px] font-medium text-[#16274D]">Rule for {r.section} ({r.diet} · {r.meal})</span>
+                              <MiniSeg
+                                options={[
+                                  { value: 'choice', label: 'Patient choice' },
+                                  { value: 'all', label: 'Served to all' },
+                                ]}
+                                value={r.rule.forAll ? 'all' : 'choice'}
+                                onChange={(v: string) => setSectionRule(r.diet, r.meal, r.section, { forAll: v === 'all' })}
+                              />
+                              {!r.rule.forAll && (
+                                <>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-[#5d6678]">Min</span>
+                                    <Stepper
+                                      value={r.rule.min}
+                                      onDec={() => setSectionRule(r.diet, r.meal, r.section, { min: Math.max(0, Math.min(r.rule.max || 1, r.rule.min - 1)) })}
+                                      onInc={() => setSectionRule(r.diet, r.meal, r.section, { min: Math.max(0, Math.min(r.rule.max || 1, r.rule.min + 1)) })}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-[13px] text-[#5d6678]">Max</span>
+                                    <Stepper
+                                      value={r.rule.max}
+                                      onDec={() => setSectionRule(r.diet, r.meal, r.section, { max: Math.max(1, r.rule.max - 1) })}
+                                      onInc={() => setSectionRule(r.diet, r.meal, r.section, { max: Math.min(5, r.rule.max + 1) })}
+                                    />
+                                  </div>
+                                </>
+                              )}
+                              <span className="text-[13px] text-[#5d6678]">{ruleText(r.rule)}</span>
+                              <button type="button" className="ml-auto text-[13px] text-[#5d6678] hover:text-[#16274D]" onClick={() => setEditRuleKey(null)}>
+                                Close
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                      onClick={() => setDef(secIdx, x.en)}
-                    >
-                      {isDef ? '★ default' : 'set default'}
-                    </button>
-                  ) : (
-                    <span className="text-[13px] text-[#9099ab]">—</span>
-                  )}
-                </div>
-              </div>
-            );
-          })
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
-        
-        {/* Inline Add Dish Form */}
-        <div className="px-5 py-3 border-t border-[#e7e9f0]">
-          {showAddDish ? (
-            <div className="flex flex-col gap-2.5 bg-[#f7f8fb] p-3 rounded-[10px] border border-[#e7e9f0]">
-              <div className="text-[13px] font-semibold text-[#16274D]">Add Dish to {sec.sec}</div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="English Name (e.g. Sunny side up)"
-                  value={newDishEn}
-                  onChange={(e) => setNewDishEn(e.target.value)}
-                  className="flex-1 h-[36px] px-3 border border-[#d6dae6] rounded-[8px] text-[13px] bg-white text-[#19233a] focus:outline-none focus:border-[#1d7da3]"
-                />
-                <input
-                  type="text"
-                  placeholder="Arabic Name (Optional)"
-                  value={newDishAr}
-                  onChange={(e) => setNewDishAr(e.target.value)}
-                  className="flex-1 h-[36px] px-3 border border-[#d6dae6] rounded-[8px] text-[13px] bg-white text-[#19233a] focus:outline-none focus:border-[#1d7da3] text-right"
-                  dir="rtl"
-                />
-              </div>
-              <div className="flex justify-end gap-2">
-                <Btn variant="neutral" className="!h-[32px] !rounded-[8px] !text-[12.5px] !px-3" onClick={() => { setShowAddDish(false); setNewDishEn(''); setNewDishAr(''); }}>
-                  Cancel
-                </Btn>
-                <Btn variant="primary" className="!h-[32px] !rounded-[8px] !text-[12.5px] !px-3" onClick={() => addDishToSection(sec.sec, secIdx)}>
-                  Save Dish
-                </Btn>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setShowAddDish(true)}
-              className="w-full h-[38px] px-3 rounded-[10px] border border-dashed border-[#d6dae6] hover:border-[#1d7da3] bg-transparent text-[13px] text-[#5d6678] hover:text-[#1d7da3] font-medium flex items-center justify-center gap-1.5 transition-all"
-            >
-              <Plus size={14} /> Add new dish to {sec.sec}
-            </button>
-          )}
-        </div>
 
-        <div className="p-5">
-          <Note icon={<Calendar size={16} />}>
-            You're editing <b>{ctx.day}</b>. Each day holds its own dishes; the rule above is shared across the week. Copy a day to others in the next step.
-          </Note>
-        </div>
+        {total > 0 && (
+          <Bar>
+            <span className="text-[13px] text-[#5d6678]">
+              Showing {(pageSafe - 1) * PER_PAGE + 1} to {Math.min(pageSafe * PER_PAGE, total)} of {total} items
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                disabled={pageSafe <= 1}
+                onClick={() => setPage(pageSafe - 1)}
+                className="w-[30px] h-[30px] rounded-[8px] border border-[#d6dae6] bg-white disabled:opacity-40 flex items-center justify-center"
+              >
+                <ChevronLeft size={15} />
+              </button>
+              <span className="text-[13px] px-2">{pageSafe} / {totalPages}</span>
+              <button
+                type="button"
+                disabled={pageSafe >= totalPages}
+                onClick={() => setPage(pageSafe + 1)}
+                className="w-[30px] h-[30px] rounded-[8px] border border-[#d6dae6] bg-white disabled:opacity-40 flex items-center justify-center"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          </Bar>
+        )}
       </div>
     );
   }
@@ -1115,7 +1197,6 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
     switch (step) {
       case 1: return step1();
       case 2: return step2();
-      case 3: return step3();
       case 4: return step4();
       case 5: return step5();
       case 6: return step6();
@@ -1159,7 +1240,7 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
           ) : null}
         />
         <div className="flex flex-wrap gap-1 bg-[#f7f8fb] p-1 rounded-[10px] mx-5 my-4">
-          {[1, 2, 3, 4, 6, 7].map(segBtn)}
+          {[1, 2, 4, 6, 7].map(segBtn)}
         </div>
         {wizardBody()}
       </Card>

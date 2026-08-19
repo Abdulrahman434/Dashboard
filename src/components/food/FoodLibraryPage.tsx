@@ -17,7 +17,7 @@ import {
   Check,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, updateFood } from './foodStore';
+import { useFood, updateFood, ruleText } from './foodStore';
 import {
   cx,
   Btn,
@@ -31,6 +31,8 @@ import {
   Bar,
   rowCls,
   FoodPage,
+  MiniSeg,
+  Stepper,
 } from './foodAtoms';
 import { SingleSelectDropdown } from '../UnifiedDropdown';
 
@@ -68,11 +70,15 @@ export default function FoodLibraryPage({
 
   // Reference List Add Modal States
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
   const [addForm, setAddForm] = useState({
     en: '',
     ar: '',
     code: '',
     active: true,
+    min: 1,
+    max: 1,
+    forAll: false,
   });
 
   // ---- navigation helpers --------------------------------------------------
@@ -145,9 +151,16 @@ export default function FoodLibraryPage({
     updateFood((d: any) => {
       if (tab === 'sections') {
         const arName = (addForm.ar || '').trim();
-        const exists = d.sections.some((x: any) => x.en.toLowerCase() === enName.toLowerCase());
+        const exists = d.sections.some((x: any, i: number) => i !== editIdx && x.en.toLowerCase() === enName.toLowerCase());
         if (exists) return;
-        d.sections.push({ en: enName, ar: arName, on: addForm.active });
+        const rule = addForm.forAll
+          ? { min: 0, max: 1, forAll: true }
+          : { min: addForm.min, max: addForm.max, forAll: false };
+        if (editIdx != null) {
+          d.sections[editIdx] = { ...d.sections[editIdx], en: enName, ar: arName, on: addForm.active, ...rule };
+        } else {
+          d.sections.push({ en: enName, ar: arName, on: addForm.active, ...rule });
+        }
         success = true;
       } else if (tab === 'diets') {
         const arName = (addForm.ar || '').trim();
@@ -169,11 +182,12 @@ export default function FoodLibraryPage({
     });
 
     if (success) {
-      toast.success(`${enName} added successfully`);
-      if (keepOpen) {
-        setAddForm({ en: '', ar: '', code: '', active: true });
+      toast.success(editIdx != null ? `${enName} updated` : `${enName} added successfully`);
+      if (keepOpen && editIdx == null) {
+        setAddForm({ en: '', ar: '', code: '', active: true, min: 1, max: 1, forAll: false });
       } else {
         setAddModalOpen(false);
+        setEditIdx(null);
       }
     } else {
       toast.error(`${enName} already exists`);
@@ -576,7 +590,8 @@ export default function FoodLibraryPage({
           <Btn
             variant="primary"
             onClick={() => {
-              setAddForm({ en: '', ar: '', code: '', active: true });
+              setEditIdx(null);
+              setAddForm({ en: '', ar: '', code: '', active: true, min: 1, max: 1, forAll: false });
               setAddModalOpen(true);
             }}
           >
@@ -597,26 +612,43 @@ export default function FoodLibraryPage({
           <div className="flex items-center gap-3 px-5 py-2">
             <span className="w-4" />
             <span className={cx(colLabel, 'flex-1')}>Section</span>
-            <span className={colLabel}>Used in</span>
+            <span className={colLabel}>Rule</span>
             <span className={cx(colLabel, 'w-[34px] text-right')}>On</span>
           </div>
           {db.sections.map((s: any, i: number) => (
-            <div key={i} className={rowCls}>
-              <GripVertical size={16} className="text-[#9099ab] cursor-grab flex-shrink-0" />
+            <div
+              key={i}
+              className={cx(rowCls, 'cursor-pointer hover:bg-[#f7f8fb] transition-colors')}
+              onClick={() => {
+                setEditIdx(i);
+                setAddForm({
+                  en: s.en,
+                  ar: s.ar || '',
+                  code: '',
+                  active: s.on,
+                  min: s.min ?? 1,
+                  max: s.max ?? 1,
+                  forAll: !!s.forAll,
+                });
+                setAddModalOpen(true);
+              }}
+            >
+              <GripVertical size={16} className="text-[#9099ab] cursor-grab flex-shrink-0" onClick={(e) => e.stopPropagation()} />
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-[#19233a]">{s.en}</div>
                 <div className="text-[13px] text-[#9099ab]" dir="rtl">
                   {s.ar}
                 </div>
               </div>
-              <div className="text-[13px] text-[#5d6678] whitespace-nowrap">{8 + i * 2} menus</div>
+              <div className="text-[13px] text-[#5d6678] whitespace-nowrap">{ruleText({ forAll: !!s.forAll, min: s.min ?? 1, max: s.max ?? 1 })}</div>
               <Toggle
                 on={s.on}
-                onClick={() =>
+                onClick={(e: any) => {
+                  e.stopPropagation();
                   updateFood((d: any) => {
                     d.sections[i].on = !d.sections[i].on;
-                  })
-                }
+                  });
+                }}
               />
             </div>
           ))}
@@ -782,15 +814,15 @@ export default function FoodLibraryPage({
   const refListAddModal = addModalOpen && (
     <div
       className="fixed inset-0 bg-[#16274D]/45 flex items-center justify-center z-40 p-5"
-      onClick={() => setAddModalOpen(false)}
+      onClick={() => { setAddModalOpen(false); setEditIdx(null); }}
     >
       <Card className="max-w-[480px] w-full" onClick={(e) => e.stopPropagation()}>
         <CardHead
-          title={addLabel[tab]}
-          sub={`Add a new ${tab.slice(0, -1)} to the library`}
+          title={tab === 'sections' && editIdx != null ? 'Edit section' : addLabel[tab]}
+          sub={tab === 'sections' && editIdx != null ? 'Update this section and its default rule' : `Add a new ${tab.slice(0, -1)} to the library`}
           right={
             <button
-              onClick={() => setAddModalOpen(false)}
+              onClick={() => { setAddModalOpen(false); setEditIdx(null); }}
               className="w-9 h-9 flex items-center justify-center rounded-[10px] text-[#5d6678] hover:bg-[#f7f8fb] cursor-pointer transition-colors"
             >
               <X size={18} />
@@ -821,6 +853,39 @@ export default function FoodLibraryPage({
                   placeholder="اسم القسم"
                   dir="rtl"
                 />
+              </div>
+              <div className="pt-3 border-t border-[#e7e9f0]">
+                <label className="block text-[12px] text-[#5d6678] mb-2 font-medium">
+                  Default rule — applied automatically when this section is added to a menu set
+                </label>
+                <MiniSeg
+                  options={[
+                    { value: 'choice', label: 'Patient choice' },
+                    { value: 'all', label: 'Served to all' },
+                  ]}
+                  value={addForm.forAll ? 'all' : 'choice'}
+                  onChange={(v: string) => setAddForm((f) => ({ ...f, forAll: v === 'all' }))}
+                />
+                {!addForm.forAll && (
+                  <div className="flex items-center gap-4 mt-3">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] text-[#5d6678]">Min</span>
+                      <Stepper
+                        value={addForm.min}
+                        onDec={() => setAddForm((f) => ({ ...f, min: Math.max(0, Math.min(f.max, f.min - 1)) }))}
+                        onInc={() => setAddForm((f) => ({ ...f, min: Math.max(0, Math.min(f.max, f.min + 1)) }))}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[13px] text-[#5d6678]">Max</span>
+                      <Stepper
+                        value={addForm.max}
+                        onDec={() => setAddForm((f) => { const max = Math.max(1, f.max - 1); return { ...f, max, min: Math.min(f.min, max) }; })}
+                        onInc={() => setAddForm((f) => ({ ...f, max: Math.min(5, f.max + 1) }))}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between py-1 border-t border-[#e7e9f0] mt-1 pt-3">
                 <span className="text-[13.5px] font-medium text-[#19233a]">Activate</span>
@@ -905,19 +970,21 @@ export default function FoodLibraryPage({
           )}
         </div>
         <Bar>
-          <Btn variant="neutral" onClick={() => setAddModalOpen(false)}>
+          <Btn variant="neutral" onClick={() => { setAddModalOpen(false); setEditIdx(null); }}>
             Cancel
           </Btn>
           <div className="flex-grow" />
-          <Btn
-            variant="neutral"
-            onClick={() => handleSave(true)}
-            className="border-[#d6dae6] hover:bg-[#f7f8fb] text-[#19233a]"
-          >
-            Save & Add Another
-          </Btn>
+          {editIdx == null && (
+            <Btn
+              variant="neutral"
+              onClick={() => handleSave(true)}
+              className="border-[#d6dae6] hover:bg-[#f7f8fb] text-[#19233a]"
+            >
+              Save & Add Another
+            </Btn>
+          )}
           <Btn variant="primary" onClick={() => handleSave(false)}>
-            Save & Close
+            {editIdx != null ? 'Save changes' : 'Save & Close'}
           </Btn>
         </Bar>
       </Card>

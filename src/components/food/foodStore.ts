@@ -18,12 +18,16 @@ export const MEAL_SECTIONS: Record<string, string[]> = {
   Dinner: ['Soup', 'Salad', 'Mains', 'Side orders', 'Dessert', 'Drinks'],
 };
 
-// Per-section selection rules (min/max picks, served-to-all).
-export function rulesFor(section: string, diet: string): any {
-  if (section === 'Drinks') {
-    return { forAll: true };
-  }
-  return { min: 1, max: 1 };
+// Per-section selection rule (min/max picks, served-to-all), read off the
+// section's own library entry (db.sections) so it's configured once in
+// Reference Lists and reused as the default everywhere that section is
+// added to a menu set. Falls back to "choose one" if the section isn't in
+// the library yet (e.g. a legacy section referenced only by old data).
+export function sectionRule(db: any, sectionName: string): { min: number; max: number; forAll: boolean } {
+  const s = db.sections.find((x: any) => x.en === sectionName);
+  if (s && s.forAll) return { min: 0, max: 1, forAll: true };
+  if (s) return { min: s.min ?? 1, max: s.max ?? 1, forAll: false };
+  return { min: 1, max: 1, forAll: false };
 }
 
 function d(en: string, ar: string, section: string, allergens: string[]): any {
@@ -36,16 +40,16 @@ function SEED(): any {
     meals: ['Breakfast', 'Lunch', 'Dinner'],
     win: { serviceDay: 'Tomorrow only', open: '4:00 PM', close: '8:00 PM', sameAll: true, autoDefault: true, allowEdit: true },
     sections: [
-      { en: 'Cereals', ar: 'حبوب الإفطار', on: true },
-      { en: 'Eggs', ar: 'بيض', on: true },
-      { en: 'Baked breads', ar: 'مخبوزات', on: true },
-      { en: 'Dairy', ar: 'ألبان', on: true },
-      { en: 'Soup', ar: 'شوربة', on: true },
-      { en: 'Salad', ar: 'سلطة', on: true },
-      { en: 'Mains', ar: 'الأطباق الرئيسية', on: true },
-      { en: 'Side orders', ar: 'أطباق جانبية', on: true },
-      { en: 'Dessert', ar: 'حلويات', on: true },
-      { en: 'Drinks', ar: 'مشروبات', on: true },
+      { en: 'Cereals', ar: 'حبوب الإفطار', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Eggs', ar: 'بيض', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Baked breads', ar: 'مخبوزات', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Dairy', ar: 'ألبان', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Soup', ar: 'شوربة', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Salad', ar: 'سلطة', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Mains', ar: 'الأطباق الرئيسية', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Side orders', ar: 'أطباق جانبية', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Dessert', ar: 'حلويات', on: true, min: 1, max: 1, forAll: false },
+      { en: 'Drinks', ar: 'مشروبات', on: true, min: 0, max: 1, forAll: true },
     ],
     diets: [
       { en: 'Regular', ar: 'عادي', his: '577365', reg: true, on: true },
@@ -136,7 +140,7 @@ export function buildMenu(db: any): any {
     m[dt.en] = {};
     db.meals.forEach((meal: string) => {
       m[dt.en][meal] = MEAL_SECTIONS[meal].map((sn) => {
-        const r = rulesFor(sn, dt.en);
+        const r = sectionRule(db, sn);
         const items = dishesSeed(db, sn, dt.en);
         const days: any = {};
         DAYS.forEach((dy) => {

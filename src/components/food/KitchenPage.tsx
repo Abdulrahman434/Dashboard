@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { ChefHat, Tablet, Printer, Check, CheckCheck, User, Clock, Utensils, CheckCircle2, Stethoscope, Edit, BedDouble, Gem, Crown, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, updateFood, resolve, MEAL_SECTIONS, rulesFor, nextOrderId } from './foodStore';
+import { useFood, updateFood, resolve, MEAL_SECTIONS, sectionRule, nextOrderId } from './foodStore';
 import { cx, Btn, Badge, Card, FoodPage } from './foodAtoms';
 import { MultiSelectDropdown } from '../UnifiedDropdown';
 import { nurseStationService } from '../../services/nurseStationService';
@@ -258,7 +258,7 @@ export default function KitchenPage({
           {/* Scrollable Body */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             {sections.map((section: string) => {
-              const rules = rulesFor(section, editingOrder.diet);
+              const rules = sectionRule(db, section);
               const max = rules.forAll ? 99 : (rules.max || 1);
               const isSelectedToEveryone = !!rules.forAll;
               
