@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { sectionVisibilityService } from "../../../services/sectionVisibilityService";
 
 /* ═══════════════════════════════════════════════════════════════
  * OVERRIDE TRACKING LOGIC
@@ -397,19 +398,20 @@ const getShiftedShortFormatted = (days: number) => {
 };
 
 function createDefaultState(): NurseStoreState {
+  const defaultVis = sectionVisibilityService.getGlobalVisibility();
   return {
     sectionVisibility: {
       profile: true,
-      careOverview: true,
-      carePlan: true,
-      financial: true,
-      labs: true,
-      imaging: true,
-      baby: true,
-      discharge: true,
-      observations: true,
+      careOverview: defaultVis.careOverview ?? true,
+      carePlan: defaultVis.carePlan ?? true,
+      financial: defaultVis.financial ?? true,
+      labs: defaultVis.labs ?? true,
+      imaging: defaultVis.imaging ?? true,
+      baby: defaultVis.baby ?? true,
+      discharge: defaultVis.discharge ?? true,
+      observations: defaultVis.observations ?? true,
       nfc: false, // Not a patient-facing CareMe slide
-      education: true,
+      education: defaultVis.education ?? true,
     },
 
     patient: {
@@ -713,6 +715,31 @@ const nurseStore = (() => {
     listeners.forEach((l) => l({ ...state }));
   }
 
+  if (typeof window !== "undefined") {
+    const syncStoreGlobalVisibility = () => {
+      const globalVis = sectionVisibilityService.getPatientVisibility(state.patient.room || state.patient.mrn || "");
+      state = {
+        ...state,
+        sectionVisibility: {
+          ...state.sectionVisibility,
+          careOverview: globalVis.careOverview ?? state.sectionVisibility.careOverview,
+          carePlan: globalVis.carePlan ?? state.sectionVisibility.carePlan,
+          financial: globalVis.financial ?? state.sectionVisibility.financial,
+          labs: globalVis.labs ?? state.sectionVisibility.labs,
+          imaging: globalVis.imaging ?? state.sectionVisibility.imaging,
+          baby: globalVis.baby ?? state.sectionVisibility.baby,
+          discharge: globalVis.discharge ?? state.sectionVisibility.discharge,
+          observations: globalVis.observations ?? state.sectionVisibility.observations,
+          education: globalVis.education ?? state.sectionVisibility.education,
+        },
+      };
+      listeners.forEach((l) => l({ ...state }));
+    };
+    window.addEventListener("careinn-global-visibility-updated", syncStoreGlobalVisibility);
+    window.addEventListener("careinn-patient-visibility-updated", syncStoreGlobalVisibility);
+    window.addEventListener("storage", syncStoreGlobalVisibility);
+  }
+
   return {
     get: () => state,
 
@@ -723,7 +750,9 @@ const nurseStore = (() => {
 
     // ── Section visibility ──
     setSectionVisible: (key: SectionKey, visible: boolean) => {
-      state = { ...state, sectionVisibility: { ...state.sectionVisibility, [key]: visible } };
+      const nextVis = { ...state.sectionVisibility, [key]: visible };
+      state = { ...state, sectionVisibility: nextVis };
+      sectionVisibilityService.savePatientVisibility(state.patient.room || state.patient.mrn || "default", nextVis as any);
       notify();
     },
 

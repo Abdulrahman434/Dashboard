@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X, ClipboardList, Stethoscope, User, Heart, DollarSign,
   FlaskConical, Image as ImageIcon, Baby, LogOut, Activity,
@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner@2.0.3";
 import { nurseStationService } from "../../../../services/nurseStationService";
+import { sectionVisibilityService, type SectionVisibilityMap } from "../../../../services/sectionVisibilityService";
 import { useTheme } from "../ThemeContext";
 import { useLocale } from "../i18n";
 import { useNurseStore, nurseActions, type SectionKey } from "../NurseDataStore";
@@ -63,6 +64,37 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
   const [customTypeDraft, setCustomTypeDraft] = useState("");
 
   const patient = store.patient;
+
+  const [visibility, setVisibility] = useState<SectionVisibilityMap>(
+    sectionVisibilityService.getPatientVisibility(patient.room || patient.mrn || "")
+  );
+
+  useEffect(() => {
+    const syncVisibility = () => {
+      setVisibility(sectionVisibilityService.getPatientVisibility(patient.room || patient.mrn || ""));
+    };
+    syncVisibility();
+    window.addEventListener("careinn-global-visibility-updated", syncVisibility);
+    window.addEventListener("careinn-patient-visibility-updated", syncVisibility);
+    window.addEventListener("storage", syncVisibility);
+    return () => {
+      window.removeEventListener("careinn-global-visibility-updated", syncVisibility);
+      window.removeEventListener("careinn-patient-visibility-updated", syncVisibility);
+      window.removeEventListener("storage", syncVisibility);
+    };
+  }, [patient.room, patient.mrn]);
+
+  const visibleTabs = TABS.filter((tab) => {
+    if (!tab.hasVisibility) return true;
+    return visibility[tab.key] !== false;
+  });
+
+  useEffect(() => {
+    if (activeTab !== "profile" && visibility[activeTab] === false) {
+      setActiveTab("profile");
+    }
+  }, [visibility, activeTab]);
+
   const wardName = nurseStationService.get(patient.stationId || "")?.name;
   const initials =
     (patient.name || "")
@@ -273,10 +305,9 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         className="flex items-center gap-1 px-6 shrink-0 overflow-x-auto"
         style={{ backgroundColor: "#fff", borderBottom: `1px solid ${t.borderDefault}`, padding: "0 24px" }}
       >
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.key;
           const Icon = tab.icon;
-          const isVisible = store.sectionVisibility[tab.key];
           return (
             <div key={tab.key} className="flex items-center shrink-0">
               <button

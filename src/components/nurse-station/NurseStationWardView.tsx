@@ -1016,26 +1016,33 @@ export default function NurseStationWardView({
         <Metric label="Offline Devices" value={terminalsTotal > 0 ? `${terminalsOffline} / ${terminalsTotal}` : "—"} icon={WifiOff} tone="green" onClick={() => setBedFilter("offline")} isActive={bedFilter === "offline"} />
       </div>
 
-      {/* Toolbar — Live simulation status + Full View + Configure */}
-      <div className="px-6 pt-4 pb-1 flex items-center justify-between gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#e7f6f0] border border-[#1f9e75]/30 text-[#1f9e75] text-[11px] font-extrabold shadow-sm">
-          <span className="w-2 h-2 rounded-full bg-[#1f9e75] animate-pulse" />
-          LIVE DATA FEED ACTIVE
-        </span>
+      {/* Toolbar — Station Name with Live Green Dot + Full View + Configure */}
+      <div className="px-6 pt-4 pb-1 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <span
+            className="w-3 h-3 rounded-full bg-[#1f9e75] animate-pulse shrink-0"
+            title="Live Data Feed Active"
+          />
+          <h2 className="text-[20px] font-extrabold text-[#16274D] tracking-tight">
+            {activeStation?.name || "—"}
+          </h2>
+        </div>
         <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={() => setIsFullView(!isFullView)}
-            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#16274D]/20 bg-[#f0f2f5] text-[#16274D] text-[13px] font-bold hover:bg-[#e2e6ec] hover:border-[#16274D]/40 shadow-sm transition-all"
-            title={isFullView ? "Exit Full View" : "Full View"}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-[#16274D] hover:text-[#0284C7] hover:bg-[#EBF8FC] active:scale-95 transition-all cursor-pointer"
+            title={isFullView ? "Exit Full View" : "Full Screen View"}
           >
-            {isFullView ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            {isFullView ? "Exit Full View" : "Full View"}
+            {isFullView ? <Minimize2 size={19} /> : <Maximize2 size={19} />}
           </button>
           <button
             onClick={() => setShowConfigureModal(true)}
-            className="inline-flex items-center gap-2 h-[36px] px-4 rounded-lg border border-[#4EBEE3]/40 bg-[#EBF8FC] text-[#0284C7] text-[13px] font-bold hover:bg-[#E0F2FE] hover:border-[#0284C7] shadow-sm transition-all"
+            className="inline-flex items-center gap-2.5 h-[38px] px-4 rounded-xl bg-white border border-[#4EBEE3]/40 text-[#0284C7] text-[13px] font-bold hover:bg-[#EBF8FC] hover:border-[#0284C7] shadow-sm hover:shadow active:scale-[0.98] transition-all group"
           >
-            <Sliders size={16} className="text-[#0284C7]" /> Configure
+            <span className="w-5 h-5 rounded-md bg-[#EBF8FC] flex items-center justify-center text-[#0284C7] group-hover:scale-110 transition-transform">
+              <Sliders size={13} />
+            </span>
+            Configure
           </button>
         </div>
       </div>
