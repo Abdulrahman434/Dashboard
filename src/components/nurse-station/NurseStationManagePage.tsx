@@ -10,6 +10,8 @@ import {
   DoorOpen,
   MonitorSmartphone,
   AlertTriangle,
+  Tablet,
+  Monitor,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import BedsidePatientModal from './BedsidePatientModal';
@@ -19,6 +21,10 @@ import {
   type Station,
   type DeviceRow,
 } from '../../services/nurseStationService';
+import {
+  careSignDeviceService,
+  careSignTypeService,
+} from '../../services/careSignService';
 
 interface NurseStationManagePageProps {
   /** When set (from the sidebar station entry or a table row), show that station. */
@@ -522,8 +528,10 @@ function StationDetail({ station }: { station: Station }) {
 }
 
 /* ========================================================================= */
-/* Way 1 â€” Device picker (reads the Device Manager single source of truth)    */
+/* Way 1 — Device picker (reads the Device Manager single source of truth)    */
 /* ========================================================================= */
+type DeviceSource = 'careinn15' | 'caresign';
+
 function DevicePickerModal({
   station,
   assignedDeviceIds,
@@ -533,10 +541,32 @@ function DevicePickerModal({
   assignedDeviceIds: Set<string>;
   onClose: () => void;
 }) {
-  const devices = useMemo<DeviceRow[]>(() => nurseStationService.listDevices(), []);
+  // CareInn15 devices (from Device Manager)
+  const careInnDevices = useMemo<DeviceRow[]>(() => nurseStationService.listDevices(), []);
+
+  // CareSign devices — convert to DeviceRow shape so assignDevice() works unchanged
+  const careSignDevices = useMemo<DeviceRow[]>(() => {
+    const csDevices = careSignDeviceService.list();
+    const csTypes = careSignTypeService.list();
+    return csDevices.map((d) => ({
+      id: d.id,
+      deviceId: d.deviceId,
+      mrn: '',
+      roomNo: d.room,
+      bedNo: d.bed,
+      building: d.bldg,
+      floor: d.floor,
+      poc: d.poc,
+      group: d.group,
+      server: '',
+      isConnected: d.isConnected,
+      isActive: true,
+      tag: csTypes.find((t) => t.id === d.careSignTypeId)?.name || '',
+    }));
+  }, []);
+
   const assignedElsewhere = useMemo(() => {
     const map = nurseStationService.deviceAssignments();
-    // exclude devices assigned to *this* station (those are just "already selected")
     const set = new Set<string>();
     for (const [deviceId, stId] of Object.entries(map)) {
       if (stId !== station.id) set.add(deviceId);
@@ -544,8 +574,11 @@ function DevicePickerModal({
     return set;
   }, [station.id]);
 
+  const [source, setSource] = useState<DeviceSource>('careinn15');
   const [query, setQuery] = useState('');
   const [picked, setPicked] = useState<Set<string>>(new Set());
+
+  const devices = source === 'careinn15' ? careInnDevices : careSignDevices;
 
   const filtered = devices.filter((d) => {
     if (!query) return true;
@@ -558,8 +591,16 @@ function DevicePickerModal({
     );
   });
 
+  // Items that can be toggled (not already on this station, not assigned elsewhere)
+  const selectableFiltered = filtered.filter(
+    (d) => !assignedDeviceIds.has(d.deviceId) && !assignedElsewhere.has(d.deviceId)
+  );
+  const allFilteredSelected =
+    selectableFiltered.length > 0 &&
+    selectableFiltered.every((d) => picked.has(d.deviceId));
+
   const toggle = (d: DeviceRow) => {
-    if (assignedDeviceIds.has(d.deviceId)) return; // already on this station
+    if (assignedDeviceIds.has(d.deviceId)) return;
     if (assignedElsewhere.has(d.deviceId)) {
       toast.error('Device already assigned', {
         description: `${d.deviceId} belongs to another station`,
@@ -574,11 +615,29 @@ function DevicePickerModal({
     });
   };
 
+  const toggleSelectAll = () => {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        // Deselect all filtered selectable items
+        for (const d of selectableFiltered) next.delete(d.deviceId);
+      } else {
+        // Select all filtered selectable items
+        for (const d of selectableFiltered) next.add(d.deviceId);
+      }
+      return next;
+    });
+  };
+
   const handleAssign = () => {
+    // Assign from whichever source has the picked ids — pass source type ('careinn15' vs 'caresign')
+    const careSignSet = new Set(careSignDevices.map((d) => d.deviceId));
+    const allDevices = [...careInnDevices, ...careSignDevices];
     let count = 0;
-    for (const d of devices) {
+    for (const d of allDevices) {
       if (picked.has(d.deviceId)) {
-        nurseStationService.assignDevice(station.id, d);
+        const sourceType = careSignSet.has(d.deviceId) ? 'caresign' : 'careinn15';
+        nurseStationService.assignDevice(station.id, d, sourceType);
         count++;
       }
     }
@@ -623,8 +682,46 @@ function DevicePickerModal({
           </button>
         </div>
 
-        {/* Search */}
-        <div className="px-6 pt-4 pb-3 shrink-0">
+        {/* Source toggle */}
+        <div className="px-6 pt-4 pb-2 shrink-0">
+          <div className="flex bg-gray-100 rounded-lg p-1 gap-1">
+            <button
+              onClick={() => { setSource('careinn15'); setQuery(''); }}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[13px] font-medium transition-colors font-['Poppins',sans-serif] ${
+                source === 'careinn15'
+                  ? 'bg-white text-[#16274D] shadow-sm'
+                  : 'text-[#637381] hover:text-[#16274D]'
+              }`}
+            >
+              <Tablet size={15} />
+              CareInn15
+              <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                source === 'careinn15' ? 'bg-[#4EBEE3]/10 text-[#4EBEE3]' : 'bg-gray-200 text-gray-500'
+              }`}>
+                {careInnDevices.length}
+              </span>
+            </button>
+            <button
+              onClick={() => { setSource('caresign'); setQuery(''); }}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-[13px] font-medium transition-colors font-['Poppins',sans-serif] ${
+                source === 'caresign'
+                  ? 'bg-white text-[#16274D] shadow-sm'
+                  : 'text-[#637381] hover:text-[#16274D]'
+              }`}
+            >
+              <Monitor size={15} />
+              CareSign
+              <span className={`ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                source === 'caresign' ? 'bg-[#4EBEE3]/10 text-[#4EBEE3]' : 'bg-gray-200 text-gray-500'
+              }`}>
+                {careSignDevices.length}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Search + Select All */}
+        <div className="px-6 pt-3 pb-3 shrink-0 space-y-2">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -635,6 +732,26 @@ function DevicePickerModal({
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3] focus:border-transparent font-['Poppins',sans-serif] text-[13px]"
             />
           </div>
+          {selectableFiltered.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 text-[12px] font-medium text-[#637381] hover:text-[#4EBEE3] transition-colors font-['Poppins',sans-serif]"
+            >
+              <div
+                className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
+                  allFilteredSelected
+                    ? 'bg-[#4EBEE3] border-[#4EBEE3]'
+                    : 'border-gray-300'
+                }`}
+              >
+                {allFilteredSelected && (
+                  <Check size={11} className="text-white" strokeWidth={3} />
+                )}
+              </div>
+              Select all ({selectableFiltered.length} available)
+            </button>
+          )}
         </div>
 
         {/* Device list */}
@@ -643,7 +760,14 @@ function DevicePickerModal({
             <div className="flex flex-col items-center justify-center py-12 text-center">
               <AlertTriangle className="w-8 h-8 text-amber-500 mb-3" />
               <p className="text-[13px] text-gray-600 font-['Poppins',sans-serif]">
-                No devices found in the Device Manager. Add devices there first.
+                No {source === 'careinn15' ? 'CareInn15' : 'CareSign'} devices found. Add devices there first.
+              </p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Search className="w-8 h-8 text-gray-300 mb-3" />
+              <p className="text-[13px] text-gray-500 font-['Poppins',sans-serif]">
+                No devices match your search
               </p>
             </div>
           ) : (

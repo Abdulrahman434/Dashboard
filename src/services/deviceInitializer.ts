@@ -1,5 +1,10 @@
+import { initializeCareSignData } from './careSignService';
+
 export function initializeDevices(): void {
   if (typeof window === 'undefined') return;
+
+  // Seed CareSign data (types, events, devices)
+  initializeCareSignData();
 
   const storedDevices = localStorage.getItem('careinn_devices');
   let devicesInitialized = false;

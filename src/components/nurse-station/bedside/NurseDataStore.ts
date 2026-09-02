@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { sectionVisibilityService } from "../../../services/sectionVisibilityService";
 
 /* ═══════════════════════════════════════════════════════════════
  * OVERRIDE TRACKING LOGIC
@@ -214,6 +215,8 @@ export interface CarePlanItem {
   labelKey: string;
   label?: string; // custom label (used for nurse-added items)
   labelAr?: string; // custom arabic label
+  desc?: string; // short activity description (optional)
+  source?: 'his' | 'manual'; // origin: synced from HIS (read-only) or nurse-added
   done: boolean;
   active?: boolean;
   status?: 'unchecked' | 'in-progress' | 'done';
@@ -395,19 +398,20 @@ const getShiftedShortFormatted = (days: number) => {
 };
 
 function createDefaultState(): NurseStoreState {
+  const defaultVis = sectionVisibilityService.getGlobalVisibility();
   return {
     sectionVisibility: {
       profile: true,
-      careOverview: true,
-      carePlan: true,
-      financial: true,
-      labs: true,
-      imaging: true,
-      baby: true,
-      discharge: true,
-      observations: true,
+      careOverview: defaultVis.careOverview ?? true,
+      carePlan: defaultVis.carePlan ?? true,
+      financial: defaultVis.financial ?? true,
+      labs: defaultVis.labs ?? true,
+      imaging: defaultVis.imaging ?? true,
+      baby: defaultVis.baby ?? true,
+      discharge: defaultVis.discharge ?? true,
+      observations: defaultVis.observations ?? true,
       nfc: false, // Not a patient-facing CareMe slide
-      education: true,
+      education: defaultVis.education ?? true,
     },
 
     patient: {
@@ -560,12 +564,14 @@ function createDefaultState(): NurseStoreState {
     painScore: 5,
 
     carePlan: [
-      { id: "cp-1", labelKey: "care.plan.initialAssessment", label: "Initial Assessment", labelAr: "التقييم الأولي", done: true, status: 'done', time: "08:00 AM", period: 30, day: 1, date: getShiftedISO(0) },
-      { id: "cp-2", labelKey: "care.plan.bloodWork", label: "Routine Blood Work", labelAr: "تحاليل الدم الروتينية", done: true, status: 'done', time: "09:00 AM", period: 15, day: 1, date: getShiftedISO(0) },
-      { id: "cp-3", labelKey: "care.plan.medicationRound", label: "Morning Medication Round", labelAr: "جولة أدوية الصباح", done: false, active: true, status: 'in-progress', time: "10:30 AM", period: 45, day: 1, date: getShiftedISO(0), autoFlag: true },
-      { id: "cp-4", labelKey: "care.plan.checkup", label: "Doctor Checkup", labelAr: "فحص الطبيب", done: false, status: 'unchecked', time: "11:30 AM", period: 15, day: 2, date: getShiftedISO(1) },
-      { id: "cp-5", labelKey: "care.plan.physicalTherapy", label: "Physical Therapy", labelAr: "العلاج الطبيعي", done: false, status: 'unchecked', time: "02:00 PM", period: 60, day: 3, date: getShiftedISO(2) },
-      { id: "cp-6", labelKey: "care.plan.doctorReview", label: "Medical Director Review", labelAr: "مراجعة المدير الطبي", done: false, status: 'unchecked', time: "04:30 PM", period: 20, day: 4, date: getShiftedISO(3) },
+      { id: "cp-1", labelKey: "care.plan.initialAssessment", label: "Initial Assessment", labelAr: "التقييم الأولي", desc: "Baseline assessment completed", source: 'his', done: true, status: 'done', time: "08:00 AM", period: 30, day: 1, date: getShiftedISO(0) },
+      { id: "cp-2", labelKey: "care.plan.bloodWork", label: "Routine Blood Work", labelAr: "تحاليل الدم الروتينية", desc: "CBC, Electrolytes", source: 'his', done: true, status: 'done', time: "09:00 AM", period: 15, day: 1, date: getShiftedISO(0) },
+      { id: "cp-3", labelKey: "care.plan.medicationRound", label: "Morning Medication Round", labelAr: "جولة أدوية الصباح", desc: "Scheduled medications", source: 'his', done: false, active: true, status: 'in-progress', time: "10:30 AM", period: 45, day: 1, date: getShiftedISO(0), autoFlag: true },
+      { id: "cp-7", labelKey: "care.plan.nutritionReview", label: "Nutrition Review", labelAr: "مراجعة التغذية", desc: "Diet & intake evaluation", source: 'manual', done: false, status: 'unchecked', time: "02:00 PM", period: 30, day: 1, date: getShiftedISO(0) },
+      { id: "cp-8", labelKey: "care.plan.mobilityCheck", label: "Mobility Check", labelAr: "فحص الحركة", desc: "Assist with mobility & safety", source: 'manual', done: false, status: 'unchecked', time: "04:00 PM", period: 20, day: 1, date: getShiftedISO(0) },
+      { id: "cp-4", labelKey: "care.plan.checkup", label: "Doctor Checkup", labelAr: "فحص الطبيب", desc: "Attending physician round", source: 'his', done: false, status: 'unchecked', time: "11:30 AM", period: 15, day: 2, date: getShiftedISO(1) },
+      { id: "cp-5", labelKey: "care.plan.physicalTherapy", label: "Physical Therapy", labelAr: "العلاج الطبيعي", desc: "Guided rehabilitation session", source: 'his', done: false, status: 'unchecked', time: "02:00 PM", period: 60, day: 3, date: getShiftedISO(2) },
+      { id: "cp-6", labelKey: "care.plan.doctorReview", label: "Medical Director Review", labelAr: "مراجعة المدير الطبي", desc: "Care plan review & sign-off", source: 'his', done: false, status: 'unchecked', time: "04:30 PM", period: 20, day: 4, date: getShiftedISO(3) },
     ],
     carePlanMode: "daily",
     carePlanSelectedDate: getTodayISO(),
@@ -709,6 +715,31 @@ const nurseStore = (() => {
     listeners.forEach((l) => l({ ...state }));
   }
 
+  if (typeof window !== "undefined") {
+    const syncStoreGlobalVisibility = () => {
+      const globalVis = sectionVisibilityService.getPatientVisibility(state.patient.room || state.patient.mrn || "");
+      state = {
+        ...state,
+        sectionVisibility: {
+          ...state.sectionVisibility,
+          careOverview: globalVis.careOverview ?? state.sectionVisibility.careOverview,
+          carePlan: globalVis.carePlan ?? state.sectionVisibility.carePlan,
+          financial: globalVis.financial ?? state.sectionVisibility.financial,
+          labs: globalVis.labs ?? state.sectionVisibility.labs,
+          imaging: globalVis.imaging ?? state.sectionVisibility.imaging,
+          baby: globalVis.baby ?? state.sectionVisibility.baby,
+          discharge: globalVis.discharge ?? state.sectionVisibility.discharge,
+          observations: globalVis.observations ?? state.sectionVisibility.observations,
+          education: globalVis.education ?? state.sectionVisibility.education,
+        },
+      };
+      listeners.forEach((l) => l({ ...state }));
+    };
+    window.addEventListener("careinn-global-visibility-updated", syncStoreGlobalVisibility);
+    window.addEventListener("careinn-patient-visibility-updated", syncStoreGlobalVisibility);
+    window.addEventListener("storage", syncStoreGlobalVisibility);
+  }
+
   return {
     get: () => state,
 
@@ -719,7 +750,9 @@ const nurseStore = (() => {
 
     // ── Section visibility ──
     setSectionVisible: (key: SectionKey, visible: boolean) => {
-      state = { ...state, sectionVisibility: { ...state.sectionVisibility, [key]: visible } };
+      const nextVis = { ...state.sectionVisibility, [key]: visible };
+      state = { ...state, sectionVisibility: nextVis };
+      sectionVisibilityService.savePatientVisibility(state.patient.room || state.patient.mrn || "default", nextVis as any);
       notify();
     },
 

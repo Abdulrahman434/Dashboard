@@ -1,74 +1,82 @@
-import { FlaskConical, Eye, EyeOff } from "lucide-react";
-import { useTheme } from "../../ThemeContext";
+import { FlaskConical } from "lucide-react";
 import { useLocale } from "../../i18n";
 import { useNurseStore, nurseActions } from "../../NurseDataStore";
+import { PageHeader, StatusBadge, SectionCard, VisibilityControl, Toggle, EmptyState } from "../ui";
 
 export function LabResultsTab({ role }: { role: "nurse" | "doctor" }) {
-  const { theme: t } = useTheme();
   const { t: tr } = useLocale();
   const store = useNurseStore();
   const isNurse = role === "nurse";
 
-  const statusColor = (s: string) => s === "low" || s === "high" ? t.error : t.success;
-  const statusBg = (s: string) => s === "low" || s === "high" ? t.errorSubtle : t.successSubtle;
+  const visible = store.sectionVisibility.labs;
+
+  const statusTone = (s: string) =>
+    s === "high" ? "danger" : s === "low" ? "info" : "success";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 font-['Poppins',sans-serif]">
+      <PageHeader
+        title="Lab Results"
+        subtitle="Laboratory results shared with the patient."
+        badges={
+          <>
+            <StatusBadge tone={visible ? "info" : "neutral"}>Visible to Patient</StatusBadge>
+            <StatusBadge tone="success" dot>EMR Synced</StatusBadge>
+          </>
+        }
+      />
+
       {isNurse && (
-        <div className="nurse-card flex items-center justify-between" style={{ marginBottom: 0 }}>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: t.primarySubtle }}>
-              <Eye size={18} style={{ color: t.primary }} />
-            </div>
-            <div>
-              <span style={{ fontSize: "14px", fontWeight: 700, color: t.textHeading, display: "block" }}>Show Section to Patient</span>
-              <span style={{ fontSize: "12px", color: t.textMuted }}>Toggle visibility for "Lab Results" on the bedside screen</span>
-            </div>
-          </div>
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input
-              type="checkbox"
-              checked={store.sectionVisibility.labs}
-              onChange={(e) => nurseActions.setSectionVisible("labs", e.target.checked)}
-              className="sr-only peer"
-            />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-600"
-              style={{ backgroundColor: store.sectionVisibility.labs ? t.primary : "#E5E7EB" }} />
-          </label>
-        </div>
+        <VisibilityControl
+          checked={visible}
+          onChange={(v: boolean) => nurseActions.setSectionVisible("labs", v)}
+          title="Show Section to Patient"
+          description='Toggle visibility for "Lab Results" on the bedside screen'
+        />
       )}
 
-      <div className="nurse-card">
-      <h3 style={{ color: t.textHeading }}><FlaskConical size={18} style={{ color: t.primary }} /> Lab Results</h3>
-      <div className="space-y-3">
-        {store.labResults.map((lab) => (
-          <div key={lab.id} className="flex items-center gap-4 px-4 py-3 rounded-xl transition-all"
-            style={{ backgroundColor: lab.visible ? "#F9FAFB" : "rgba(0,0,0,0.02)", border: `1px solid ${t.borderDefault}`, opacity: lab.visible ? 1 : 0.5 }}>
-            <div className="w-9 h-9 flex items-center justify-center rounded-lg shrink-0" style={{ backgroundColor: t.primarySubtle }}>
-              <FlaskConical size={16} style={{ color: t.primary }} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p style={{ fontSize: "14px", fontWeight: 700, color: t.textHeading }}>{tr(lab.labelKey)}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span style={{ fontSize: "13px", fontWeight: 700, color: statusColor(lab.status) }}>{lab.value}</span>
-                <span style={{ fontSize: "11px", color: t.textMuted }}>{lab.date}</span>
+      <SectionCard title="Lab Results" icon={<FlaskConical size={17} />}>
+        {store.labResults.length === 0 ? (
+          <EmptyState
+            icon={<FlaskConical size={22} />}
+            title="No lab results"
+            description="Laboratory results for this admission will appear here once available."
+          />
+        ) : (
+          <div className="space-y-2.5">
+            {store.labResults.map((lab) => (
+              <div
+                key={lab.id}
+                className="flex items-center gap-3 px-3.5 py-3 rounded-[10px] border border-[#E5E7EB] bg-[#fafbfc] transition-all"
+                style={{ opacity: lab.visible ? 1 : 0.55 }}
+              >
+                <div className="w-9 h-9 flex items-center justify-center rounded-lg shrink-0 bg-[#eaf7fc] text-[#1d7da3]">
+                  <FlaskConical size={16} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-bold text-[#16274D] truncate">{tr(lab.labelKey)}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[13px] font-bold text-[#16274D]">{lab.value}</span>
+                    <span className="text-[11px] text-[#6B7280]">{lab.date}</span>
+                  </div>
+                </div>
+                <StatusBadge tone={statusTone(lab.status)}>{lab.status.toUpperCase()}</StatusBadge>
+                {isNurse && (
+                  <div className="flex items-center gap-2 shrink-0 pl-1">
+                    <span className="text-[11px] text-[#6B7280] hidden sm:inline">Visible to patient</span>
+                    <Toggle
+                      size="sm"
+                      checked={lab.visible}
+                      onChange={() => nurseActions.setLabResultVisible(lab.id, !lab.visible)}
+                      label="Visible to patient"
+                    />
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="px-2 py-0.5 rounded-md" style={{ backgroundColor: statusBg(lab.status) }}>
-              <span style={{ fontSize: "10px", fontWeight: 800, color: statusColor(lab.status), letterSpacing: "0.5px" }}>
-                {lab.status.toUpperCase()}
-              </span>
-            </div>
-            {isNurse && (
-              <button onClick={() => nurseActions.setLabResultVisible(lab.id, !lab.visible)}
-                className="p-2 rounded-lg cursor-pointer transition-all" style={{ backgroundColor: lab.visible ? t.primarySubtle : t.errorSubtle, border: "none" }}>
-                {lab.visible ? <Eye size={14} style={{ color: t.primary }} /> : <EyeOff size={14} style={{ color: t.error }} />}
-              </button>
-            )}
+            ))}
           </div>
-        ))}
-      </div>
-      </div>
+        )}
+      </SectionCard>
     </div>
   );
 }

@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   X, ClipboardList, Stethoscope, User, Heart, DollarSign,
   FlaskConical, Image as ImageIcon, Baby, LogOut, Activity,
   Hash, DoorOpen, Clock, Plus, Bed, ExternalLink,
-  Crown, Gem, BedDouble, BookOpen,
+  Crown, Gem, BedDouble, BookOpen, ChevronLeft, RefreshCw,
 } from "lucide-react";
+import { toast } from "sonner@2.0.3";
+import { nurseStationService } from "../../../../services/nurseStationService";
+import { sectionVisibilityService, type SectionVisibilityMap } from "../../../../services/sectionVisibilityService";
 import { useTheme } from "../ThemeContext";
 import { useLocale } from "../i18n";
 import { useNurseStore, nurseActions, type SectionKey } from "../NurseDataStore";
@@ -29,14 +32,14 @@ interface TabDef {
 const TABS: TabDef[] = [
   { key: "profile", label: "Patient Profile", icon: User, hasVisibility: false },
   { key: "careOverview", label: "Care Overview", icon: Heart, hasVisibility: true },
+  { key: "observations", label: "Observations", icon: Activity, hasVisibility: true },
   { key: "carePlan", label: "My Care Plan", icon: ClipboardList, hasVisibility: true },
-  { key: "financial", label: "Financial", icon: DollarSign, hasVisibility: true },
   { key: "labs", label: "Lab Results", icon: FlaskConical, hasVisibility: true },
   { key: "imaging", label: "Imaging", icon: ImageIcon, hasVisibility: true },
+  { key: "education", label: "Education", icon: BookOpen, hasVisibility: true },
   { key: "baby", label: "Baby Camera", icon: Baby, hasVisibility: true },
   { key: "discharge", label: "Discharge Plan", icon: LogOut, hasVisibility: true },
-  { key: "observations", label: "Observations", icon: Activity, hasVisibility: true },
-  { key: "education", label: "Education", icon: BookOpen, hasVisibility: true },
+  { key: "financial", label: "Financial", icon: DollarSign, hasVisibility: true },
 ];
 
 interface NurseInterfaceProps {
@@ -62,6 +65,46 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
 
   const patient = store.patient;
 
+  const [visibility, setVisibility] = useState<SectionVisibilityMap>(
+    sectionVisibilityService.getPatientVisibility(patient.room || patient.mrn || "")
+  );
+
+  useEffect(() => {
+    const syncVisibility = () => {
+      setVisibility(sectionVisibilityService.getPatientVisibility(patient.room || patient.mrn || ""));
+    };
+    syncVisibility();
+    window.addEventListener("careinn-global-visibility-updated", syncVisibility);
+    window.addEventListener("careinn-patient-visibility-updated", syncVisibility);
+    window.addEventListener("storage", syncVisibility);
+    return () => {
+      window.removeEventListener("careinn-global-visibility-updated", syncVisibility);
+      window.removeEventListener("careinn-patient-visibility-updated", syncVisibility);
+      window.removeEventListener("storage", syncVisibility);
+    };
+  }, [patient.room, patient.mrn]);
+
+  const visibleTabs = TABS.filter((tab) => {
+    if (!tab.hasVisibility) return true;
+    return visibility[tab.key] !== false;
+  });
+
+  useEffect(() => {
+    if (activeTab !== "profile" && visibility[activeTab] === false) {
+      setActiveTab("profile");
+    }
+  }, [visibility, activeTab]);
+
+  const wardName = nurseStationService.get(patient.stationId || "")?.name;
+  const initials =
+    (patient.name || "")
+      .trim()
+      .split(/\s+/)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "P";
+
   const renderTab = () => {
     switch (activeTab) {
       case "profile": return <PatientProfileTab role={role} />;
@@ -83,164 +126,178 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
       className="absolute inset-0 z-[900] flex flex-col"
       style={{ backgroundColor: "#F4F6F8" }}
     >
-      {/* ── Header ── */}
+      {/* ── Header (white) ── */}
       <div
-        className="flex items-center justify-between px-8 py-4 shrink-0"
-        style={{ backgroundColor: t.primary }}
+        className="flex items-center gap-4 px-6 py-3.5 shrink-0 bg-white"
+        style={{ borderBottom: `1px solid ${t.borderDefault}` }}
       >
-        <div className="flex items-center gap-4">
-          <div
-            className="w-11 h-11 rounded-2xl flex items-center justify-center"
-            style={{ backgroundColor: "rgba(255,255,255,0.18)" }}
-          >
-            {role === "nurse"
-              ? <ClipboardList size={22} color="#fff" />
-              : <Stethoscope size={22} color="#fff" />}
-          </div>
-          <div>
-            <h1 style={{ fontFamily: t.fontFamily, fontSize: "20px", fontWeight: 800, color: "#fff" }}>
-              {role === "nurse" ? tr("careteam.nurseRole") : tr("careteam.doctorRole")}
-            </h1>
-            <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.72)", fontWeight: 500 }}>
-              {new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-            </p>
-          </div>
+        <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "#4EBEE3" }}>
+          {role === "nurse" ? <ClipboardList size={22} color="#fff" /> : <Stethoscope size={22} color="#fff" />}
         </div>
-        <button
-          onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center rounded-full transition-all cursor-pointer"
-          style={{ backgroundColor: "rgba(255,255,255,0.15)" }}
-        >
-          <X size={20} color="rgba(255,255,255,0.9)" />
-        </button>
+        <div className="min-w-0">
+          <h1 style={{ fontFamily: t.fontFamily, fontSize: "20px", fontWeight: 800, color: "#16274D" }}>
+            {role === "nurse" ? tr("careteam.nurseRole") : tr("careteam.doctorRole")}
+          </h1>
+          <p style={{ fontSize: "13px", color: "#5d6678", fontWeight: 500 }}>
+            {new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          </p>
+        </div>
+        {wardName && (
+          <button
+            onClick={onClose}
+            className="ms-2 flex items-center gap-1 text-[14px] font-semibold cursor-pointer hover:opacity-80 transition-opacity"
+            style={{ color: "#4EBEE3" }}
+          >
+            <ChevronLeft size={17} /> Ward {wardName}
+          </button>
+        )}
+        <div className="ms-auto flex items-center gap-3 shrink-0">
+          {role === "nurse" && (
+            <button
+              onClick={() => toast.success("Patient Terminal synced successfully")}
+              className="flex items-center gap-2 px-5 h-[42px] rounded-xl text-white font-bold text-[14px] cursor-pointer transition-colors hover:bg-[#3DA5CA] active:scale-95"
+              style={{ background: "#4EBEE3", border: "none" }}
+            >
+              <RefreshCw size={17} /> Sync Terminal
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center rounded-full border transition-colors cursor-pointer hover:bg-gray-50"
+            style={{ borderColor: t.borderDefault, color: "#5d6678" }}
+          >
+            <X size={20} />
+          </button>
+        </div>
       </div>
 
       {/* ── Patient Summary Bar ── */}
       <div
-        className="flex items-center px-8 py-4 shrink-0"
-        style={{ backgroundColor: "#fff", borderBottom: `1px solid ${t.borderDefault}` }}
+        className="flex items-center gap-5 px-6 py-4 shrink-0 bg-white"
+        style={{ borderBottom: `1px solid ${t.borderDefault}` }}
       >
-        <div className="flex-1 grid grid-cols-5 gap-0">
-          {[
-            { label: "MRN", value: patient.mrn, icon: <Hash size={15} /> },
-            { 
-              label: "Patient", 
-              value: `${(tr("direction") === "rtl" && patient.nameAr) ? patient.nameAr : patient.name} (${patient.age}y)`, 
-              icon: <User size={15} /> 
-            },
-            { label: "Room", value: patient.room, icon: <DoorOpen size={15} /> },
-            { label: "Bed", value: patient.bed || "—", icon: <Bed size={15} /> },
-          ].map((item, i) => (
-            <div key={i} className="flex relative items-center justify-center">
-              {i > 0 && (
-                <div className="absolute inset-inline-start-0 top-1/2 -translate-y-1/2 w-[1.5px] h-10"
-                  style={{ backgroundColor: t.borderDefault, opacity: 0.6 }} />
-              )}
-              <div className="flex flex-col items-center">
-                <span className="flex items-center gap-1.5 mb-1" style={{ fontSize: "12px", fontWeight: 600, color: t.textMuted }}>
-                  <span style={{ color: t.primary }}>{item.icon}</span> {item.label}
-                </span>
-                <span style={{ fontSize: "17px", fontWeight: 800, color: t.textHeading }}>{item.value}</span>
-              </div>
+        {/* Identity */}
+        <div className="flex items-center gap-3 shrink-0 pe-5" style={{ borderInlineEnd: `1px solid ${t.borderDefault}` }}>
+          <div className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-[18px] shrink-0" style={{ background: "#eaf7fc", color: "#1d7da3" }}>
+            {initials}
+          </div>
+          <div className="min-w-0">
+            <div className="text-[19px] font-bold leading-tight" style={{ color: "#16274D" }}>
+              {(tr("direction") === "rtl" && patient.nameAr) ? patient.nameAr : (patient.name || "—")}
             </div>
-          ))}
-
-          {/* 5th Column: Room Type dropdown */}
-          <div className="flex relative items-center justify-center">
-            <div className="absolute inset-inline-start-0 top-1/2 -translate-y-1/2 w-[1.5px] h-10"
-              style={{ backgroundColor: t.borderDefault, opacity: 0.6 }} />
-            <div className="flex flex-col items-center relative">
-              <span className="flex items-center gap-1.5 mb-1" style={{ fontSize: "12px", fontWeight: 600, color: t.textMuted }}>
-                <span style={{ color: t.primary }}>{getRoomTypeIcon(patient.roomType || "Single")}</span> Room Type
-              </span>
-              
-              {isEditingOther ? (
-                <div className="flex items-center gap-1 mt-0.5" style={{ zIndex: 100 }}>
-                  <input
-                    type="text"
-                    value={customTypeDraft}
-                    onChange={(e) => setCustomTypeDraft(e.target.value)}
-                    placeholder="Type custom type..."
-                    className="px-2 py-0.5 text-[13px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#09ADEA] font-semibold text-[#1C1B1F]"
-                    style={{ width: "120px" }}
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => {
-                      if (customTypeDraft.trim()) {
-                        nurseActions.updatePatient({ roomType: customTypeDraft.trim() });
-                      }
-                      setIsEditingOther(false);
-                    }}
-                    className="p-1 rounded bg-[#01C874] text-white hover:bg-[#00AC64] transition-colors cursor-pointer flex items-center justify-center"
-                    title="Save custom type"
-                  >
-                    <Plus size={12} strokeWidth={3} />
-                  </button>
-                  <button
-                    onClick={() => setIsEditingOther(false)}
-                    className="p-1 rounded bg-[#DF4354] text-white hover:bg-[#c93545] transition-colors cursor-pointer flex items-center justify-center"
-                    title="Cancel"
-                  >
-                    <X size={12} strokeWidth={3} />
-                  </button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <button
-                    onClick={() => setShowRoomTypeDropdown(!showRoomTypeDropdown)}
-                    className="flex items-center gap-1.5 mt-0.5 px-3 py-1 rounded-lg border border-gray-200 hover:border-gray-300 bg-white transition-all cursor-pointer font-bold text-[#1C1B1F] text-[15px]"
-                  >
-                    <span>{patient.roomType || "Single"}</span>
-                    <span className="text-gray-400 text-[10px]">▼</span>
-                  </button>
-
-                  {showRoomTypeDropdown && (
-                    <>
-                      {/* Invisible backdrop to dismiss dropdown */}
-                      <div className="fixed inset-0 z-40" onClick={() => setShowRoomTypeDropdown(false)} />
-                      
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 z-50">
-                        {[
-                          { value: "Single", label: "Single", icon: <BedDouble size={14} className="text-blue-500" /> },
-                          { value: "Royal", label: "Royal", icon: <Crown size={14} className="text-purple-500" /> },
-                          { value: "VIP", label: "VIP", icon: <Gem size={14} className="text-teal-500" /> },
-                          { value: "other", label: "Other (type)...", icon: <Plus size={14} className="text-gray-500" /> }
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              if (opt.value === "other") {
-                                setCustomTypeDraft("");
-                                setIsEditingOther(true);
-                              } else {
-                                nurseActions.updatePatient({ roomType: opt.value });
-                              }
-                              setShowRoomTypeDropdown(false);
-                            }}
-                            className="w-full px-3 py-2 text-[13px] text-left hover:bg-gray-50 flex items-center gap-2.5 cursor-pointer font-semibold text-gray-700"
-                          >
-                            {opt.icon}
-                            <span>{opt.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+            <div className="text-[13px]" style={{ color: "#5d6678" }}>
+              {patient.sex || "—"}{patient.age ? ` · ${patient.age} years` : ""}
+            </div>
+            <div className="mt-1 inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-extrabold tracking-wide bg-[#fcebe9] text-[#c0392b] border border-[#f5c6cb]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#c0392b]" /> OCCUPIED
             </div>
           </div>
         </div>
-        {role === "nurse" && (
-          <button
-            onClick={() => setActiveTab("observations")}
-            className="flex items-center gap-2 px-5 py-3 cursor-pointer transition-all active:scale-95"
-            style={{ backgroundColor: t.primary, color: "#fff", fontSize: "14px", fontWeight: 800, borderRadius: "14px", border: "none" }}
-          >
-            <Plus size={18} /> Add Observation
-          </button>
-        )}
+
+        {/* Columns */}
+        <div className="flex-1 flex items-stretch">
+          {[
+            { label: "MRN", value: patient.mrn || "—" },
+            { label: "Room", value: patient.room || "—" },
+            { label: "Bed", value: patient.bed || "—" },
+          ].map((c, i) => (
+            <div
+              key={c.label}
+              className="flex-1 min-w-0 flex flex-col justify-center px-5"
+              style={i > 0 ? { borderInlineStart: `1px solid ${t.borderDefault}` } : undefined}
+            >
+              <span className="text-[12px] mb-1" style={{ color: "#5d6678", fontWeight: 600 }}>{c.label}</span>
+              <span className="text-[16px] font-bold truncate" style={{ color: "#16274D" }}>{c.value}</span>
+            </div>
+          ))}
+
+          {/* Room Type column (editable) */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center px-5" style={{ borderInlineStart: `1px solid ${t.borderDefault}` }}>
+            <span className="text-[12px] mb-1" style={{ color: "#5d6678", fontWeight: 600 }}>Room Type</span>
+            {isEditingOther ? (
+              <div className="flex items-center gap-1" style={{ zIndex: 100 }}>
+                <input
+                  type="text"
+                  value={customTypeDraft}
+                  onChange={(e) => setCustomTypeDraft(e.target.value)}
+                  placeholder="Type custom type..."
+                  className="px-2 py-0.5 text-[13px] border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-[#4EBEE3] font-semibold text-[#16274D]"
+                  style={{ width: "110px" }}
+                  autoFocus
+                />
+                <button
+                  onClick={() => {
+                    if (customTypeDraft.trim()) {
+                      nurseActions.updatePatient({ roomType: customTypeDraft.trim() });
+                    }
+                    setIsEditingOther(false);
+                  }}
+                  className="p-1 rounded bg-[#01C874] text-white hover:bg-[#00AC64] transition-colors cursor-pointer flex items-center justify-center"
+                  title="Save custom type"
+                >
+                  <Plus size={12} strokeWidth={3} />
+                </button>
+                <button
+                  onClick={() => setIsEditingOther(false)}
+                  className="p-1 rounded bg-[#DF4354] text-white hover:bg-[#c93545] transition-colors cursor-pointer flex items-center justify-center"
+                  title="Cancel"
+                >
+                  <X size={12} strokeWidth={3} />
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <button
+                  onClick={() => setShowRoomTypeDropdown(!showRoomTypeDropdown)}
+                  className="flex items-center gap-1.5 cursor-pointer font-bold text-[16px]"
+                  style={{ color: "#16274D", background: "none", border: "none", padding: 0 }}
+                >
+                  <span>{patient.roomType || "Single"}</span>
+                  <span className="text-gray-400 text-[10px]">▼</span>
+                </button>
+
+                {showRoomTypeDropdown && (
+                  <>
+                    {/* Invisible backdrop to dismiss dropdown */}
+                    <div className="fixed inset-0 z-40" onClick={() => setShowRoomTypeDropdown(false)} />
+
+                    <div className="absolute top-full inset-inline-start-0 mt-1.5 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1.5 z-50">
+                      {[
+                        { value: "Single", label: "Single", icon: <BedDouble size={14} className="text-blue-500" /> },
+                        { value: "Royal", label: "Royal", icon: <Crown size={14} className="text-purple-500" /> },
+                        { value: "VIP", label: "VIP", icon: <Gem size={14} className="text-teal-500" /> },
+                        { value: "other", label: "Other (type)...", icon: <Plus size={14} className="text-gray-500" /> }
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
+                          onClick={() => {
+                            if (opt.value === "other") {
+                              setCustomTypeDraft("");
+                              setIsEditingOther(true);
+                            } else {
+                              nurseActions.updatePatient({ roomType: opt.value });
+                            }
+                            setShowRoomTypeDropdown(false);
+                          }}
+                          className="w-full px-3 py-2 text-[13px] text-left hover:bg-gray-50 flex items-center gap-2.5 cursor-pointer font-semibold text-gray-700"
+                        >
+                          {opt.icon}
+                          <span>{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Admission column */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center px-5" style={{ borderInlineStart: `1px solid ${t.borderDefault}` }}>
+            <span className="text-[12px] mb-1" style={{ color: "#5d6678", fontWeight: 600 }}>Admission</span>
+            <span className="text-[16px] font-bold truncate" style={{ color: "#16274D" }}>{patient.admissionDate || "—"}</span>
+          </div>
+        </div>
       </div>
 
       {/* â”€â”€ Tab Bar â”€â”€ */}
@@ -248,10 +305,9 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
         className="flex items-center gap-1 px-6 shrink-0 overflow-x-auto"
         style={{ backgroundColor: "#fff", borderBottom: `1px solid ${t.borderDefault}`, padding: "0 24px" }}
       >
-        {TABS.map((tab) => {
+        {visibleTabs.map((tab) => {
           const isActive = activeTab === tab.key;
           const Icon = tab.icon;
-          const isVisible = store.sectionVisibility[tab.key];
           return (
             <div key={tab.key} className="flex items-center shrink-0">
               <button
@@ -280,26 +336,10 @@ export function NurseInterface({ role, onClose }: NurseInterfaceProps) {
 
       {/* â”€â”€ Tab Content â”€â”€ */}
       <div className="flex-1 overflow-y-auto p-8" style={{ backgroundColor: "#F4F6F8" }}>
-        <div className="mx-auto" style={{ maxWidth: 1100 }}>
+        <div className="mx-auto" style={{ maxWidth: 1440 }}>
           {renderTab()}
         </div>
       </div>
-
-      {/* â”€â”€ Footer Link â”€â”€ */}
-      {role === "nurse" && (
-        <div className="flex justify-end px-8 pb-4 shrink-0">
-          <a
-            href="https://client.careinn.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline font-semibold flex items-center gap-1.5 cursor-pointer"
-            style={{ color: t.primary }}
-          >
-            <ExternalLink size={14} />
-            {tr("careteam.gotoEmr")}
-          </a>
-        </div>
-      )}
 
       <style>{`
         .nurse-card {
