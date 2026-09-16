@@ -171,11 +171,11 @@ const navigationItems: MenuItem[] = [
     label: 'Food Management',
     icon: UtensilsCrossed,
     subItems: [
-      { id: 'food-dishes', label: 'Menu Dishes', icon: Salad },
       { id: 'food-reflists', label: 'Reference Lists', icon: ListTree },
+      { id: 'food-dishes', label: 'Menu Dishes', icon: Salad },
       { id: 'food-sets', label: 'Menu Sets', icon: CalendarDays },
-      { id: 'food-kiosk', label: 'Patient Kiosk', icon: Tablet },
-      { id: 'food-kitchen', label: 'Kitchen', icon: ChefHat }
+      { id: 'food-kitchen', label: 'Kitchen', icon: ChefHat },
+      { id: 'food-kiosk', label: 'Patient Kiosk', icon: Tablet }
     ]
   },
   {

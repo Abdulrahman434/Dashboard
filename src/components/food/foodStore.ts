@@ -38,6 +38,11 @@ function SEED(): any {
   return {
     allergens: ['Milk', 'Egg', 'Gluten', 'Nuts', 'Fish', 'Shellfish', 'Soy', 'Sesame', 'Peanut'],
     meals: ['Breakfast', 'Lunch', 'Dinner'],
+    // Per-meal metadata keyed by meal name: editable Arabic + images (base64).
+    // Kept separate so `meals` stays a plain string[] referenced by name everywhere.
+    mealMeta: {} as Record<string, { ar?: string; regular?: string; landscape?: string }>,
+    // Editable Arabic override for allergens, keyed by English allergen name.
+    allergenAr: {} as Record<string, string>,
     win: { serviceDay: 'Tomorrow only', open: '4:00 PM', close: '8:00 PM', sameAll: true, autoDefault: true, allowEdit: true },
     sections: [
       { en: 'Cereals', ar: 'حبوب الإفطار', on: true, min: 1, max: 1, forAll: false },
@@ -49,7 +54,7 @@ function SEED(): any {
       { en: 'Mains', ar: 'الأطباق الرئيسية', on: true, min: 1, max: 1, forAll: false },
       { en: 'Side orders', ar: 'أطباق جانبية', on: true, min: 1, max: 1, forAll: false },
       { en: 'Dessert', ar: 'حلويات', on: true, min: 1, max: 1, forAll: false },
-      { en: 'Drinks', ar: 'مشروبات', on: true, min: 0, max: 1, forAll: true },
+      { en: 'Drinks', ar: 'مشروبات', on: true, min: 1, max: 1, forAll: false },
     ],
     diets: [
       { en: 'Regular', ar: 'عادي', his: '577365', reg: true, on: true },
@@ -103,15 +108,25 @@ function SEED(): any {
       d('Arabic coffee', 'قهوة عربية', 'Drinks', []),
     ],
     sets: [
-      { id: 'standard', name: 'Standard week', status: 'Published', sub: 'All 8 diets · breakfast, lunch, dinner · live since 1 Jun', edited: '2d ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '2026-06-01', activeTo: '' },
-      { id: 'ramadan', name: 'Ramadan 2026', status: 'Draft', sub: '8 diets · suhoor and iftar · not published yet', edited: '5h ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '', activeTo: '' },
-      { id: 'eid', name: 'Eid special', status: 'Scheduled', sub: '8 diets · 3 meals · starts 16 Jun', edited: '1w ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '2026-06-16', activeTo: '' },
+      { id: 'standard', name: 'Standard week', nameAr: 'الأسبوع العادي', status: 'Published', sub: 'All 8 diets · breakfast, lunch, dinner · live since 1 Jun', edited: '2d ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '2026-06-01', activeTo: '' },
+      { id: 'ramadan', name: 'Ramadan 2026', nameAr: 'رمضان 2026', status: 'Draft', sub: '8 diets · suhoor and iftar · not published yet', edited: '5h ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '', activeTo: '' },
+      { id: 'eid', name: 'Eid special', nameAr: 'عيد خاص', status: 'Scheduled', sub: '8 diets · 3 meals · starts 16 Jun', edited: '1w ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '2026-06-16', activeTo: '' },
     ],
     patients: [
-      { name: 'Ahmed Al-Salem', room: '312', bed: 'A', diet: 'Low sodium', allergies: [] },
-      { name: 'Sara Hassan', room: '305', bed: 'B', diet: 'Diabetic', allergies: ['Nuts'] },
-      { name: 'Khalid Al-Otaibi', room: '210', bed: 'A', diet: 'Soft diet', allergies: ['Milk'] },
-      { name: 'Maryam Saleh', room: '418', bed: 'C', diet: 'Regular', allergies: ['Fish', 'Shellfish'] },
+      { name: 'Ahmed Al-Salem', room: '312', bed: 'A', floor: '3', building: 'A', diet: 'Low sodium', allergies: [] },
+      { name: 'Sara Hassan', room: '305', bed: 'B', floor: '3', building: 'A', diet: 'Diabetic', allergies: ['Nuts'] },
+      { name: 'Khalid Al-Otaibi', room: '210', bed: 'A', floor: '2', building: 'A', diet: 'Soft diet', allergies: ['Milk'] },
+      { name: 'Maryam Saleh', room: '418', bed: 'C', floor: '4', building: 'B', diet: 'Regular', allergies: ['Fish', 'Shellfish'] },
+      { name: 'Fatima Noor', room: '401', bed: 'A', floor: '4', building: 'B', diet: 'Diabetic', allergies: [] },
+      { name: 'Omar Said', room: '208', bed: 'B', floor: '2', building: 'A', diet: 'Regular', allergies: ['Egg'] },
+      { name: 'Layla Ibrahim', room: '316', bed: 'B', floor: '3', building: 'A', diet: 'Low sodium', allergies: ['Gluten'] },
+      { name: 'Yousef Al-Harbi', room: '223', bed: 'A', floor: '2', building: 'A', diet: 'Soft diet', allergies: [] },
+      { name: 'Noura Al-Qahtani', room: '410', bed: 'A', floor: '4', building: 'B', diet: 'Regular', allergies: ['Milk', 'Soy'] },
+      { name: 'Hassan Ali', room: '507', bed: 'C', floor: '5', building: 'B', diet: 'Diabetic', allergies: ['Nuts'] },
+      { name: 'Aisha Mohammed', room: '119', bed: 'A', floor: '1', building: 'A', diet: 'Regular', allergies: [] },
+      { name: 'Tariq Zaid', room: '514', bed: 'B', floor: '5', building: 'B', diet: 'Low sodium', allergies: ['Shellfish'] },
+      { name: 'Reem Al-Dosari', room: '327', bed: 'C', floor: '3', building: 'A', diet: 'Soft diet', allergies: [] },
+      { name: 'Sami Al-Ghamdi', room: '105', bed: 'B', floor: '1', building: 'A', diet: 'Regular', allergies: ['Fish'] },
     ],
     orders: [
       {
@@ -185,10 +200,18 @@ export function resolve(menu: any, diet: string, meal: string, day: string): any
 
 export function ruleText(s: any): string {
   if (s.forAll) return 'Served to everyone';
-  if (s.min >= 1 && s.max > 1) return 'Choose ' + s.max + ' · required';
-  if (s.min >= 1 && s.max === 1) return 'Choose one · required';
+  if (s.min >= 1 && s.max > 1) return 'Choose ' + s.max;
+  if (s.min >= 1 && s.max === 1) return 'Choose one';
   if (s.max > 1) return 'Choose up to ' + s.max;
-  return 'Choose one · optional';
+  return 'Choose one';
+}
+
+export function ruleTextAr(s: any): string {
+  if (s.forAll) return 'يُقدَّم للجميع';
+  if (s.min >= 1 && s.max > 1) return 'اختر ' + s.max;
+  if (s.min >= 1 && s.max === 1) return 'اختر واحد';
+  if (s.max > 1) return 'حتى ' + s.max;
+  return 'اختر واحد';
 }
 
 // ---- external store --------------------------------------------------------

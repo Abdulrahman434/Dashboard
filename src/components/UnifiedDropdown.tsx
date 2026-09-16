@@ -12,17 +12,22 @@ interface SingleSelectDropdownProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  searchable?: boolean;
+  size?: 'sm' | 'md';
 }
 
-export function SingleSelectDropdown({ 
-  options, 
-  value, 
-  onChange, 
+export function SingleSelectDropdown({
+  options,
+  value,
+  onChange,
   placeholder = "Select option",
   className = "",
-  disabled = false
+  disabled = false,
+  searchable = false,
+  size = 'sm'
 }: SingleSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,9 +53,14 @@ export function SingleSelectDropdown({
   const selectedOption = normalizedOptions.find(opt => opt.value === value);
   const displayText = selectedOption?.label || placeholder;
 
+  const visibleOptions = searchable && query.trim()
+    ? normalizedOptions.filter(o => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : normalizedOptions;
+
   const handleSelect = (optionValue: string) => {
     onChange(optionValue);
     setIsOpen(false);
+    setQuery('');
   };
 
   return (
@@ -58,9 +68,9 @@ export function SingleSelectDropdown({
       {/* Trigger Button */}
       <button
         type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={() => { if (!disabled) { setIsOpen(!isOpen); setQuery(''); } }}
         disabled={disabled}
-        className={`w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
+        className={`w-full ${size === 'md' ? 'px-4 py-2.5' : 'px-3 py-1.5'} border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
           disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-400'
         } ${!value ? 'text-gray-400' : 'text-[#16274D]'} ${className.includes('text-[12px]') ? 'text-[12px]' : 'text-[14px]'}`}
       >
@@ -73,9 +83,24 @@ export function SingleSelectDropdown({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className={`absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden font-['Poppins',sans-serif] ${className.includes('text-[12px]') ? 'max-h-[200px]' : 'max-h-[280px]'}`}>
+        <div className={`absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden font-['Poppins',sans-serif]`}>
+          {searchable && (
+            <div className="p-2 border-b border-gray-100">
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search…"
+                className="w-full px-2.5 py-1.5 text-[13px] rounded-md border border-gray-200 outline-none focus:border-[#4EBEE3] text-[#16274D]"
+              />
+            </div>
+          )}
           <div className={`overflow-y-auto ${className.includes('text-[12px]') ? 'max-h-[200px]' : 'max-h-[280px]'}`}>
-            {normalizedOptions.map((option) => {
+            {visibleOptions.length === 0 && (
+              <div className="px-3 py-3 text-[12.5px] text-gray-400 text-center">No matches</div>
+            )}
+            {visibleOptions.map((option) => {
               const isSelected = option.value === value;
               
               return (
