@@ -13,21 +13,26 @@ interface SingleSelectDropdownProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  searchable?: boolean;
+  size?: 'sm' | 'md';
 }
 
-export function SingleSelectDropdown({ 
-  options, 
-  value, 
-  onChange, 
+export function SingleSelectDropdown({
+  options,
+  value,
+  onChange,
   placeholder = "Select option",
   className = "",
-  disabled = false
+  disabled = false,
+  searchable = false,
+  size = 'sm'
 }: SingleSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   // Menu is portalled to <body> so an ancestor with overflow:hidden/auto — a
   // modal body, a scrolling card — can't clip it. Position is measured from the
   // trigger and the menu flips above when there isn't room below.
   const [menuRect, setMenuRect] = useState<{ top: number; bottom: number; left: number; width: number } | null>(null);
+  const [query, setQuery] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -44,6 +49,7 @@ export function SingleSelectDropdown({
   const toggleOpen = () => {
     if (disabled) return;
     if (!isOpen) measure();
+    setQuery('');
     setIsOpen(o => !o);
   };
 
@@ -79,9 +85,14 @@ export function SingleSelectDropdown({
   const selectedOption = normalizedOptions.find(opt => opt.value === value);
   const displayText = selectedOption?.label || placeholder;
 
+  const visibleOptions = searchable && query.trim()
+    ? normalizedOptions.filter(o => o.label.toLowerCase().includes(query.trim().toLowerCase()))
+    : normalizedOptions;
+
   const handleSelect = (optionValue: string) => {
     onChange(optionValue);
     setIsOpen(false);
+    setQuery('');
   };
 
   // Flip up when the space below can't hold the menu but the space above can.
@@ -97,7 +108,7 @@ export function SingleSelectDropdown({
         type="button"
         onClick={toggleOpen}
         disabled={disabled}
-        className={`w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
+        className={`w-full ${size === 'md' ? 'px-4 py-2.5' : 'px-3 py-1.5'} border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
           disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-400'
         } ${!value ? 'text-gray-400' : 'text-[#16274D]'} ${className.includes('text-[12px]') ? 'text-[12px]' : 'text-[14px]'}`}
       >
@@ -123,8 +134,23 @@ export function SingleSelectDropdown({
           }}
           className="z-[60] bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden font-['Poppins',sans-serif]"
         >
+          {searchable && (
+            <div className="p-2 border-b border-gray-100">
+              <input
+                autoFocus
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search…"
+                className="w-full px-2.5 py-1.5 text-[13px] rounded-md border border-gray-200 outline-none focus:border-[#4EBEE3] text-[#16274D]"
+              />
+            </div>
+          )}
           <div className="overflow-y-auto" style={{ maxHeight: availableH }}>
-            {normalizedOptions.map((option) => {
+            {visibleOptions.length === 0 && (
+              <div className="px-3 py-3 text-[12.5px] text-gray-400 text-center">No matches</div>
+            )}
+            {visibleOptions.map((option) => {
               const isSelected = option.value === value;
 
               return (
