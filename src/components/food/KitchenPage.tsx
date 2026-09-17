@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChefHat, Tablet, Printer, Check, CheckCheck, User, Clock, Utensils, CheckCircle2, Edit, BedDouble, Gem, Crown, ShieldAlert, AlertTriangle, LayoutGrid, Table as TableIcon, ChevronUp, ChevronDown, ChevronRight, PlusCircle, MoreVertical, Wheat, Egg, Croissant, Milk, Soup, Salad, Beef, CupSoda, CakeSlice, ClipboardList, Package, TrendingUp, Download, Plus, Search, X, MapPin, Link2 } from 'lucide-react';
+import { ChefHat, Tablet, Printer, Check, CheckCheck, User, Clock, Utensils, CheckCircle2, Edit, BedDouble, Gem, Crown, ShieldAlert, AlertTriangle, LayoutGrid, Table as TableIcon, ChevronUp, ChevronDown, ChevronRight, PlusCircle, MoreVertical, Wheat, Egg, Croissant, Milk, Soup, Salad, Beef, CupSoda, CakeSlice, ClipboardList, Package, TrendingUp, Download, Plus, Search, X, MapPin, Link2, Layers } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, updateFood, resolve, MEAL_SECTIONS, sectionRule, nextOrderId } from './foodStore';
+import { useFood, updateFood, resolve, MEAL_SECTIONS, sectionRule, nextOrderId, setKioskPrefill } from './foodStore';
+import { buildSheets, type Sheet } from './mealTicket';
+import { MealSheet, MealTicketPrintStyles } from './MealTicketSheet';
 import { cx, Btn, Badge, Card, FoodPage } from './foodAtoms';
 import PillTabs from '../PillTabs';
 import TableSortIcon from '../TableSortIcon';
@@ -311,7 +313,6 @@ export default function KitchenPage({
         draft.orders.unshift({
           ...editingOrder,
           id: editingOrder.id.startsWith('DEF-') ? nextOrderId() : editingOrder.id,
-          isDefaultAutoFill: false,
           lines: newLines
         });
       } else {
@@ -513,13 +514,10 @@ export default function KitchenPage({
 
   // Selected tickets state
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<'queue' | 'status'>('queue');
   // A ticket to jump to (e.g. after placing an order at the kiosk).
   const [focusOrderId, setFocusOrderId] = useState<string | null>(null);
 
   // Patient Order Status: filter + search
-  const [statusFilter, setStatusFilter] = useState<'all' | 'ordered' | 'default' | 'pending'>('all');
-  const [patientSearch, setPatientSearch] = useState('');
   // Kitchen Queue: free-text search (name, room, bed, order id, meal, diet)
   const [queueSearch, setQueueSearch] = useState('');
 
@@ -576,10 +574,22 @@ export default function KitchenPage({
   const appYesterday = shiftDays(appToday, -1);
   const appTomorrow = shiftDays(appToday, 1);
   const [selectedDate, setSelectedDate] = useState<string>(appToday);
-  const [mainTab, setMainTab] = useState<'queue' | 'summary'>('queue');
+  const [mainTab, setMainTab] = useState<'queue' | 'summary' | 'missing'>('summary');
+  // "Not ordered" tab — its own filters so switching tabs doesn't carry the
+  // queue's filter state (and its Date/Companion-status filters) across.
+  const [missSearch, setMissSearch] = useState('');
+  const [missMeals, setMissMeals] = useState<string[]>([]);
+  const [missDiets, setMissDiets] = useState<string[]>([]);
+  const [missRooms, setMissRooms] = useState<string[]>([]);
+  const [missFor, setMissFor] = useState<string[]>([]);
+  const [missGroupBy, setMissGroupBy] = useState<'none' | 'floor' | 'ward' | 'meal'>('none');
+  /* Ordering is for tomorrow, but a patient admitted today still has to be fed
+     today — the kitchen asks them and enters it by hand — so the tab can look
+     at either day. */
+  const [missDate, setMissDate] = useState<string>(appTomorrow);
   const [summaryDate, setSummaryDate] = useState<string>(appToday);
   const [summaryMeal, setSummaryMeal] = useState<'All' | 'Breakfast' | 'Lunch' | 'Dinner'>('All');
-  const [summaryGroup, setSummaryGroup] = useState<'none' | 'section' | 'diet' | 'ward'>('none');
+  const [summaryGroup, setSummaryGroup] = useState<'none' | 'floor' | 'section' | 'diet' | 'ward'>('none');
   const [tableSort, setTableSort] = useState<{ key: string; dir: 'asc' | 'desc' }>({ key: 'total', dir: 'desc' });
   const [summaryPrint, setSummaryPrint] = useState(false);
   const isTodaySelected = selectedDate === appToday;
@@ -630,7 +640,12 @@ export default function KitchenPage({
   const [companionFilter, setCompanionFilter] = useState<'all' | 'with' | 'without'>('all'); // has a companion?
 
   // Print queue state
-  const [printingOrders, setPrintingOrders] = useState<any[]>([]);
+  /** The orders behind the sheets currently queued for print. */
+  const [printScope, setPrintScope] = useState<any[]>([]);
+  // Batch meal-ticket sheets: one A4 landscape page per recipient.
+  const [printSheets, setPrintSheets] = useState<Sheet[]>([]);
+  const [sheetPreviewOpen, setSheetPreviewOpen] = useState(false);
+  const [cutGuides, setCutGuides] = useState(true);
 
   // Advance an order along its lifecycle: Submitted -> Printed -> Delivered.
   const advance = (id: string) => {
@@ -652,13 +667,12 @@ export default function KitchenPage({
     toast(newStatus === 'Printed' ? 'Ticket printed' : 'Marked delivered');
   };
 
-  // Print a single ticket (and advance status to Printed if it is Submitted)
-  const printSingle = (order: any) => {
-    // Print the patient and their companion together (patient first).
-    const list = pairList(order, visibleOrders);
-    const ids = list.map((o) => o.id);
+  /* Every print path below goes through the same meal-ticket sheet — one A4
+     landscape page per recipient. What differs is only the scope: one row, the
+     current selection, or the whole day. */
+  const markPrinted = (orders: any[]) => {
     updateFood((d: any) => {
-      list.forEach((src) => {
+      orders.forEach((src: any) => {
         let o = d.orders.find((ord: any) => ord.id === src.id);
         if (!o) {
           d.orders.unshift({ ...src, status: 'Submitted' });
@@ -667,11 +681,28 @@ export default function KitchenPage({
         if (o && o.status === 'Submitted') o.status = 'Printed';
       });
     });
-    void ids;
-    setPrintingOrders(list);
-    setTimeout(() => {
-      window.print();
-    }, 150);
+  };
+
+  const sendSheetsToPrinter = (orders: any[], sheets: Sheet[]) => {
+    markPrinted(orders);
+    setSummaryPrint(false);
+    setPrintSheets(sheets);
+    setSheetPreviewOpen(false);
+    const clear = () => { setPrintSheets([]); window.removeEventListener('afterprint', clear); };
+    window.addEventListener('afterprint', clear);
+    setTimeout(() => window.print(), 200);
+  };
+
+  // Print a single ticket (and advance status to Printed if it is Submitted)
+  const printSingle = (order: any) => {
+    // Print the patient and their companion together (patient first).
+    const list = pairList(order, visibleOrders);
+    const sheets = buildSheets(db, list, selectedDate);
+    if (sheets.length === 0) {
+      toast('No orders to print for this date');
+      return;
+    }
+    sendSheetsToPrinter(list, sheets);
   };
 
   // Mark a single order delivered (works for generated + stored orders)
@@ -700,35 +731,52 @@ export default function KitchenPage({
     toast('Reverted to pending');
   };
 
-  // Bulk Print
-  const bulkPrint = () => {
-    const selected = visibleOrders.filter((o: any) => selectedOrderIds.includes(o.id));
-    if (selected.length === 0) return;
+  // ---- batch meal-ticket sheets ---------------------------------------------
 
-    // Expand each selection to its patient+companion pair, ordered, no duplicates.
-    const toPrint: any[] = [];
-    const added = new Set<string>();
-    selected.forEach((o: any) => {
-      pairList(o, visibleOrders).forEach((p: any) => {
-        if (!added.has(p.id)) { added.add(p.id); toPrint.push(p); }
+  /**
+   * What a print action covers: the selected rows if any are selected, and
+   * otherwise every order for the serving date. Selecting rows and printing
+   * used to go down a different path that ignored the selection — there is now
+   * one path, and it always follows what is ticked.
+   *
+   * A selected row is expanded to its patient+companion pair, so a tray is
+   * never printed without its partner.
+   */
+  const ordersToPrint = (): any[] => {
+    const all = buildOrdersForDate(selectedDate);
+    if (selectedOrderIds.length === 0) return all;
+    const picked = visibleOrders.filter((o: any) => selectedOrderIds.includes(o.id));
+    const out: any[] = [];
+    const seen = new Set<string>();
+    picked.forEach((o: any) => {
+      pairList(o, visibleOrders).forEach((x: any) => {
+        if (!seen.has(x.id)) { seen.add(x.id); out.push(x); }
       });
     });
+    return out;
+  };
 
-    updateFood((d: any) => {
-      toPrint.forEach((src: any) => {
-        let o = d.orders.find((ord: any) => ord.id === src.id);
-        if (!o) {
-          d.orders.unshift({ ...src, status: 'Submitted' });
-          o = d.orders[0];
-        }
-        if (o && o.status === 'Submitted') o.status = 'Printed';
-      });
-    });
+  const openSheetPreview = () => {
+    const orders = ordersToPrint();
+    const sheets = buildSheets(db, orders, selectedDate);
+    if (sheets.length === 0) {
+      toast('No orders to print for this date');
+      return;
+    }
+    setPrintScope(orders);
+    setPrintSheets(sheets);
+    setSheetPreviewOpen(true);
+  };
 
-    setPrintingOrders(toPrint);
-    setTimeout(() => {
-      window.print();
-    }, 150);
+  /** Print the batch, advancing the printed orders to Printed as it goes. */
+  const printSheetBatch = () => {
+    const orders = printScope.length ? printScope : ordersToPrint();
+    const sheets = printSheets.length ? printSheets : buildSheets(db, orders, selectedDate);
+    if (sheets.length === 0) {
+      toast('No orders to print for this date');
+      return;
+    }
+    sendSheetsToPrinter(orders, sheets);
     setSelectedOrderIds([]);
   };
 
@@ -837,14 +885,53 @@ export default function KitchenPage({
     'Nabil Aoun', 'Lina Habib', 'Karim Fouad', 'Mona Saleh', 'Adel Munir',
     'Hana Zayd', 'Sami Rashid', 'Jana Ali', 'Wael Amin', 'Ghada Salim',
   ];
-  const nameForMrn = (mrn: string) =>
-    MOCK_PATIENT_NAMES[mrn] || NAME_POOL[hashStr(String(mrn)) % NAME_POOL.length];
+  /* Bed names come from the patient list the rest of the app joins against, so
+     a printed ticket can resolve the person: their allergies, and whether they
+     are a child (the pediatric ticket decoration). Names invented outside that
+     list matched no patient record, which is why no ticket was ever pediatric
+     and why allergy strips were always empty. NAME_POOL is the fallback for an
+     empty roster only. */
+  const rosterNames: string[] = (db.patients || []).map((x: any) => String(x.name)).filter(Boolean);
+  const nameForMrn = (mrn: string) => {
+    if (MOCK_PATIENT_NAMES[mrn]) return MOCK_PATIENT_NAMES[mrn];
+    const pool = rosterNames.length ? rosterNames : NAME_POOL;
+    return pool[hashStr(String(mrn)) % pool.length];
+  };
+
+  /* Every bed the kitchen serves, order or no order. buildOrdersForDate only
+     yields tickets, so the "Not Ordered" tab reads the roster instead. */
+  const bedRoster = () => {
+    const devRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_devices') : null;
+    const allDevs: any[] = devRaw ? JSON.parse(devRaw) : [];
+    const devices = restrictToWardId && station
+      ? allDevs.filter((d: any) =>
+          station.rooms.some((r: any) => r.source === 'device' && r.deviceId === d.deviceId)
+        )
+      : allDevs;
+    const occRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_manual_room_occupancy') : null;
+    const occupancies: any = occRaw ? JSON.parse(occRaw) : {};
+    const dietsList = db.diets.filter((d: any) => d.on).map((d: any) => d.en);
+    return devices.map((dv: any) => {
+      const occKey = Object.keys(occupancies).find((k) => occupancies[k].mrn === dv.mrn);
+      const occ = occKey ? occupancies[occKey] : null;
+      const seed = hashStr(String(dv.deviceId));
+      return {
+        room: String(dv.roomNo).replace(/[A-Za-z]/g, ''),
+        bed: String(dv.roomNo).replace(/[^A-Za-z]/g, '') || dv.bedNo,
+        name: occ?.name || nameForMrn(dv.mrn),
+        diet: occ?.diet || dietsList[seed % dietsList.length] || 'Regular',
+        floor: String(dv.floor || ''),
+        mrn: dv.mrn,
+      };
+    });
+  };
 
   // Build a realistic kitchen order list for a given service day, one ticket per
-  // device: ~60% of patients "placed an order" (varied real selections), the
-  // rest are auto-filled with the published menu's defaults. Real orders that
-  // already live in db.orders (edited/printed/delivered) take precedence and are
-  // never overwritten. Yesterday is presented as delivered history.
+  // device for the ~60% of patients who placed an order. Every order is placed
+  // by hand — a bed with no order simply has no ticket, and is chased from the
+  // "Not Ordered" tab. Real orders that already live in db.orders
+  // (edited/printed/delivered) take precedence and are never overwritten.
+  // Yesterday is presented as delivered history.
   const buildOrdersForDate = (dateStr: string) => {
     const past = dateStr < appToday;
     const today = dateStr === appToday;
@@ -860,7 +947,6 @@ export default function KitchenPage({
     const occRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_manual_room_occupancy') : null;
     const occupancies: any = occRaw ? JSON.parse(occRaw) : {};
 
-    const menuSet = db.sets.find((s: any) => s.id === 'standard') || db.sets[0];
     const dietsList = db.diets.filter((d: any) => d.on).map((d: any) => d.en);
     const mealsToGen: string[] = db.meals; // all services (Breakfast, Lunch, Dinner)
 
@@ -916,35 +1002,37 @@ export default function KitchenPage({
           if (prevDiet === diet) prevDiet = dietsList[(seed + 2) % dietsList.length];
         }
 
-        const dietMenu = menuSet?.menu?.[diet]?.[meal] || menuSet?.menu?.['Regular']?.[meal] || [];
+        // Nobody is served a meal they did not ask for: no order, no ticket.
+        if (!didOrder) return;
 
-        let lines: [string, string][] = [];
-        if (didOrder) {
-          lines = sections
-            .map((sec: string, si: number) => {
-              const dishes = db.dishes.filter((x: any) => x.section === sec && x.on);
-              if (dishes.length === 0) return null;
-              const pick = dishes[(seed + si * 7) % dishes.length];
-              return [sec, pick.en] as [string, string];
-            })
-            .filter(Boolean) as [string, string][];
-        } else {
-          lines = dietMenu
-            .map((sc: any) => {
-              const def = sc.days?.['Wed']?.def || null;
-              return def ? ([sc.sec, def] as [string, string]) : null;
-            })
-            .filter(Boolean) as [string, string][];
-          if (lines.length === 0) lines = [['Mains', 'Steamed rice'], ['Drinks', 'Water']];
-        }
+        const lines: [string, string][] = sections
+          .map((sec: string, si: number) => {
+            const dishes = db.dishes.filter((x: any) => x.section === sec && x.on);
+            if (dishes.length === 0) return null;
+            const pick = dishes[(seed + si * 7) % dishes.length];
+            return [sec, pick.en] as [string, string];
+          })
+          .filter(Boolean) as [string, string][];
 
         let status: string;
         if (past) status = 'Delivered';
-        else if (today && didOrder) status = ['Submitted', 'Printed', 'Delivered'][seed % 3];
+        else if (today) status = ['Submitted', 'Printed', 'Delivered'][seed % 3];
         else status = 'Submitted';
+
+        /* Whether this bed is a child's. Two sources, because neither alone
+           covers the board: the patient record's pediatric flag when the name
+           resolves to one, and the device's own ward group, which is what
+           actually marks a bed as pediatric on the kiosk roster. Without this
+           no ticket was ever pediatric, since bed names rarely resolve to a
+           patient record at all. */
+        const patientRec = (db.patients || []).find(
+          (x: any) => String(x.name).toLowerCase() === String(name).toLowerCase()
+        );
+        const isKidBed = !!patientRec?.pediatric || String(dv.group || '').toLowerCase() === 'kids';
 
         list.push({
           id: `GEN-${dateStr}-${dv.deviceId}-${meal}`,
+          _pediatric: isKidBed,
           orderNo: 1000 + (seed % 9000),
           name,
           room: roomStr,
@@ -954,7 +1042,6 @@ export default function KitchenPage({
           date: dateStr,
           time: cutoffTime,
           status,
-          isDefaultAutoFill: !didOrder,
           dietChanged,
           prevDiet,
           lines,
@@ -989,7 +1076,6 @@ export default function KitchenPage({
             date: dateStr,
             time: cutoffTime,
             status: past ? 'Delivered' : ['Submitted', 'Printed'][seed % 2],
-            isDefaultAutoFill: false,
             dietChanged: false,
             prevDiet: null,
             lines: cLines,
@@ -1108,225 +1194,6 @@ export default function KitchenPage({
     { Submitted: 0, Printed: 0, Delivered: 0 },
   );
 
-  const viewOrderStatus = () => {
-    const devRaw = typeof window !== 'undefined' ? localStorage.getItem('careinn_devices') : null;
-    const allDevs: any[] = devRaw ? JSON.parse(devRaw) : [];
-
-    const meal = selectedMeals[0] || 'Lunch';
-
-    // One status row per kitchen order (the builder already produces one per
-    // device for the selected day), so this tab stays in sync with the queue.
-    const rows = allOrders.map((o: any) => {
-      const dev = allDevs.find((x: any) =>
-        x.deviceId === o._deviceId ||
-        x.roomNo === `${o.room}${o.bed}` ||
-        (x.roomNo === o.room && x.bedNo === o.bed)
-      ) || {};
-
-      const d = {
-        id: o.id,
-        mrn: o._mrn || dev.mrn || '—',
-        roomNo: o._roomNo || dev.roomNo || `${o.room}${o.bed || ''}`,
-        bedNo: o._bedNo || dev.bedNo || o.bed || '—',
-        floor: o._floor || dev.floor || '—',
-        building: o._building || dev.building || '—',
-        group: o._group || dev.group || '—',
-      };
-
-      const orderStatus: 'ordered' | 'default' | 'pending' = o.isDefaultAutoFill ? 'default' : 'ordered';
-      const displayItems = (o.lines || [])
-        .map((l: any) => (Array.isArray(l) ? l[1] : l?.name))
-        .filter(Boolean);
-
-      return { d, patientName: o.name, diet: o.diet, order: o, orderStatus, displayItems };
-    });
-
-    const counts = {
-      total: rows.length,
-      ordered: rows.filter((r: any) => r.orderStatus === 'ordered').length,
-      default: rows.filter((r: any) => r.orderStatus === 'default').length,
-      pending: rows.filter((r: any) => r.orderStatus === 'pending').length,
-    };
-
-    const q = patientSearch.trim().toLowerCase();
-    // Sort so actionable patients surface first: Not Ordered → Auto-Filled → Ordered,
-    // then by location (room) so it reads like a delivery run.
-    const statusRank: Record<string, number> = { pending: 0, default: 1, ordered: 2 };
-    const filteredRows = rows
-      .filter((r: any) => {
-        const matchStatus = statusFilter === 'all' || r.orderStatus === statusFilter;
-        const matchSearch = !q ||
-          r.patientName.toLowerCase().includes(q) ||
-          String(r.d.mrn).toLowerCase().includes(q) ||
-          String(r.d.roomNo).toLowerCase().includes(q);
-        return matchStatus && matchSearch;
-      })
-      .sort((a: any, b: any) => {
-        const s = statusRank[a.orderStatus] - statusRank[b.orderStatus];
-        if (s !== 0) return s;
-        return String(a.d.roomNo).localeCompare(String(b.d.roomNo), undefined, { numeric: true });
-      });
-
-    const statusChip = (s: 'ordered' | 'default' | 'pending') => {
-      if (s === 'ordered') return { label: 'Ordered', cls: 'bg-green-50 text-green-700 border-green-200' };
-      if (s === 'default') return { label: 'Auto-Filled', cls: 'bg-[#fbf1de] text-[#b9770b] border-[#f0e6cf]' };
-      return { label: 'Not Ordered', cls: 'bg-gray-100 text-gray-600 border-gray-200' };
-    };
-
-    const summaryCards: { key: typeof statusFilter; label: string; value: number; color: string }[] = [
-      { key: 'all', label: 'Total Patients', value: counts.total, color: '#16274D' },
-      { key: 'ordered', label: 'Ordered', value: counts.ordered, color: '#1f9e75' },
-      { key: 'default', label: 'Auto-Filled (Default)', value: counts.default, color: '#b9770b' },
-    ];
-
-    return (
-      <div className="space-y-4 text-left">
-        {/* Cutoff status */}
-        <Card className="p-4 bg-white border border-[#e7e9f0] rounded-[16px]">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-4 flex-wrap">
-              <div className="text-[14px] font-semibold text-[#16274D] flex items-center gap-2">
-                <span>Cutoff:</span>
-                <span className="bg-[#eaf5fa] text-[#0a84b1] px-2.5 py-0.5 rounded-full font-mono text-[13px] border border-[#e7e9f0]">
-                  {cutoffTime}
-                </span>
-              </div>
-              <div className="text-[13px] text-[#5d6678]">
-                Now: <span className="font-semibold text-[#16274D] font-mono">{currentStr}</span>
-              </div>
-              <div className="text-[13px] text-[#5d6678]">
-                Meal: <span className="font-semibold text-[#16274D]">{meal}</span>
-              </div>
-            </div>
-            {isAfterCutoff ? (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-red-50 border border-red-200 text-red-700 font-semibold text-[13px]">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
-                After Cutoff — Defaults Applied
-              </div>
-            ) : (
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-green-50 border border-green-200 text-green-700 font-semibold text-[13px]">
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse" />
-                Before Cutoff — Ordering Open
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* Summary cards double as status filters */}
-        <div className="grid grid-cols-3 gap-3">
-          {summaryCards.map((c) => {
-            const active = statusFilter === c.key;
-            return (
-              <button
-                key={c.key}
-                type="button"
-                onClick={() => setStatusFilter(active && c.key !== 'all' ? 'all' : c.key)}
-                className={cx(
-                  "text-left rounded-[14px] border p-3.5 transition-all cursor-pointer bg-white outline-none",
-                  active ? "border-[#4EBEE3] ring-1 ring-[#4EBEE3] shadow-sm" : "border-[#e7e9f0] hover:border-[#c7d2e0]"
-                )}
-              >
-                <div className="text-[26px] font-bold leading-none" style={{ color: c.color }}>{c.value}</div>
-                <div className="text-[12px] text-[#5d6678] font-medium mt-1">{c.label}</div>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Search toolbar */}
-        <div className="flex items-center gap-2">
-          <input
-            value={patientSearch}
-            onChange={(e) => setPatientSearch(e.target.value)}
-            placeholder="Search patient, room, or MRN…"
-            className="flex-1 h-[40px] px-3 rounded-[10px] border border-[#e7e9f0] text-[13.5px] text-[#16274D] outline-none focus:border-[#4EBEE3] bg-white"
-          />
-          {(statusFilter !== 'all' || q) && (
-            <button
-              type="button"
-              onClick={() => { setStatusFilter('all'); setPatientSearch(''); }}
-              className="h-[40px] px-3 rounded-[10px] border border-[#e7e9f0] text-[13px] text-[#5d6678] hover:text-[#16274D] hover:border-[#c7d2e0] bg-white cursor-pointer"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {/* Patient status table */}
-        <Card className="overflow-hidden">
-          <div className="bg-[#f8fafc] px-5 py-3 border-b border-[#e7e9f0] flex items-center justify-between">
-            <span className="text-[13px] font-bold text-[#5d6678] uppercase tracking-wide">
-              Patient Order Status
-            </span>
-            <span className="text-[12.5px] text-[#5d6678]">
-              Showing <span className="font-semibold text-[#16274D]">{filteredRows.length}</span> of {counts.total}
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <thead>
-                <tr className="bg-white border-b border-[#e7e9f0] text-[11px] uppercase tracking-wide text-[#9099ab]">
-                  <th className="font-semibold px-5 py-2.5">Patient</th>
-                  <th className="font-semibold px-3 py-2.5">Location</th>
-                  <th className="font-semibold px-3 py-2.5">Diet</th>
-                  <th className="font-semibold px-3 py-2.5">Status</th>
-                  <th className="font-semibold px-5 py-2.5">Items</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((r: any) => {
-                  const chip = statusChip(r.orderStatus);
-                  return (
-                    <tr key={r.d.id} className="border-b border-[#eef1f6] last:border-0 hover:bg-[#fcfdfe] transition-colors align-top">
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-[#16274D]/10 flex items-center justify-center text-[#16274D] font-bold text-[12px] shrink-0">
-                            {r.patientName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-semibold text-[#16274D] text-[13.5px] truncate">{r.patientName}</div>
-                            <div className="text-[11.5px] text-[#9099ab]">{r.d.mrn}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3 text-[12.5px] text-[#5d6678] whitespace-nowrap">
-                        <div className="font-medium text-[#16274D]">Room {r.d.roomNo} · Bed {r.d.bedNo}</div>
-                        <div className="text-[11.5px]">Floor {r.d.floor} · Bldg {r.d.building}</div>
-                      </td>
-                      <td className="px-3 py-3 text-[12.5px] text-[#5d6678] whitespace-nowrap">
-                        <div className="font-medium text-[#16274D]">{r.diet}</div>
-                        <div className="text-[11.5px]">{r.d.group}</div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <span className={cx("inline-flex items-center px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold border whitespace-nowrap", chip.cls)}>
-                          {chip.label}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-[12.5px]">
-                        {r.displayItems.length > 0 ? (
-                          <span className="text-[#16274D] font-medium">{r.displayItems.join(' · ')}</span>
-                        ) : (
-                          <span className="text-gray-400 italic">Pending patient selection</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-                {filteredRows.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-10 text-center text-[#9099ab] text-[13px]">
-                      No patients match your search or filter.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      </div>
-    );
-  };
 
   // Kitchen Orders — Table view (mirrors the app's existing table pattern)
   const viewKitchenTable = () => {
@@ -1406,8 +1273,8 @@ export default function KitchenPage({
               <span className={cx("inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-white", isCompanion ? 'bg-[#4EBEE3]' : 'bg-[#16274D]')}>
                 {isCompanion ? 'Companion' : 'Patient'}
               </span>
-              <span className={cx("inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold", o.isDefaultAutoFill ? 'bg-[#EFEAFB] text-[#5B45A0]' : 'bg-[#E5F6FC] text-[#0A7C9E]')}>
-                {o.isDefaultAutoFill ? 'Auto-filled' : 'Submitted'}
+              <span className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#E5F6FC] text-[#0A7C9E]">
+                Submitted
               </span>
             </div>
             <div className="font-semibold text-[#16274D] text-[13px] truncate">{o.name}</div>
@@ -1502,8 +1369,6 @@ export default function KitchenPage({
       setCollapsedMeals((c) => (c.includes(m) ? c.filter((x) => x !== m) : [...c, m]));
     const mealCounts = (rows: any[]) => ({
       total: rows.length,
-      submitted: rows.filter((r) => !r.isDefaultAutoFill).length,
-      autofilled: rows.filter((r) => r.isDefaultAutoFill).length,
       printed: rows.filter((r) => r.status === 'Printed').length,
       delivered: rows.filter((r) => r.status === 'Delivered').length,
     });
@@ -1515,7 +1380,7 @@ export default function KitchenPage({
           <div className="flex flex-wrap items-center justify-between gap-3 mb-3 px-4 py-3 bg-[#eaf7fc] border border-[#bfe6f4] rounded-xl">
             <span className="text-[13.5px] font-semibold text-[#16274D]">{selectedOrderIds.length} selected</span>
             <div className="flex gap-2">
-              <Btn variant="neutral" onClick={bulkPrint}><Printer size={16} /> Print</Btn>
+              <Btn variant="neutral" onClick={openSheetPreview}><Printer size={16} /> Print tickets</Btn>
               <Btn variant="primary" onClick={bulkDeliver}><Check size={16} /> Mark as Delivered</Btn>
               <Btn variant="neutral" onClick={() => setSelectedOrderIds([])}>Clear</Btn>
             </div>
@@ -1596,7 +1461,7 @@ export default function KitchenPage({
                               {collapsed ? <ChevronRight size={16} className="text-[#5d6678]" /> : <ChevronDown size={16} className="text-[#5d6678]" />}
                               <span className="text-[13.5px] font-bold text-[#16274D]">{heading}</span>
                               <span className="text-[12px] font-medium text-[#5d6678]">
-                                — {c.total} total · {c.submitted} submitted · {c.autofilled} auto-filled · {c.printed} printed · {c.delivered} delivered
+                                — {c.total} total · {c.printed} printed · {c.delivered} delivered
                               </span>
                             </div>
                           </td>
@@ -1684,10 +1549,12 @@ export default function KitchenPage({
   const summaryDataFor = (dateStr: string, mealFilter: string) => {
     const orders = buildOrdersForDate(dateStr).filter((o: any) => mealFilter === 'All' || o.meal === mealFilter);
     const flat: DishAgg = {};
+    const byFloor: Record<string, DishAgg> = {};
     const byWard: Record<string, DishAgg> = {};
     const byDiet: Record<string, DishAgg> = {};
     const bySection: Record<string, DishAgg> = {};
     orders.forEach((o: any) => {
+      const floor = orderFloor(o);
       const ward = String(o.room || '—');
       const diet = String(o.diet || 'Regular');
       (o.lines || []).forEach((line: any) => {
@@ -1700,6 +1567,8 @@ export default function KitchenPage({
           bucket[dish].meals[o.meal] = (bucket[dish].meals[o.meal] || 0) + 1;
         };
         add(flat);
+        byFloor[floor] = byFloor[floor] || {};
+        add(byFloor[floor]);
         byWard[ward] = byWard[ward] || {};
         add(byWard[ward]);
         byDiet[diet] = byDiet[diet] || {};
@@ -1709,7 +1578,7 @@ export default function KitchenPage({
       });
     });
     const totalItems = orders.reduce((n: number, o: any) => n + (o.lines?.length || 0), 0);
-    return { orders, flat, byWard, byDiet, bySection, totalItems };
+    return { orders, flat, byFloor, byWard, byDiet, bySection, totalItems };
   };
 
   // Sort a dish map's [dish, agg] entries by any table column.
@@ -1734,11 +1603,367 @@ export default function KitchenPage({
     ['Breakfast', 'Lunch', 'Dinner'].filter((m) => v.meals[m]).map((m) => `${m} ${v.meals[m]}`).join(' · ');
 
   // Daily Summary — a full view (its own tab). Date can be today or up to tomorrow.
+  /* ── "Not ordered" tab ────────────────────────────────────────────────────
+     Who has no order for the chosen service day, so the kitchen can chase them.
+
+     Orders are always placed by hand, so a bed with no ticket for a meal gets
+     no tray — the roster is the source of truth for who exists, and the
+     tickets say who has ordered.
+
+     Companions: there is no companion roster in the data — a companion only
+     exists once they have an order. A bed is therefore treated as having a
+     companion when a companion order exists for it on the chosen day or today,
+     and any of that day's meals without one is reported as not ordered. */
+  const notOrderedRows = useMemo(() => {
+    const dayOrders = buildOrdersForDate(missDate);
+    const todayOrders = missDate === appToday ? dayOrders : buildOrdersForDate(appToday);
+    const rows: any[] = [];
+
+    const patientOrdered = new Set(
+      dayOrders.filter((o: any) => !isCompanionOrder(o)).map((o: any) => `${o.room}|${o.bed}|${o.meal}`)
+    );
+    bedRoster().forEach((b: any) => {
+      (db.meals as string[]).forEach((meal: string) => {
+        if (patientOrdered.has(`${b.room}|${b.bed}|${meal}`)) return;
+        rows.push({
+          key: `p|${b.room}|${b.bed}|${meal}`,
+          kind: 'Patient',
+          name: b.name,
+          room: b.room,
+          bed: b.bed,
+          diet: b.diet,
+          meal,
+          floor: orderFloor({ room: b.room, _floor: b.floor }),
+          ward: orderWard({ room: b.room }),
+          mrn: b.mrn,
+        });
+      });
+    });
+
+    const companionBeds = new Map<string, any>();
+    [...dayOrders, ...todayOrders].filter(isCompanionOrder).forEach((o: any) => {
+      const k = `${o.room}|${o.bed}`;
+      if (!companionBeds.has(k)) companionBeds.set(k, o);
+    });
+    const companionOrdered = new Set(
+      dayOrders.filter(isCompanionOrder).map((o: any) => `${o.room}|${o.bed}|${o.meal}`)
+    );
+    companionBeds.forEach((sample: any, bedKey: string) => {
+      (db.meals as string[]).forEach((meal: string) => {
+        if (companionOrdered.has(`${bedKey}|${meal}`)) return;
+        rows.push({
+          key: `c|${bedKey}|${meal}`,
+          kind: 'Companion',
+          name: basePatientName(sample),
+          room: sample.room,
+          bed: sample.bed,
+          diet: 'Regular',
+          meal,
+          floor: orderFloor(sample),
+          ward: orderWard(sample),
+          mrn: sample._mrn,
+        });
+      });
+    });
+
+    const mealOrder = (m: string) => Math.max(0, (db.meals as string[]).indexOf(m));
+    return rows.sort(
+      (a, b) =>
+        String(a.room).localeCompare(String(b.room), undefined, { numeric: true }) ||
+        String(a.bed).localeCompare(String(b.bed)) ||
+        mealOrder(a.meal) - mealOrder(b.meal) ||
+        a.kind.localeCompare(b.kind)
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [db, missDate, appToday, restrictToWardId, station]);
+
+  const notOrderedFiltered = useMemo(() => {
+    const q = missSearch.trim().toLowerCase();
+    return notOrderedRows.filter((r: any) => {
+      const matchSearch =
+        !q || [r.name, r.room, r.bed, r.meal, r.diet, r.mrn].some((v) => String(v || '').toLowerCase().includes(q));
+      const matchMeal = missMeals.length === 0 || missMeals.includes(r.meal);
+      const matchDiet = missDiets.length === 0 || missDiets.includes(r.diet);
+      const matchRoom = missRooms.length === 0 || missRooms.includes(r.room);
+      const matchFor = missFor.length === 0 || missFor.includes(r.kind);
+      return matchSearch && matchMeal && matchDiet && matchRoom && matchFor;
+    });
+  }, [notOrderedRows, missSearch, missMeals, missDiets, missRooms, missFor]);
+
+  /* One row is one missing meal, so a patient who ordered nothing all day is
+     three rows. Head-counts are distinct people; the row count is meals. */
+  const distinctPeople = (rows: any[], kind: string) =>
+    new Set(rows.filter((r: any) => r.kind === kind).map((r: any) => `${r.room}|${r.bed}|${r.name}`)).size;
+  const notOrderedPatients = distinctPeople(notOrderedFiltered, 'Patient');
+  const notOrderedCompanions = distinctPeople(notOrderedFiltered, 'Companion');
+  const notOrderedPeople =
+    distinctPeople(notOrderedRows, 'Patient') + distinctPeople(notOrderedRows, 'Companion');
+
+  const renderNotOrderedPage = () => {
+    const groups = new Map<string, any[]>();
+    if (missGroupBy === 'none') {
+      groups.set('', notOrderedFiltered);
+    } else {
+      notOrderedFiltered.forEach((r: any) => {
+        const k = missGroupBy === 'floor' ? r.floor : missGroupBy === 'ward' ? r.ward : r.meal;
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k)!.push(r);
+      });
+    }
+    const groupLabel = (k: string) =>
+      missGroupBy === 'floor' ? `Floor ${k}` : missGroupBy === 'ward' ? `Ward ${k}` : k;
+
+    const row = (r: any) => (
+      <div
+        key={r.key}
+        className="flex items-center gap-3 px-4 py-2.5 border-b border-[#eef0f4] last:border-b-0 hover:bg-[#f9fbfd] transition-colors"
+      >
+        <span
+          className={cx(
+            'w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white',
+            r.kind === 'Companion' ? 'bg-[#4EBEE3]' : 'bg-[#16274D]'
+          )}
+        >
+          {r.kind === 'Companion' ? <User size={16} /> : <BedDouble size={16} />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-semibold text-[#16274D] text-[14px] truncate">{r.name}</span>
+            <span
+              className={cx(
+                'shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-white',
+                r.kind === 'Companion' ? 'bg-[#4EBEE3]' : 'bg-[#16274D]'
+              )}
+            >
+              {r.kind}
+            </span>
+          </div>
+          <div className="text-[12px] text-[#9099ab] truncate">
+            {`Room ${r.room}${r.bed ? ` · Bed ${r.bed}` : ''} · Floor ${r.floor} · ${r.diet}`}
+          </div>
+        </div>
+        <span className="shrink-0 px-2.5 py-1 rounded-full bg-[#f0f4f8] text-[#5d6678] text-[12px] font-semibold">
+          {r.meal}
+        </span>
+        <button
+          onClick={() => {
+            // Hand the kiosk the person whose row was clicked, plus the meal and
+            // day this row stands for, so nothing has to be picked twice.
+            setKioskPrefill({
+              name: r.name,
+              room: r.room,
+              bed: r.bed,
+              diet: r.diet,
+              mrn: r.mrn,
+              floor: r.floor,
+              meal: r.meal,
+              day: missDate === appToday ? 'today' : 'tomorrow',
+              eater: r.kind,
+              returnTo: 'food-kitchen',
+              returnLabel: 'Back to Kitchen',
+            });
+            onNavigate('food-kiosk');
+          }}
+          title={`Order ${r.meal} for ${r.name} in the patient kiosk`}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 border border-[#d6dae6] hover:bg-[#f7f8fb] text-[#16274D] rounded-lg text-[12.5px] font-semibold transition-colors cursor-pointer"
+        >
+          <Plus size={14} />
+          Order
+        </button>
+      </div>
+    );
+
+    return (
+      <div className="space-y-4">
+        <Card className="!overflow-visible">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4">
+            <div className="min-w-0">
+              <div className="font-['Poppins',sans-serif] font-semibold text-[18px] text-[#16274D] flex items-center gap-2">
+                <AlertTriangle size={18} className="text-[#e0a106]" /> Not ordered ·{' '}
+                {missDate === appToday ? 'Today' : 'Tomorrow'}
+              </div>
+              <div className="text-[13px] text-[#5d6678] mt-0.5">
+                {fmtDate(missDate)} · {notOrderedPatients} patient{notOrderedPatients === 1 ? '' : 's'} and{' '}
+                {notOrderedCompanions} companion{notOrderedCompanions === 1 ? '' : 's'} with no order ·{' '}
+                {notOrderedFiltered.length} meal{notOrderedFiltered.length === 1 ? '' : 's'} to chase
+              </div>
+              {missDate === appToday && (
+                <div className="text-[12px] text-[#9099ab] mt-0.5">
+                  Today is for patients admitted after the window closed.
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex bg-[#f7f8fb] p-1 rounded-[10px] border border-[#e7e9f0]">
+                {([
+                  { d: appToday, label: 'Today' },
+                  { d: appTomorrow, label: 'Tomorrow' },
+                ] as const).map(({ d, label }) => (
+                  <button
+                    key={label}
+                    onClick={() => setMissDate(d)}
+                    className={cx(
+                      'px-3.5 py-1.5 rounded-[8px] text-[12.5px] font-semibold transition-all cursor-pointer border-none outline-none',
+                      missDate === d ? 'bg-white text-[#16274D] shadow border border-[#e7e9f0]' : 'text-[#5d6678] hover:text-[#16274D]'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="px-5 py-3 bg-[#f8fafc] border-t border-b border-[#e7e9f0] !overflow-visible">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 !overflow-visible">
+              <div>
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
+                  Search
+                </label>
+                <div className="relative">
+                  <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9099ab] pointer-events-none" />
+                  <input
+                    value={missSearch}
+                    onChange={(e) => setMissSearch(e.target.value)}
+                    placeholder="Search patient, room, MRN…"
+                    className="w-full h-[32px] pl-[30px] pr-7 rounded-lg border border-gray-300 text-[11.5px] text-[#16274D] placeholder:text-gray-400 outline-none focus:border-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/50 bg-white"
+                  />
+                  {missSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setMissSearch('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9099ab] hover:text-[#5d6678] cursor-pointer"
+                      aria-label="Clear search"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="relative !overflow-visible">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
+                  Meal Type
+                </label>
+                <MultiSelectDropdown
+                  options={db.meals}
+                  selectedValues={missMeals}
+                  onChange={setMissMeals}
+                  placeholder="All Meals"
+                  className="text-[12px]"
+                />
+              </div>
+              <div className="relative !overflow-visible">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
+                  Diet Type
+                </label>
+                <MultiSelectDropdown
+                  options={db.diets.map((x: any) => x.en)}
+                  selectedValues={missDiets}
+                  onChange={setMissDiets}
+                  placeholder="All Diets"
+                  className="text-[12px]"
+                />
+              </div>
+              <div className="relative !overflow-visible">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
+                  Room/Ward
+                </label>
+                <MultiSelectDropdown
+                  options={uniqueRooms}
+                  selectedValues={missRooms}
+                  onChange={setMissRooms}
+                  placeholder="All Rooms"
+                  className="text-[12px]"
+                />
+              </div>
+              <div className="relative !overflow-visible">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
+                  Order For
+                </label>
+                <MultiSelectDropdown
+                  options={['Patient', 'Companion']}
+                  selectedValues={missFor}
+                  onChange={setMissFor}
+                  placeholder="Patient & Companion"
+                  className="text-[12px]"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Group by */}
+          <div className="px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[12.5px] text-[#5d6678]">
+              Showing <span className="font-semibold text-[#16274D]">{notOrderedFiltered.length}</span> of{' '}
+              {notOrderedRows.length}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-semibold text-[#9099ab]">Group by</span>
+              <div className="flex bg-[#f7f8fb] p-1 rounded-[10px] border border-[#e7e9f0]">
+                {([
+                  { g: 'none', label: 'None' },
+                  { g: 'floor', label: 'Floor' },
+                  { g: 'ward', label: 'Ward' },
+                  { g: 'meal', label: 'Meal' },
+                ] as const).map(({ g, label }) => (
+                  <button
+                    key={g}
+                    onClick={() => setMissGroupBy(g)}
+                    className={cx(
+                      'px-3 py-1 rounded-[8px] text-[12.5px] font-semibold transition-all cursor-pointer border-none outline-none',
+                      missGroupBy === g ? 'bg-white text-[#16274D] shadow border border-[#e7e9f0]' : 'text-[#5d6678] hover:text-[#16274D]'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {notOrderedFiltered.length === 0 ? (
+          <Card>
+            <div className="text-center py-[50px] px-5 text-[#5d6678]">
+              <CheckCircle2 size={48} className="mx-auto text-[#1f9e75]" />
+              <div className="font-semibold text-[#16274D] mt-3">
+                {notOrderedRows.length === 0 ? 'Everyone has ordered for tomorrow' : 'No one matches these filters'}
+              </div>
+              <div className="text-[#5d6678] mt-1">
+                {notOrderedRows.length === 0
+                  ? 'Every patient and companion has a submitted order for tomorrow.'
+                  : 'Clear a filter to see the rest of the list.'}
+              </div>
+            </div>
+          </Card>
+        ) : missGroupBy === 'none' ? (
+          <Card>{notOrderedFiltered.map(row)}</Card>
+        ) : (
+          <div className="space-y-3">
+            {Array.from(groups.entries()).map(([k, rows]) => (
+              <Card key={k}>
+                <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-[#f7f8fb] border-b border-[#e7e9f0]">
+                  <span className="font-semibold text-[#16274D] text-[13.5px]">{groupLabel(k)}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-white border border-[#e7e9f0] text-[#5d6678] text-[12px] font-semibold tabular-nums">
+                    {rows.length}
+                  </span>
+                </div>
+                {rows.map(row)}
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSummaryPage = () => {
-    const { orders: todayOrders, flat, byWard, byDiet, bySection, totalItems } = summaryDataFor(summaryDate, summaryMeal);
+    const { orders: todayOrders, flat, byFloor, byWard, byDiet, bySection, totalItems } = summaryDataFor(summaryDate, summaryMeal);
     const distinctItems = Object.keys(flat).length;
     // The active grouping's map + how to label/sort its groups.
     const groupCfg: Record<string, { map: Record<string, DishAgg>; icon: any; label: (k: string) => string; numeric?: boolean }> = {
+      floor: { map: byFloor, icon: Layers, label: (k) => `Floor ${k}`, numeric: true },
       ward: { map: byWard, icon: BedDouble, label: (k) => `Ward ${k}`, numeric: true },
       diet: { map: byDiet, icon: Salad, label: (k) => `${k} diet` },
       section: { map: bySection, icon: Utensils, label: (k) => k },
@@ -1813,6 +2038,9 @@ export default function KitchenPage({
     };
 
     const printSummary = () => {
+      // Only one thing may be in the print root at a time, or a leftover batch
+      // of meal-ticket sheets prints instead of (or alongside) the summary.
+      setPrintSheets([]);
       setSummaryPrint(true);
       const clear = () => { setSummaryPrint(false); window.removeEventListener('afterprint', clear); };
       window.addEventListener('afterprint', clear);
@@ -1886,6 +2114,7 @@ export default function KitchenPage({
                 <div className="flex bg-[#f7f8fb] p-1 rounded-[10px] border border-[#e7e9f0]">
                   {([
                     { g: 'none', label: 'None' },
+                    { g: 'floor', label: 'Floor' },
                     { g: 'section', label: 'Section' },
                     { g: 'diet', label: 'Diet' },
                     { g: 'ward', label: 'Ward' },
@@ -1992,7 +2221,7 @@ export default function KitchenPage({
         /* Print root lives at the end of <body> via a portal; hidden on screen */
         #careinn-print-root { display: none; }
         @media print {
-          @page { size: A4 portrait; margin: 12mm; }
+          ${printSheets.length > 0 ? '' : '@page { size: A4 portrait; margin: 12mm; }'}
           /* The app has a global rule forcing #root visible (specificity 1,0,2).
              Override it with the SAME selector so only the print root prints. */
           body > div#root,
@@ -2028,6 +2257,13 @@ export default function KitchenPage({
             page-break-after: avoid;
             break-after: avoid;
           }
+          /* A summary group spans pages; only the individual rows must stay
+             whole, and the column head repeats so page 2+ is still readable. */
+          #careinn-print-root tr { break-inside: avoid; page-break-inside: avoid; }
+          #careinn-print-root thead { display: table-header-group; }
+          #careinn-print-root tfoot { display: table-footer-group; }
+          /* Never strand a group heading alone at the foot of a page. */
+          #careinn-print-root .summary-group-head { break-after: avoid; page-break-after: avoid; }
         }
       `}} />
 
@@ -2035,11 +2271,11 @@ export default function KitchenPage({
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm">
         {/* Page header + tabs (CareSign pattern) */}
         <div className="px-6 pt-6">
-          <div className="flex items-center gap-3 mb-5">
+          <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 bg-[#4EBEE3]/10 rounded-lg flex items-center justify-center shrink-0">
               <ChefHat size={20} className="text-[#4EBEE3]" strokeWidth={2} />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <h1 className="text-[22px] font-semibold text-[#16274D] font-['Poppins',sans-serif]">
                 Kitchen
               </h1>
@@ -2047,14 +2283,56 @@ export default function KitchenPage({
                 Review patient meals, dietary alerts, printing and delivery progress.
               </p>
             </div>
+            {/* Queue actions live on the title row — they were costing a whole
+                band of vertical space in a sub-header that only repeated the
+                tab label and the order count. */}
+            {mainTab === 'queue' && allOrders.length > 0 && (
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={openSheetPreview}
+                  title={
+                    selectedOrderIds.length > 0
+                      ? 'Preview and print meal tickets for the selected rows'
+                      : 'Preview and print meal tickets for every order on this serving date'
+                  }
+                  className="flex items-center gap-2 px-4 py-2.5 bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white rounded-xl text-[13px] font-medium transition-colors shadow-sm whitespace-nowrap"
+                >
+                  <Printer size={16} />
+                  {selectedOrderIds.length > 0 ? `Meal tickets · ${selectedOrderIds.length} selected` : 'Meal tickets'}
+                </button>
+                <button
+                  onClick={() => { setKioskPrefill({ returnTo: 'food-kitchen', returnLabel: 'Back to Kitchen' }); onNavigate('food-kiosk'); }}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-[#d6dae6] hover:bg-[#f7f8fb] text-[#16274D] rounded-xl text-[13px] font-medium transition-colors whitespace-nowrap"
+                >
+                  <Plus size={16} />
+                  Add order
+                </button>
+              </div>
+            )}
           </div>
           <PillTabs
             tabs={[
-              { id: 'queue', label: 'Kitchen Queue' },
               { id: 'summary', label: 'Daily Summary' },
+              { id: 'queue', label: 'Kitchen Queue' },
+              {
+                id: 'missing',
+                label: 'Not Ordered',
+                /* The count is the point of the tab — it is what tells the
+                   kitchen whether anyone still needs chasing. */
+                icon: notOrderedPeople > 0 ? (
+                  <span
+                    className={cx(
+                      'min-w-[20px] px-1.5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums',
+                      mainTab === 'missing' ? 'bg-white/25 text-white' : 'bg-[#fff4e5] text-[#b4690e]'
+                    )}
+                  >
+                    {notOrderedPeople}
+                  </span>
+                ) : undefined,
+              },
             ]}
             activeTab={mainTab}
-            onChange={(id) => setMainTab(id as 'queue' | 'summary')}
+            onChange={(id) => setMainTab(id as 'queue' | 'summary' | 'missing')}
           />
         </div>
 
@@ -2063,6 +2341,8 @@ export default function KitchenPage({
 
       {mainTab === 'summary' ? (
         renderSummaryPage()
+      ) : mainTab === 'missing' ? (
+        renderNotOrderedPage()
       ) : (
       <>
       {isHistory && (
@@ -2081,7 +2361,7 @@ export default function KitchenPage({
               Place an order in the patient kiosk and it lands here.
             </div>
             <div className="mt-4 flex justify-center">
-              <Btn variant="primary" onClick={() => onNavigate('food-kiosk')}>
+              <Btn variant="primary" onClick={() => { setKioskPrefill({ returnTo: 'food-kitchen', returnLabel: 'Back to Kitchen' }); onNavigate('food-kiosk'); }}>
                 <Tablet size={16} />
                 Open patient kiosk
               </Btn>
@@ -2092,28 +2372,9 @@ export default function KitchenPage({
         <>
           {/* Header, Filters, and Bulk Actions Card with !overflow-visible to prevent dropdown clipping */}
           <Card className="mb-5 !overflow-visible">
-            <div className="px-5 py-4 border-b border-[#e7e9f0]">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-baseline gap-2 min-w-0">
-                  <span className="font-['Poppins',sans-serif] font-semibold text-[18px] text-[#16274D]">
-                    Kitchen queue
-                  </span>
-                  <span className="text-[13px] text-[#9099ab]">· {allOrders.length} orders</span>
-                </div>
-                {/* Add an order — main action, top-right (CareSign button style) */}
-                <div className="flex-shrink-0">
-                  <button
-                    onClick={() => onNavigate('food-kiosk')}
-                    className="flex items-center gap-2 px-5 py-2.5 bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white rounded-xl text-[13px] font-medium transition-colors shadow-sm whitespace-nowrap"
-                  >
-                    <Plus size={16} />
-                    Add order
-                  </button>
-                </div>
-              </div>
-
-              {/* Workflow status chips */}
-              <div className="flex flex-wrap gap-2 mt-3">
+            <div className="px-5 py-3 border-b border-[#e7e9f0]">
+              {/* Workflow status chips, with the view toggle on the same row */}
+              <div className="flex flex-wrap items-center gap-2">
                 {[
                   { key: 'all' as const, label: 'All', count: allOrders.length, color: '#16274D', bg: '#eef1f6' },
                   { key: 'Submitted' as const, label: 'Ordered', count: counts.Submitted, color: '#0A6CA6', bg: '#E7F3FB' },
@@ -2146,11 +2407,9 @@ export default function KitchenPage({
                     </button>
                   );
                 })}
-              </div>
 
-              {/* Cards/Table view toggle (right) */}
-              <div className="flex flex-wrap items-center justify-end gap-3 mt-3">
-                <div className="flex bg-[#f7f8fb] p-1 rounded-[10px] border border-[#e7e9f0] shrink-0">
+                {/* Cards/Table view toggle — same row, pushed right */}
+                <div className="ml-auto flex bg-[#f7f8fb] p-1 rounded-[10px] border border-[#e7e9f0] shrink-0">
                   {([
                     { key: 'cards' as const, label: 'Cards', icon: LayoutGrid },
                     { key: 'table' as const, label: 'Table', icon: TableIcon },
@@ -2174,31 +2433,38 @@ export default function KitchenPage({
             </div>
 
         {/* Multi-Filter Section — filters left, Date on the right */}
-        <div className="px-5 py-4 bg-[#f8fafc] border-b border-[#e7e9f0] !overflow-visible">
-          {/* Search */}
-          <div className="relative mb-4">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#9099ab] pointer-events-none" />
-            <input
-              value={queueSearch}
-              onChange={(e) => setQueueSearch(e.target.value)}
-              placeholder="Search patient, room, bed, order # or meal…"
-              className="w-full h-[42px] pl-9 pr-9 rounded-[10px] border border-[#e7e9f0] text-[13.5px] text-[#16274D] outline-none focus:border-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20 bg-white"
-            />
-            {queueSearch && (
-              <button
-                type="button"
-                onClick={() => setQueueSearch('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#9099ab] hover:text-[#5d6678] cursor-pointer"
-                aria-label="Clear search"
-              >
-                <X size={16} />
-              </button>
-            )}
+        <div className="px-5 py-3 bg-[#f8fafc] border-b border-[#e7e9f0] !overflow-visible">
+          <div className="flex flex-col lg:flex-row lg:items-end gap-3 !overflow-visible">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 flex-1 !overflow-visible">
+          {/* Search — a cell in the filter grid. The icon is positioned against
+              an inner wrapper that holds only the input, so it centres on the
+              field instead of guessing an offset past the label. */}
+          <div>
+            <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
+              Search
+            </label>
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9099ab] pointer-events-none" />
+              <input
+                value={queueSearch}
+                onChange={(e) => setQueueSearch(e.target.value)}
+                placeholder="Search patient, room, order #…"
+                className="w-full h-[32px] pl-[30px] pr-7 rounded-lg border border-gray-300 text-[11.5px] text-[#16274D] placeholder:text-gray-400 outline-none focus:border-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/50 bg-white"
+              />
+              {queueSearch && (
+                <button
+                  type="button"
+                  onClick={() => setQueueSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#9099ab] hover:text-[#5d6678] cursor-pointer"
+                  aria-label="Clear search"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="flex flex-col lg:flex-row lg:items-end gap-4 !overflow-visible">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 flex-1 !overflow-visible">
               <div className="relative !overflow-visible">
-                <label className="block text-[12px] font-semibold text-[#5d6678] mb-1.5 font-['Poppins',sans-serif]">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
                   Meal Type
                 </label>
                 <MultiSelectDropdown
@@ -2206,10 +2472,11 @@ export default function KitchenPage({
                   selectedValues={selectedMeals}
                   onChange={setSelectedMeals}
                   placeholder="All Meals"
+                  className="text-[12px]"
                 />
               </div>
               <div className="relative !overflow-visible">
-                <label className="block text-[12px] font-semibold text-[#5d6678] mb-1.5 font-['Poppins',sans-serif]">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
                   Diet Type
                 </label>
                 <MultiSelectDropdown
@@ -2217,10 +2484,11 @@ export default function KitchenPage({
                   selectedValues={selectedDiets}
                   onChange={setSelectedDiets}
                   placeholder="All Diets"
+                  className="text-[12px]"
                 />
               </div>
               <div className="relative !overflow-visible">
-                <label className="block text-[12px] font-semibold text-[#5d6678] mb-1.5 font-['Poppins',sans-serif]">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
                   Room/Ward
                 </label>
                 <MultiSelectDropdown
@@ -2228,10 +2496,11 @@ export default function KitchenPage({
                   selectedValues={selectedWards}
                   onChange={setSelectedWards}
                   placeholder="All Rooms"
+                  className="text-[12px]"
                 />
               </div>
               <div className="relative !overflow-visible">
-                <label className="block text-[12px] font-semibold text-[#5d6678] mb-1.5 font-['Poppins',sans-serif]">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
                   Order For
                 </label>
                 <MultiSelectDropdown
@@ -2239,14 +2508,15 @@ export default function KitchenPage({
                   selectedValues={selectedMealFor}
                   onChange={setSelectedMealFor}
                   placeholder="Patient & Companion"
+                  className="text-[12px]"
                 />
               </div>
               <div className="relative !overflow-visible">
-                <label className="block text-[12px] font-semibold text-[#5d6678] mb-1.5 font-['Poppins',sans-serif]">
+                <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
                   Companion Status
                 </label>
                 <SingleSelectDropdown
-                  size="md"
+                  className="text-[12px]"
                   options={[
                     { value: '', label: 'All patients' },
                     { value: 'with', label: 'With companion' },
@@ -2260,29 +2530,29 @@ export default function KitchenPage({
             </div>
             {/* Date — right side */}
             <div className="lg:w-[240px] shrink-0">
-              <label className="block text-[12px] font-semibold text-[#5d6678] mb-1.5 font-['Poppins',sans-serif]">
+              <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
                 Date
               </label>
-              <div className="flex items-center gap-2 h-[42px] px-3 rounded-[10px] border border-[#e7e9f0] bg-white">
-                <Clock size={15} className="text-[#5d6678] shrink-0" />
+              <div className="flex items-center gap-1.5 h-[32px] px-2.5 rounded-lg border border-gray-300 bg-white">
+                <Clock size={13} className="text-[#5d6678] shrink-0" />
                 <input
                   type="date"
                   value={selectedDate}
                   max={appTomorrow}
                   onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-                  className="flex-1 min-w-0 bg-transparent text-[13px] font-semibold text-[#16274D] outline-none cursor-pointer"
+                  className="flex-1 min-w-0 bg-transparent text-[11.5px] font-semibold text-[#16274D] outline-none cursor-pointer"
                 />
                 {selectedDate !== appToday ? (
                   <button
                     onClick={() => setSelectedDate(appToday)}
-                    className="shrink-0 px-2 py-0.5 rounded-[6px] text-[12px] font-semibold text-[#0a84b1] hover:bg-[#eaf5fa] transition-colors cursor-pointer border-none outline-none"
+                    className="shrink-0 px-1.5 py-0.5 rounded-[6px] text-[11px] font-semibold text-[#0a84b1] hover:bg-[#eaf5fa] transition-colors cursor-pointer border-none outline-none"
                   >
                     Today
                   </button>
                 ) : (
                   <button
                     onClick={() => setSelectedDate(appTomorrow)}
-                    className="shrink-0 px-2 py-0.5 rounded-[6px] text-[12px] font-semibold text-[#0a84b1] hover:bg-[#eaf5fa] transition-colors cursor-pointer border-none outline-none"
+                    className="shrink-0 px-1.5 py-0.5 rounded-[6px] text-[11px] font-semibold text-[#0a84b1] hover:bg-[#eaf5fa] transition-colors cursor-pointer border-none outline-none"
                   >
                     Tomorrow
                   </button>
@@ -2351,9 +2621,9 @@ export default function KitchenPage({
                 {selectedOrderIds.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[13px] font-semibold text-[#5d6678]">{selectedOrderIds.length} selected</span>
-                    <Btn variant="neutral" onClick={bulkPrint}>
+                    <Btn variant="neutral" onClick={openSheetPreview}>
                       <Printer size={16} />
-                      Print
+                      Print tickets
                     </Btn>
                     <Btn variant="primary" onClick={bulkDeliver}>
                       <Check size={16} />
@@ -2461,13 +2731,15 @@ export default function KitchenPage({
                         <div className="font-bold text-[13.5px] text-[#16274D]">
                           #{o.orderNo || o.id.replace('ORD-', '')}
                         </div>
+                        {/* Workflow status only. This slot used to show the word
+                            "Companion" for a companion order, which hid whether
+                            that tray had been printed or delivered — and the role
+                            is already on the badge to the left. */}
                         <span
                           className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
-                          style={isCompanion
-                            ? { color: '#5B45A0', backgroundColor: '#EFEAFB' }
-                            : { color: statusMeta.text, backgroundColor: statusMeta.bg }}
+                          style={{ color: statusMeta.text, backgroundColor: statusMeta.bg }}
                         >
-                          {isCompanion ? 'Companion' : statusMeta.label}
+                          {statusMeta.label}
                         </span>
                       </div>
                     </div>
@@ -2676,8 +2948,14 @@ export default function KitchenPage({
       {/* Print rendering area (hidden on screen, visible during browser print) */}
       {typeof document !== 'undefined' && createPortal(
         <div id="careinn-print-root">
+          {printSheets.length > 0 && (
+            <>
+              <MealTicketPrintStyles cutGuides={cutGuides} />
+              {printSheets.map((sh) => <MealSheet key={sh.key} sheet={sh} cutGuides={cutGuides} />)}
+            </>
+          )}
           {summaryPrint && (() => {
-            const { orders, flat, byWard, byDiet, bySection, totalItems } = summaryDataFor(summaryDate, summaryMeal);
+            const { orders, flat, byFloor, byWard, byDiet, bySection, totalItems } = summaryDataFor(summaryDate, summaryMeal);
             const printAll = summaryMeal === 'All';
             const printTable = (agg: any) => (
               <table className="w-full text-[12px] border-collapse">
@@ -2706,6 +2984,7 @@ export default function KitchenPage({
               </table>
             );
             const printGroup: Record<string, { map: Record<string, DishAgg>; label: (k: string) => string; numeric?: boolean }> = {
+              floor: { map: byFloor, label: (k) => `Floor ${k}`, numeric: true },
               ward: { map: byWard, label: (k) => `Ward ${k}`, numeric: true },
               diet: { map: byDiet, label: (k) => `${k} diet` },
               section: { map: bySection, label: (k) => k },
@@ -2726,8 +3005,8 @@ export default function KitchenPage({
                 {groups.map((g) => {
                   const total = Object.values(g.agg).reduce((n: number, v: any) => n + v.total, 0);
                   return (
-                    <div key={g.label} className="mb-4 break-inside-avoid">
-                      <div className="font-bold text-[13.5px] text-[#16274D] mb-1">{g.label} <span className="text-[#9099ab] font-normal">({total})</span></div>
+                    <div key={g.label} className="mb-4">
+                      <div className="font-bold text-[13.5px] text-[#16274D] mb-1 summary-group-head">{g.label} <span className="text-[#9099ab] font-normal">({total})</span></div>
                       {printTable(g.agg)}
                     </div>
                   );
@@ -2735,153 +3014,61 @@ export default function KitchenPage({
               </div>
             );
           })()}
-          {printingOrders.map((o, idx) => {
-            const isCompanion = o.name.toLowerCase().includes('companion');
-            const info = getDeviceAndOccupancy(o, idx);
-
-            // Categorize lines
-            const mealItems: string[] = [];
-            const accompaniments: string[] = [];
-
-            (o.lines || []).forEach(([section, dish]: [string, string]) => {
-              if (isAccompaniment(section, dish)) {
-                accompaniments.push(dish);
-              } else {
-                mealItems.push(dish);
-              }
-            });
-
-            // Fetch patient allergies
-            const patientObj = db.patients.find((p: any) => p.name === o.name);
-            const allergiesList = isCompanion
-              ? 'None'
-              : patientObj && patientObj.allergies.length > 0
-              ? patientObj.allergies.join(', ')
-              : 'None';
-
-            // Accent colour is driven by the DIET, so staff recognise the diet at a glance.
-            // Regular is colour-coded per meal (breakfast/lunch/dinner) like its menu.
-            const accent = dietTone(o.diet, o.meal);
-            const hasAllergy = allergiesList !== 'None';
-            const location = `Room ${o.room}${o.bed ? ` · Bed ${o.bed}` : ''}`;
-            const displayName = isCompanion ? `${basePatientName(o)}'s companion` : (!o._deviceId ? o.name : info.patientName);
-
-            return (
-              <div key={o.id} className="print-ticket-page max-w-[620px] mx-auto font-['Poppins',sans-serif]">
-                <div className="border border-[#e7e9f0] rounded-[16px] bg-white overflow-hidden">
-                  {/* Ticket Header */}
-                  <div
-                    className="flex items-start justify-between gap-3 p-5 border-b border-[#e7e9f0]"
-                    style={accent.headerBg2
-                      ? { background: `linear-gradient(135deg, ${accent.headerBg} 0%, ${accent.headerBg2} 100%)` }
-                      : { backgroundColor: accent.headerBg }}
-                  >
-                    <div className="flex items-center">
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-white bg-[#16274D] shrink-0">
-                        <User size={22} />
-                      </div>
-                      <div className="ml-3.5 text-left">
-                        <div className="font-bold text-[#16274D] text-[17px] leading-tight">
-                          For {displayName}
-                        </div>
-                        <div className="text-[12.5px] text-[#5d6678] font-medium mt-1">{location}</div>
-                        <div className="text-[12.5px] text-[#5d6678] font-medium mt-0.5">
-                          Diet: <span className="font-bold" style={{ color: accent.idText }}>{o.diet}</span> · Allergies:{' '}
-                          <span
-                            className="font-bold"
-                            style={{ color: hasAllergy ? '#C0392B' : '#5d6678' }}
-                          >
-                            {allergiesList}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <span
-                      className="px-3 py-1 rounded-lg font-bold text-[13px] whitespace-nowrap"
-                      style={{ color: accent.idText, backgroundColor: 'rgba(255,255,255,0.7)' }}
-                    >
-                      Order ID: #{o.orderNo || o.id.replace('ORD-', '')}
-                    </span>
-                  </div>
-
-                  {/* Diet-change alert — shown when the diet was changed after submission */}
-                  {o.dietChanged && (
-                    <div className="flex items-center gap-2 px-5 py-2 bg-[#fbf1de] border-b border-[#f0e6cf] text-[#b9770b]">
-                      <AlertTriangle size={14} className="shrink-0" strokeWidth={2.5} />
-                      <span className="text-[12px] font-semibold">
-                        Diet changed after order submission{o.prevDiet ? ` · ${o.prevDiet} → ${o.diet}` : ''}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Ticket Delivery Row */}
-                  <div className="flex items-start gap-3.5 p-5 border-b border-[#e7e9f0]">
-                    <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ backgroundColor: accent.chipBg }}>
-                      <Clock size={17} style={{ color: accent.dot }} />
-                    </div>
-                    <div>
-                      <div className="text-[12.5px] font-semibold" style={{ color: accent.dot }}>Delivery Time</div>
-                      <div className="font-bold text-[#16274D] text-[16px] mt-1">
-                        {o.meal} ({o.meal === 'Breakfast' ? '8:00 AM – 9:00 AM' : o.meal === 'Lunch' ? '1:00 PM – 2:00 PM' : '7:00 PM – 8:00 PM'})
-                      </div>
-                      <div className="text-[13px] text-[#5d6678] mt-0.5">{fmtDate(o.date)}</div>
-                    </div>
-                  </div>
-
-                  {/* Ticket Meal Items Row */}
-                  <div className="flex items-start gap-3.5 p-5 border-b border-[#e7e9f0]">
-                    <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ backgroundColor: accent.chipBg }}>
-                      <Utensils size={17} style={{ color: accent.dot }} />
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-[12.5px] font-semibold" style={{ color: accent.dot }}>Your Meal Items</div>
-                      <ul className="mt-2 space-y-1.5">
-                        {mealItems.map((dish, di) => (
-                          <li key={di} className="flex items-center gap-2.5 text-[15px] font-medium text-[#16274D]">
-                            <span
-                              className="w-2 h-2 rounded-full shrink-0"
-                              style={{ backgroundColor: accent.dots ? accent.dots[di % accent.dots.length] : accent.dot }}
-                            />
-                            {dish}
-                          </li>
-                        ))}
-                        {mealItems.length === 0 && <li className="text-gray-400 italic text-[14px]">None selected</li>}
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* Ticket Extras Row */}
-                  <div className="flex items-center justify-between gap-3 p-5">
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0" style={{ backgroundColor: accent.chipBg }}>
-                        <Soup size={17} style={{ color: accent.dot }} />
-                      </div>
-                      <span className="text-[13px] font-semibold text-[#5d6678]">Comes With Meal</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-end max-w-[60%]">
-                      {accompaniments.map((dish, di) => {
-                        const c = accent.dots ? accent.dots[(di + 1) % accent.dots.length] : accent.pillText;
-                        return (
-                          <span
-                            key={di}
-                            className="px-3 py-1 rounded-lg text-[13px] font-semibold"
-                            style={accent.dots
-                              ? { color: c, backgroundColor: c + '22' }
-                              : { color: accent.pillText, backgroundColor: accent.pillBg }}
-                          >
-                            {dish}
-                          </span>
-                        );
-                      })}
-                      {accompaniments.length === 0 && <span className="text-gray-400 italic text-[13px]">None</span>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>,
         document.body
+      )}
+      {/* Meal-ticket preview — true-size sheets scaled to fit, so what you see
+          is geometrically what prints. */}
+      {sheetPreviewOpen && (
+        <div
+          className="fixed inset-0 bg-[#16274D]/55 z-50 flex flex-col"
+          onClick={() => setSheetPreviewOpen(false)}
+        >
+          <div
+            className="bg-white m-4 rounded-2xl shadow-xl flex flex-col flex-1 min-h-0 font-['Poppins',sans-serif]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-[#eef0f4]">
+              <div className="w-10 h-10 rounded-lg bg-[#4EBEE3]/10 flex items-center justify-center shrink-0">
+                <Printer size={19} className="text-[#4EBEE3]" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-[18px] font-semibold text-[#16274D]">Meal tickets — {fmtDate(selectedDate)}</h2>
+                <p className="text-[13px] text-[#5d6678]">
+                  {printSheets.length} sheet{printSheets.length === 1 ? '' : 's'} ·{' '}
+                  {selectedOrderIds.length > 0
+                    ? `from ${selectedOrderIds.length} selected row${selectedOrderIds.length === 1 ? '' : 's'}`
+                    : 'all orders for this day'}{' '}
+                  · one A4 landscape page per recipient, ordered by floor, room and bed
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-[13px] text-[#16274D] cursor-pointer select-none mr-2">
+                <input
+                  type="checkbox"
+                  checked={cutGuides}
+                  onChange={() => setCutGuides((v) => !v)}
+                  className="w-4 h-4 rounded border-2 border-gray-300 accent-[#4EBEE3] cursor-pointer"
+                />
+                Cutting guides
+              </label>
+              <Btn variant="primary" onClick={printSheetBatch}><Printer size={16} /> Print</Btn>
+              <button
+                onClick={() => setSheetPreviewOpen(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-[10px] text-[#5d6678] hover:bg-[#f7f8fb] cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto bg-[#eef0f4] p-5">
+              <MealTicketPrintStyles cutGuides={cutGuides} />
+              {/* Scaled so a 297mm sheet fits the dialog; transform keeps the
+                  real mm geometry intact underneath. */}
+              <div className="mt-preview" style={{ transform: 'scale(0.62)', transformOrigin: 'top center' }}>
+                {printSheets.map((sh) => <MealSheet key={sh.key} sheet={sh} cutGuides={cutGuides} />)}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
       {editingOrder && renderEditModal()}
     </FoodPage>

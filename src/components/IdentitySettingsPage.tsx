@@ -6,6 +6,7 @@ interface IdentitySettings {
   logo: string | null;
   logoName: string;
   hospitalName: string;
+  hospitalNameAr: string;
   hospitalShortName: string;
   hospitalImage: string | null;
   hospitalImageName: string;
@@ -19,6 +20,7 @@ const defaultSettings: IdentitySettings = {
   logo: null,
   logoName: '',
   hospitalName: 'Dallah Hospital',
+  hospitalNameAr: 'مستشفى دلة',
   hospitalShortName: 'Dallah',
   hospitalImage: null,
   hospitalImageName: '',
@@ -327,6 +329,18 @@ export default function IdentitySettingsPage() {
                     <AlertCircle className="w-3 h-3" /> Hospital name is required
                   </p>
                 )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[13px] font-medium text-[#16274D] font-['Poppins',sans-serif] text-right">اسم المستشفى (Arabic)</label>
+                <input
+                  type="text"
+                  value={settings.hospitalNameAr}
+                  onChange={e => update({ hospitalNameAr: e.target.value })}
+                  placeholder="مثال: مستشفى دلة"
+                  dir="rtl"
+                  className="bg-white border border-gray-200 rounded-xl px-4 py-3 text-[14px] font-['Poppins',sans-serif] text-[#16274D] text-right outline-none transition-all hover:border-[#4EBEE3]/50 focus:border-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20"
+                />
+                <p className="text-[11px] text-[#6B7280]">Printed beside the English name on meal tickets.</p>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[13px] font-medium text-[#16274D] font-['Poppins',sans-serif]">Short Name / Abbreviation</label>

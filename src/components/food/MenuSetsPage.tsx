@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner@2.0.3';
 import {
   useFood, updateFood, resolve, ruleText, DAYS, buildMenu, sectionRule, getLiveSet,
+  setKioskPrefill,
 } from './foodStore';
 import {
   cx, Btn, Toggle, Chip, StatusBadge, Tag, Badge, Note, Metric, Stepper,
@@ -1699,7 +1700,6 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
           />
         ),
       },
-      { name: 'Auto-fill default if no order', desc: 'Fall back to the default dish when no choice made', key: 'autoDefault' },
       { name: 'Allow edits until cutoff', desc: 'Patients can change their order before it closes', key: 'allowEdit' },
     ];
     return (
@@ -1775,7 +1775,7 @@ export default function MenuSetsPage({ onNavigate }: { onNavigate: (route: strin
           right={
             <>
               <Btn variant="neutral" onClick={dupSet}><Copy size={16} /> Duplicate</Btn>
-              <Btn variant="accent" onClick={() => onNavigate('food-kiosk')}><Eye size={16} /> Preview</Btn>
+              <Btn variant="accent" onClick={() => { setKioskPrefill({ returnTo: 'food-sets', returnLabel: 'Back to Menu Sets' }); onNavigate('food-kiosk'); }}><Eye size={16} /> Preview</Btn>
               <Btn variant="primary" onClick={() => setPublishOpen(true)}>
                 <Rocket size={16} /> {published ? 'Re-publish' : 'Publish'}
               </Btn>

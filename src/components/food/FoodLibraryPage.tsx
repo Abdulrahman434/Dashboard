@@ -30,7 +30,7 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, updateFood, ruleText, ruleTextAr } from './foodStore';
+import { useFood, updateFood, ruleText, ruleTextAr, mealServingTime } from './foodStore';
 import {
   cx,
   Btn,
@@ -60,6 +60,15 @@ const blankDish = () => ({ en: '', ar: '', section: 'Mains', allergens: [] as st
 
 // Default Arabic labels for the built-in allergens & meals (data stays plain
 // strings; editable overrides live in db.allergenAr / db.mealMeta).
+// Default when a diet has no print colour yet — deliberately a neutral slate so
+// an unconfigured diet looks unset on the ticket rather than plausibly styled.
+const DIET_COLOR_FALLBACK = '#475569';
+// Starting points for the picker; any hex is still allowed.
+const DIET_COLOR_PRESETS = [
+  '#6B3FA0', '#1F5C93', '#1E6B4D', '#A81E5F',
+  '#9A7620', '#2E7D7B', '#C05A2E', '#8C5E2A',
+  '#B03A48', '#475569',
+];
 const ALLERGEN_AR: Record<string, string> = {
   Milk: 'حليب', Egg: 'بيض', Gluten: 'جلوتين', Nuts: 'مكسرات', Fish: 'سمك',
   Shellfish: 'محار', Soy: 'صويا', Sesame: 'سمسم', Peanut: 'فول سوداني',
@@ -158,6 +167,9 @@ export default function FoodLibraryPage({
     forAll: false,
     regular: '',
     landscape: '',
+    start: '',
+    end: '',
+    color: DIET_COLOR_FALLBACK,
   });
 
   // ---- navigation helpers --------------------------------------------------
@@ -245,10 +257,11 @@ export default function FoodLibraryPage({
         const arName = (addForm.ar || '').trim();
         const exists = d.diets.some((x: any, i: number) => i !== editIdx && x.en.toLowerCase() === enName.toLowerCase());
         if (exists) return;
+        const color = (addForm.color || DIET_COLOR_FALLBACK).trim();
         if (editIdx != null) {
-          d.diets[editIdx] = { ...d.diets[editIdx], en: enName, ar: arName, his: (addForm.code || '').trim(), on: addForm.active };
+          d.diets[editIdx] = { ...d.diets[editIdx], en: enName, ar: arName, his: (addForm.code || '').trim(), on: addForm.active, color };
         } else {
-          d.diets.push({ en: enName, ar: arName, his: (addForm.code || '').trim(), on: addForm.active });
+          d.diets.push({ en: enName, ar: arName, his: (addForm.code || '').trim(), on: addForm.active, color });
         }
         success = true;
       } else if (tab === 'allergens') {
@@ -269,7 +282,7 @@ export default function FoodLibraryPage({
         const exists = d.meals.some((x: string, i: number) => i !== editIdx && x.toLowerCase() === enName.toLowerCase());
         if (exists) return;
         if (!d.mealMeta) d.mealMeta = {};
-        const meta = { ar: (addForm.ar || '').trim(), regular: addForm.regular || '', landscape: addForm.landscape || '' };
+        const meta = { ar: (addForm.ar || '').trim(), regular: addForm.regular || '', landscape: addForm.landscape || '', start: (addForm.start || '').trim(), end: (addForm.end || '').trim() };
         if (editIdx != null) {
           const oldName = d.meals[editIdx];
           d.meals[editIdx] = enName;
@@ -285,7 +298,7 @@ export default function FoodLibraryPage({
     if (success) {
       toast.success(editIdx != null ? `${enName} updated` : `${enName} added successfully`);
       if (keepOpen && editIdx == null) {
-        setAddForm({ en: '', ar: '', code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '' });
+        setAddForm({ en: '', ar: '', code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '', start: '', end: '', color: DIET_COLOR_FALLBACK });
       } else {
         setAddModalOpen(false);
         setEditIdx(null);
@@ -476,29 +489,30 @@ export default function FoodLibraryPage({
 
   const openEditSection = (s: any, i: number) => {
     setEditIdx(i);
-    setAddForm({ en: s.en, ar: s.ar || '', code: '', active: s.on, min: s.min ?? 1, max: s.max ?? 1, forAll: !!s.forAll, regular: '', landscape: '' });
+    setAddForm({ en: s.en, ar: s.ar || '', code: '', active: s.on, min: s.min ?? 1, max: s.max ?? 1, forAll: !!s.forAll, regular: '', landscape: '', start: '', end: '', color: DIET_COLOR_FALLBACK });
     setAddModalOpen(true);
   };
   const openEditDiet = (dt: any, i: number) => {
     setEditIdx(i);
-    setAddForm({ en: dt.en, ar: dt.ar || '', code: dt.his || '', active: dt.on, min: 1, max: 1, forAll: false, regular: '', landscape: '' });
+    setAddForm({ en: dt.en, ar: dt.ar || '', code: dt.his || '', active: dt.on, min: 1, max: 1, forAll: false, regular: '', landscape: '', start: '', end: '', color: dt.color || DIET_COLOR_FALLBACK });
     setAddModalOpen(true);
   };
   const openEditName = (name: string, i: number) => {
     setEditIdx(i);
-    setAddForm({ en: name, ar: '', code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '' });
+    setAddForm({ en: name, ar: '', code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '', start: '', end: '', color: DIET_COLOR_FALLBACK });
     setAddModalOpen(true);
   };
   const openEditAllergen = (name: string, i: number) => {
     setEditIdx(i);
     const ar = (db.allergenAr && db.allergenAr[name]) || ALLERGEN_AR[name] || '';
-    setAddForm({ en: name, ar, code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '' });
+    setAddForm({ en: name, ar, code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '', start: '', end: '', color: DIET_COLOR_FALLBACK });
     setAddModalOpen(true);
   };
   const openEditMeal = (name: string, i: number) => {
     setEditIdx(i);
     const meta = (db.mealMeta && db.mealMeta[name]) || {};
-    setAddForm({ en: name, ar: meta.ar || MEAL_AR[name] || '', code: '', active: true, min: 1, max: 1, forAll: false, regular: meta.regular || '', landscape: meta.landscape || '' });
+    const svc = mealServingTime(db, name);
+    setAddForm({ en: name, ar: meta.ar || MEAL_AR[name] || '', code: '', active: true, min: 1, max: 1, forAll: false, regular: meta.regular || '', landscape: meta.landscape || '', start: svc.start, end: svc.end });
     setAddModalOpen(true);
   };
   const refDeleteLabel = (): string => {
@@ -1235,7 +1249,7 @@ export default function FoodLibraryPage({
               variant="primary"
               onClick={() => {
                 setEditIdx(null);
-                setAddForm({ en: '', ar: '', code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '' });
+                setAddForm({ en: '', ar: '', code: '', active: true, min: 1, max: 1, forAll: false, regular: '', landscape: '', start: '', end: '', color: DIET_COLOR_FALLBACK });
                 setAddModalOpen(true);
               }}
             >
@@ -1319,6 +1333,18 @@ export default function FoodLibraryPage({
               { label: 'Name (EN)', sortKey: 'en', sortVal: (dt: any) => String(dt.en || '').toLowerCase(), cell: (dt: any) => <span className="font-medium text-[#19233a] text-[13.5px]">{dt.en}</span> },
               { label: 'Name (AR)', className: 'text-right', sortKey: 'ar', sortVal: (dt: any) => String(dt.ar || ''), cell: (dt: any) => arNameCell(dt.ar) },
               { label: 'HIS code', sortKey: 'his', sortVal: (dt: any) => String(dt.his || '').toLowerCase(), cell: (dt: any) => <Badge tone="info" className="font-mono">{dt.his}</Badge> },
+              { label: 'Print colour', sortKey: 'color', sortVal: (dt: any) => String(dt.color || ''), cell: (dt: any) => {
+                const c = dt.color || DIET_COLOR_FALLBACK;
+                const set = !!dt.color;
+                return (
+                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                    <span className="w-[18px] h-[18px] rounded-[5px] border border-black/10 shrink-0" style={{ backgroundColor: c }} />
+                    <span className={cx('text-[12.5px] font-mono uppercase', set ? 'text-[#5d6678]' : 'text-[#9099ab] italic')}>
+                      {c}{!set && ' (unset)'}
+                    </span>
+                  </span>
+                );
+              } },
               { label: 'Status', sortKey: 'on', sortVal: (dt: any) => (dt.on ? 1 : 0), cell: (dt: any, i: number) => (
                 <Toggle on={dt.on} onClick={() => updateFood((d: any) => { d.diets[i].on = !d.diets[i].on; })} />
               ) },
@@ -1373,6 +1399,15 @@ export default function FoodLibraryPage({
                 );
               } },
               { label: 'Name (AR)', className: 'text-right', sortKey: 'ar', sortVal: (m: string) => String((db.mealMeta?.[m]?.ar) || MEAL_AR[m] || ''), cell: (m: string) => arNameCell((db.mealMeta?.[m]?.ar) || MEAL_AR[m] || '') },
+              { label: 'Serving time', sortKey: 'serving', sortVal: (m: string) => mealServingTime(db, m).start, cell: (m: string) => {
+                const svc = mealServingTime(db, m);
+                const set = !!(db.mealMeta?.[m]?.start || db.mealMeta?.[m]?.end);
+                return (
+                  <span className={cx('text-[13px] whitespace-nowrap', set ? 'text-[#5d6678]' : 'text-[#9099ab] italic')}>
+                    {svc.start} – {svc.end}{!set && ' (default)'}
+                  </span>
+                );
+              } },
               { label: 'Order', sortKey: 'order', sortVal: (_m: string, i: number) => i, cell: (_m: string, i: number) => <span className="text-[13px] text-[#5d6678] whitespace-nowrap">order #{i + 1}</span> },
             ],
             (m: string, i: number) => openEditMeal(m, i),
@@ -1380,7 +1415,7 @@ export default function FoodLibraryPage({
           )}
           <div className="p-5">
             <Note tone="info" icon={<Clock size={16} />}>
-              Meals share one ordering window in this hospital — set it inside each menu set.
+              The serving window above is what prints on the meal ticket. The ordering cut-off is separate — meals share one in this hospital, set inside each menu set.
             </Note>
           </div>
         </>
@@ -1434,6 +1469,29 @@ export default function FoodLibraryPage({
               <div>
                 <label className="block text-[13px] font-medium text-[#0f1729] mb-1.5 text-right">Name (Arabic) <span className="text-red-500">*</span></label>
                 <input type="text" value={addForm.ar} onChange={(e) => setAddForm((f) => ({ ...f, ar: e.target.value }))} className={cx(modalInput, 'text-right')} placeholder="اسم الوجبة" dir="rtl" />
+              </div>
+            </div>
+          </section>
+
+          {/* Serving window — the time the meal reaches the patient, printed on
+              every meal ticket. Distinct from the ordering cut-off, which is
+              set per menu set. */}
+          <section className="rounded-xl border border-gray-200 p-4">
+            <div className="flex items-center gap-3 mb-4">
+              {sectionIcon(Clock)}
+              <div>
+                <h3 className="text-[16px] font-semibold text-[#16274D]">Serving window</h3>
+                <p className="text-[13px] text-[#5d6678]">Printed on the meal ticket. This is when the meal is served, not the ordering cut-off.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[13px] font-medium text-[#0f1729] mb-1.5">Starts</label>
+                <input type="text" value={addForm.start} onChange={(e) => setAddForm((f) => ({ ...f, start: e.target.value }))} className={modalInput} placeholder="e.g. 8:00 AM" />
+              </div>
+              <div>
+                <label className="block text-[13px] font-medium text-[#0f1729] mb-1.5">Ends</label>
+                <input type="text" value={addForm.end} onChange={(e) => setAddForm((f) => ({ ...f, end: e.target.value }))} className={modalInput} placeholder="e.g. 9:00 AM" />
               </div>
             </div>
           </section>
@@ -1594,6 +1652,57 @@ export default function FoodLibraryPage({
                   className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a] font-mono"
                   placeholder="e.g. DIAB_01"
                 />
+              </div>
+              <div className="border-t border-[#e7e9f0] mt-1 pt-3">
+                <label className="block text-[12px] text-[#5d6678] mb-1 font-medium">Print colour</label>
+                <p className="text-[12px] text-[#9099ab] mb-2">
+                  Used for this diet's meal tickets. Pediatric decoration is separate — a child on
+                  this diet still gets the playful ticket.
+                </p>
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="color"
+                    value={addForm.color}
+                    onChange={(e) => setAddForm((f) => ({ ...f, color: e.target.value }))}
+                    className="w-[46px] h-[38px] p-1 border border-[#d6dae6] rounded-[8px] bg-white cursor-pointer shrink-0"
+                    title="Pick a colour"
+                  />
+                  <input
+                    type="text"
+                    value={addForm.color}
+                    onChange={(e) => setAddForm((f) => ({ ...f, color: e.target.value }))}
+                    className="w-[110px] h-[38px] px-3 border border-[#d6dae6] rounded-[8px] bg-white text-[13.5px] text-[#19233a] font-mono uppercase"
+                    placeholder="#6B3FA0"
+                  />
+                  <div className="flex flex-wrap gap-1.5">
+                    {DIET_COLOR_PRESETS.map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setAddForm((f) => ({ ...f, color: c }))}
+                        title={c}
+                        className={cx(
+                          'w-[22px] h-[22px] rounded-[6px] cursor-pointer transition-transform hover:scale-110',
+                          addForm.color.toLowerCase() === c.toLowerCase()
+                            ? 'ring-2 ring-offset-1 ring-[#16274D]'
+                            : 'border border-black/10',
+                        )}
+                        style={{ backgroundColor: c }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                {/* Shows the colour doing its actual job, not just as a swatch. */}
+                <div className="mt-3 rounded-[8px] overflow-hidden border border-[#e7e9f0] max-w-[300px]">
+                  <div className="px-3 py-2 text-white text-[13px] font-semibold flex items-center justify-between" style={{ backgroundColor: addForm.color }}>
+                    <span>BREAKFAST</span>
+                    <span dir="rtl">افطار</span>
+                  </div>
+                  <div className="px-3 py-1.5 text-[12px] flex items-center justify-between" style={{ backgroundColor: addForm.color + '14', color: addForm.color }}>
+                    <span className="font-semibold uppercase">{addForm.en || 'Diet name'}</span>
+                    <span dir="rtl" className="font-semibold">{addForm.ar || 'اسم الحمية'}</span>
+                  </div>
+                </div>
               </div>
               <div className="flex items-center justify-between py-1 border-t border-[#e7e9f0] mt-1 pt-3">
                 <span className="text-[13.5px] font-medium text-[#19233a]">Active</span>

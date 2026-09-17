@@ -30,6 +30,89 @@ export function sectionRule(db: any, sectionName: string): { min: number; max: n
   return { min: 1, max: 1, forAll: false };
 }
 
+/* Kitchen → Kiosk hand-off. The Kitchen's "Not Ordered" tab names the person
+   whose row was clicked; the kiosk consumes it once, on arrival. Kept out of
+   `db` because it is navigation intent, not data. */
+export type KioskPrefill = {
+  /** Omitted when the hand-off is only "open the kiosk, and let me back out". */
+  name?: string;
+  room?: string;
+  bed?: string;
+  diet?: string;
+  mrn?: string;
+  floor?: string;
+  meal?: string;
+  day?: 'today' | 'tomorrow';
+  eater?: 'Patient' | 'Companion';
+  /** Route to offer as a way back, and what to call it. */
+  returnTo?: string;
+  returnLabel?: string;
+};
+
+let _kioskPrefill: KioskPrefill | null = null;
+
+export function setKioskPrefill(v: KioskPrefill | null) {
+  _kioskPrefill = v;
+}
+
+export function takeKioskPrefill(): KioskPrefill | null {
+  const v = _kioskPrefill;
+  _kioskPrefill = null;
+  return v;
+}
+
+// ---- printed meal ticket lookups -------------------------------------------
+
+// Fallback serving windows, used until a meal is given explicit times in
+// Reference Lists. Kept here so the ticket and any preview agree.
+const MEAL_TIME_DEFAULT: Record<string, { start: string; end: string }> = {
+  Breakfast: { start: '8:00 AM', end: '9:00 AM' },
+  Lunch: { start: '1:00 PM', end: '2:00 PM' },
+  Dinner: { start: '7:00 PM', end: '8:00 PM' },
+};
+
+const MEAL_AR_DEFAULT: Record<string, string> = {
+  Breakfast: 'افطار', Lunch: 'غداء', Dinner: 'عشاء',
+};
+
+// The diet's editable print colour. Unknown or uncoloured diets fall back to
+// slate rather than inventing one, so a missing colour is visible, not silent.
+export function dietColor(db: any, dietName: string): string {
+  const dt = (db.diets || []).find((x: any) => x.en === dietName);
+  return (dt && dt.color) || '#475569';
+}
+
+export function dietAr(db: any, dietName: string): string {
+  const dt = (db.diets || []).find((x: any) => x.en === dietName);
+  return (dt && dt.ar) || '';
+}
+
+export function sectionAr(db: any, sectionName: string): string {
+  const s = (db.sections || []).find((x: any) => x.en === sectionName);
+  return (s && s.ar) || '';
+}
+
+export function allergenAr(db: any, allergen: string): string {
+  return (db.allergenAr && db.allergenAr[allergen]) || '';
+}
+
+export function mealAr(db: any, meal: string): string {
+  return (db.mealMeta && db.mealMeta[meal] && db.mealMeta[meal].ar) || MEAL_AR_DEFAULT[meal] || '';
+}
+
+// Serving window for a meal, as shown on the ticket — not the ordering cut-off.
+export function mealServingTime(db: any, meal: string): { start: string; end: string } {
+  const m = (db.mealMeta && db.mealMeta[meal]) || {};
+  const def = MEAL_TIME_DEFAULT[meal] || { start: '', end: '' };
+  return { start: m.start || def.start, end: m.end || def.end };
+}
+
+// Patient record by name, the join used by every ticket field that isn't on the
+// order itself (MRN, floor, pediatric flag, allergies).
+export function patientByName(db: any, name: string): any {
+  return (db.patients || []).find((p: any) => p.name === name);
+}
+
 function d(en: string, ar: string, section: string, allergens: string[]): any {
   return { en, ar, section, allergens, on: true };
 }
@@ -40,10 +123,24 @@ function SEED(): any {
     meals: ['Breakfast', 'Lunch', 'Dinner'],
     // Per-meal metadata keyed by meal name: editable Arabic + images (base64).
     // Kept separate so `meals` stays a plain string[] referenced by name everywhere.
-    mealMeta: {} as Record<string, { ar?: string; regular?: string; landscape?: string }>,
-    // Editable Arabic override for allergens, keyed by English allergen name.
-    allergenAr: {} as Record<string, string>,
-    win: { serviceDay: 'Tomorrow only', open: '4:00 PM', close: '8:00 PM', sameAll: true, autoDefault: true, allowEdit: true },
+    // `start`/`end` are the SERVING window shown on the printed meal ticket —
+    // distinct from `win` below, which is the ordering cut-off.
+    mealMeta: {} as Record<string, { ar?: string; regular?: string; landscape?: string; start?: string; end?: string }>,
+    // Arabic name per allergen, keyed by the English name (which is the id used
+    // on dishes and patient records). Editable in Reference Lists; seeded so the
+    // printed allergy strip is bilingual out of the box.
+    allergenAr: {
+      Milk: 'حليب',
+      Egg: 'بيض',
+      Gluten: 'جلوتين',
+      Nuts: 'مكسرات',
+      Fish: 'أسماك',
+      Shellfish: 'محار وقشريات',
+      Soy: 'صويا',
+      Sesame: 'سمسم',
+      Peanut: 'فول سوداني',
+    } as Record<string, string>,
+    win: { serviceDay: 'Tomorrow only', open: '4:00 PM', close: '8:00 PM', sameAll: true, allowEdit: true },
     sections: [
       { en: 'Cereals', ar: 'حبوب الإفطار', on: true, min: 1, max: 1, forAll: false },
       { en: 'Eggs', ar: 'بيض', on: true, min: 1, max: 1, forAll: false },
@@ -56,15 +153,17 @@ function SEED(): any {
       { en: 'Dessert', ar: 'حلويات', on: true, min: 1, max: 1, forAll: false },
       { en: 'Drinks', ar: 'مشروبات', on: true, min: 1, max: 1, forAll: false },
     ],
+    // `color` is the diet's print colour — one editable hex per diet, used for
+    // the ticket header and group accents. Pediatric decoration is separate.
     diets: [
-      { en: 'Regular', ar: 'عادي', his: '577365', reg: true, on: true },
-      { en: 'Diabetic', ar: 'سكري', his: '577365-DM', on: true },
-      { en: 'Low sodium', ar: 'قليل الصوديوم', his: '577365-LS', on: true },
-      { en: 'Low potassium', ar: 'قليل البوتاسيوم', his: '577365-LK', on: true },
-      { en: 'Soft diet', ar: 'طعام طري', his: '577365-SOFT', on: true },
-      { en: 'Chemotherapy', ar: 'علاج كيماوي', his: '577365-CH', on: true },
-      { en: 'Kids', ar: 'أطفال', his: '577365-KD', on: true },
-      { en: 'OB / maternity', ar: 'ولادة', his: '577365-OB', on: true },
+      { en: 'Regular', ar: 'عادي', his: '577365', reg: true, on: true, color: '#6B3FA0' },
+      { en: 'Diabetic', ar: 'سكري', his: '577365-DM', on: true, color: '#1F5C93' },
+      { en: 'Low sodium', ar: 'قليل الصوديوم', his: '577365-LS', on: true, color: '#1E6B4D' },
+      { en: 'Low potassium', ar: 'قليل البوتاسيوم', his: '577365-LK', on: true, color: '#A81E5F' },
+      { en: 'Soft diet', ar: 'طعام طري', his: '577365-SOFT', on: true, color: '#9A7620' },
+      { en: 'Chemotherapy', ar: 'علاج كيماوي', his: '577365-CH', on: true, color: '#2E7D7B' },
+      { en: 'Kids', ar: 'أطفال', his: '577365-KD', on: true, color: '#C05A2E' },
+      { en: 'OB / maternity', ar: 'ولادة', his: '577365-OB', on: true, color: '#8C5E2A' },
     ],
     dishes: [
       d('Cornflakes', 'رقائق الذرة', 'Cereals', ['Gluten']),
@@ -112,21 +211,23 @@ function SEED(): any {
       { id: 'ramadan', name: 'Ramadan 2026', nameAr: 'رمضان 2026', status: 'Draft', sub: '8 diets · suhoor and iftar · not published yet', edited: '5h ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '', activeTo: '' },
       { id: 'eid', name: 'Eid special', nameAr: 'عيد خاص', status: 'Scheduled', sub: '8 diets · 3 meals · starts 16 Jun', edited: '1w ago', groups: ['Kids', 'Adults', 'VIP'], activeFrom: '2026-06-16', activeTo: '' },
     ],
+    // `mrn` prints on the ticket; `pediatric` is an explicit flag driving the
+    // playful ticket decoration, independent of which diet the child is on.
     patients: [
-      { name: 'Ahmed Al-Salem', room: '312', bed: 'A', floor: '3', building: 'A', diet: 'Low sodium', allergies: [] },
-      { name: 'Sara Hassan', room: '305', bed: 'B', floor: '3', building: 'A', diet: 'Diabetic', allergies: ['Nuts'] },
-      { name: 'Khalid Al-Otaibi', room: '210', bed: 'A', floor: '2', building: 'A', diet: 'Soft diet', allergies: ['Milk'] },
-      { name: 'Maryam Saleh', room: '418', bed: 'C', floor: '4', building: 'B', diet: 'Regular', allergies: ['Fish', 'Shellfish'] },
-      { name: 'Fatima Noor', room: '401', bed: 'A', floor: '4', building: 'B', diet: 'Diabetic', allergies: [] },
-      { name: 'Omar Said', room: '208', bed: 'B', floor: '2', building: 'A', diet: 'Regular', allergies: ['Egg'] },
-      { name: 'Layla Ibrahim', room: '316', bed: 'B', floor: '3', building: 'A', diet: 'Low sodium', allergies: ['Gluten'] },
-      { name: 'Yousef Al-Harbi', room: '223', bed: 'A', floor: '2', building: 'A', diet: 'Soft diet', allergies: [] },
-      { name: 'Noura Al-Qahtani', room: '410', bed: 'A', floor: '4', building: 'B', diet: 'Regular', allergies: ['Milk', 'Soy'] },
-      { name: 'Hassan Ali', room: '507', bed: 'C', floor: '5', building: 'B', diet: 'Diabetic', allergies: ['Nuts'] },
-      { name: 'Aisha Mohammed', room: '119', bed: 'A', floor: '1', building: 'A', diet: 'Regular', allergies: [] },
-      { name: 'Tariq Zaid', room: '514', bed: 'B', floor: '5', building: 'B', diet: 'Low sodium', allergies: ['Shellfish'] },
-      { name: 'Reem Al-Dosari', room: '327', bed: 'C', floor: '3', building: 'A', diet: 'Soft diet', allergies: [] },
-      { name: 'Sami Al-Ghamdi', room: '105', bed: 'B', floor: '1', building: 'A', diet: 'Regular', allergies: ['Fish'] },
+      { name: 'Ahmed Al-Salem', room: '312', bed: 'A', floor: '3', building: 'A', diet: 'Low sodium', allergies: [], mrn: '20046317', nameAr: 'احمد السالم' },
+      { name: 'Sara Hassan', room: '305', bed: 'B', floor: '3', building: 'A', diet: 'Diabetic', allergies: ['Nuts'], mrn: '20058879', nameAr: 'سارة حسن' },
+      { name: 'Khalid Al-Otaibi', room: '210', bed: 'A', floor: '2', building: 'A', diet: 'Soft diet', allergies: ['Milk'], mrn: '20059016', nameAr: 'خالد العتيبي' },
+      { name: 'Maryam Saleh', room: '418', bed: 'C', floor: '4', building: 'B', diet: 'Regular', allergies: ['Fish', 'Shellfish'], mrn: '20059153', nameAr: 'مريم صالح' },
+      { name: 'Fatima Noor', room: '401', bed: 'A', floor: '4', building: 'B', diet: 'Diabetic', allergies: [], mrn: '20059290', nameAr: 'فاطمة نور' },
+      { name: 'Omar Said', room: '208', bed: 'B', floor: '2', building: 'A', diet: 'Regular', allergies: ['Egg'], mrn: '20059427', nameAr: 'عمر سعيد' },
+      { name: 'Layla Ibrahim', room: '316', bed: 'B', floor: '3', building: 'A', diet: 'Low sodium', allergies: ['Gluten'], mrn: '20059564', nameAr: 'ليلى إبراهيم' },
+      { name: 'Yousef Al-Harbi', room: '223', bed: 'A', floor: '2', building: 'A', diet: 'Soft diet', allergies: [], mrn: '20059701', nameAr: 'يوسف الحربي' },
+      { name: 'Noura Al-Qahtani', room: '410', bed: 'A', floor: '4', building: 'B', diet: 'Regular', allergies: ['Milk', 'Soy'], mrn: '20059838', nameAr: 'نورة القحطاني' },
+      { name: 'Hassan Ali', room: '507', bed: 'C', floor: '5', building: 'B', diet: 'Diabetic', allergies: ['Nuts'], mrn: '20059975', nameAr: 'حسن علي' },
+      { name: 'Aisha Mohammed', room: '119', bed: 'A', floor: '1', building: 'A', diet: 'Regular', allergies: [], mrn: '20060112', nameAr: 'عائشة محمد' },
+      { name: 'Tariq Zaid', room: '514', bed: 'B', floor: '5', building: 'B', diet: 'Low sodium', allergies: ['Shellfish'], mrn: '20060249', nameAr: 'طارق زيد' },
+      { name: 'Reem Al-Dosari', room: '327', bed: 'C', floor: '3', building: 'A', diet: 'Soft diet', allergies: [], mrn: '20060386', pediatric: true, nameAr: 'ريم الدوسري' },
+      { name: 'Sami Al-Ghamdi', room: '105', bed: 'B', floor: '1', building: 'A', diet: 'Regular', allergies: ['Fish'], mrn: '20060523', pediatric: true, nameAr: 'سامي الغامدي' },
     ],
     orders: [
       {

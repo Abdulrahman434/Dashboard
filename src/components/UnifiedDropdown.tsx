@@ -108,9 +108,9 @@ export function SingleSelectDropdown({
         type="button"
         onClick={toggleOpen}
         disabled={disabled}
-        className={`w-full ${size === 'md' ? 'px-4 py-2.5' : 'px-3 py-1.5'} border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
+        className={`w-full ${size === 'md' ? 'px-4 py-2.5' : compact ? 'px-2.5 py-1 h-[32px]' : 'px-3 py-1.5'} border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
           disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-400'
-        } ${!value ? 'text-gray-400' : 'text-[#16274D]'} ${className.includes('text-[12px]') ? 'text-[12px]' : 'text-[14px]'}`}
+        } ${!value ? 'text-gray-400' : 'text-[#16274D]'} ${compact ? 'text-[11.5px]' : 'text-[14px]'}`}
       >
         <span className="truncate">{displayText}</span>
         <ChevronDown 
@@ -248,6 +248,7 @@ export function MultiSelectDropdown({
         .join(', ');
 
   const allSelected = selectedValues.length === normalizedOptions.length && normalizedOptions.length > 0;
+  const compact = className.includes('text-[12px]');
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -256,14 +257,14 @@ export function MultiSelectDropdown({
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
         disabled={disabled}
-        className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all text-[14px] bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
+        className={`w-full ${compact ? 'px-2.5 py-1 text-[11.5px] h-[32px]' : 'px-4 py-2.5 text-[14px]'} border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
           disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-400'
         } ${selectedValues.length === 0 ? 'text-gray-400' : 'text-[#16274D]'}`}
       >
         <span className="truncate">{displayText}</span>
-        <ChevronDown 
-          size={16} 
-          className={`text-gray-500 transition-transform flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`} 
+        <ChevronDown
+          size={compact ? 14 : 16}
+          className={`text-gray-500 transition-transform flex-shrink-0 ml-2 ${isOpen ? 'rotate-180' : ''}`}
         />
       </button>
 
@@ -285,7 +286,7 @@ export function MultiSelectDropdown({
                 }`}>
                   {allSelected && <Check size={14} className="text-white" strokeWidth={3} />}
                 </div>
-                <span className="text-[14px] text-[#16274D] font-medium">
+                <span className={`${compact ? 'text-[12px]' : 'text-[14px]'} text-[#16274D] font-medium`}>
                   Select All
                 </span>
               </button>
@@ -300,16 +301,16 @@ export function MultiSelectDropdown({
                   key={option.value}
                   type="button"
                   onClick={() => handleToggleOption(option.value)}
-                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors"
+                  className={`w-full ${compact ? 'px-3 py-2 gap-2.5' : 'px-4 py-3 gap-3'} flex items-center hover:bg-gray-50 transition-colors`}
                 >
-                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                  <div className={`${compact ? 'w-4 h-4' : 'w-5 h-5'} rounded border-2 flex items-center justify-center transition-all ${
                     isSelected 
                       ? 'bg-[#4EBEE3] border-[#4EBEE3]' 
                       : 'bg-white border-gray-300'
                   }`}>
                     {isSelected && <Check size={14} className="text-white" strokeWidth={3} />}
                   </div>
-                  <span className="text-[14px] text-[#16274D]">
+                  <span className={`${compact ? 'text-[12px]' : 'text-[14px]'} text-[#16274D]`}>
                     {option.label}
                   </span>
                 </button>

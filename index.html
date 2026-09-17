@@ -2,6 +2,12 @@
   <!DOCTYPE html>
   <html lang="en">
     <head>
+      <!-- Loaded here rather than via @import in index.css: PostCSS drops any
+           @import that follows other rules, which is why the CSS ones never
+           applied. Noto Sans Arabic is the printed meal ticket's Arabic face. -->
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
       <meta charset="UTF-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <title>CareInn Dashboard</title>

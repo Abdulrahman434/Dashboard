@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  ArrowLeft,
   ArrowRight,
   Check,
   CheckCircle2,
   ShieldCheck,
-  Wand2,
   Plus,
   ChefHat,
   Info,
@@ -20,7 +20,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, resolve, ruleText, updateFood, nextOrderId, getLiveSet } from './foodStore';
+import { useFood, resolve, ruleText, updateFood, nextOrderId, getLiveSet, takeKioskPrefill } from './foodStore';
 import { cx, Btn, Badge, Card, CardHead, Bar, Note, FoodPage } from './foodAtoms';
 
 function initials(name: string) {
@@ -86,7 +86,53 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   const wardOptions = Array.from(new Set((db.patients || []).map((p: any) => wardOf(p.room)))).sort();
   const floorOptions = Array.from(new Set((db.patients || []).map((p: any) => String(p.floor || '—')))).sort();
   const [lastOrderId, setLastOrderId] = useState<string | null>(null);
+  /* Where the kiosk was opened from, so there is always a way out. The kiosk
+     is otherwise a dead end once you arrive from another page. */
+  const [returnTo, setReturnTo] = useState<{ route: string; label: string } | null>(null);
   const k = kiosk;
+
+  /* Arriving from the Kitchen's "Not Ordered" tab: the row that was clicked
+     names the patient, the meal and the day, so none of it is picked twice.
+     The kitchen board is driven by the bed/device roster, which can hold
+     patients this roster doesn't have yet — add them rather than dropping the
+     hand-off, otherwise the button silently does nothing for those rows. */
+  useEffect(() => {
+    const pre = takeKioskPrefill();
+    if (!pre) return;
+    if (pre.returnTo) setReturnTo({ route: pre.returnTo, label: pre.returnLabel || 'Back' });
+    const name = pre.name;
+    if (!name) return;
+
+    let idx = (db.patients || []).findIndex(
+      (p: any) => String(p.name).toLowerCase() === name.toLowerCase()
+    );
+    if (idx < 0) {
+      idx = (db.patients || []).length;
+      updateFood((draft: any) => {
+        draft.patients.push({
+          name,
+          room: pre.room || '',
+          bed: pre.bed || '',
+          floor: pre.floor || '',
+          building: '',
+          diet: pre.diet || 'Regular',
+          allergies: [],
+          mrn: pre.mrn || '',
+          nameAr: '',
+        });
+      });
+    }
+    setKiosk((kk) => ({
+      ...kk,
+      stage: 'context',
+      patientIdx: idx,
+      eater: pre.eater === 'Companion' ? 'Companion' : 'Patient',
+      meal: pre.meal || kk.meal,
+      day: pre.day === 'today' ? todayCode() : tomorrowCode(),
+      sel: {},
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Same helpers the Kitchen ticket uses, so the confirmation card matches the print.
   const isAccompaniment = (section: string, dishName: string) => {
@@ -187,31 +233,6 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
     setKiosk((kk) => ({ ...kk, sel: { ...kk.sel, [sn]: arr } }));
   }
 
-  // ---- kAutoFill ----
-  function kAutoFill() {
-    const p = db.patients[k.patientIdx];
-    const diet = curDiet(k);
-    const cfg = resolve(activeMenu, diet, k.meal, k.day);
-    setKiosk((kk) => {
-      const sel = { ...kk.sel };
-      cfg.forEach((sec: any) => {
-        if (sec.forAll || !(sec.min > 0)) return;
-        if ((sel[sec.sec] || []).length > 0) return;
-        const def = sec.def;
-        if (!def) return;
-        const dish: any = db.dishes.find((z: any) => z.en === def && z.on);
-        const blocked =
-          dish && kk.eater === 'Patient'
-            ? dish.allergens.some((a: string) => p.allergies.includes(a))
-            : false;
-        if (blocked) return;
-        sel[sec.sec] = [def];
-      });
-      return { ...kk, sel };
-    });
-    toast('Filled empty sections with defaults');
-  }
-
   // ---- kConfirm ----
   function kConfirm() {
     const p = db.patients[k.patientIdx];
@@ -258,22 +279,30 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   // =========================================================
   const kioskContext = () => (
     <Card>
-      {/* Page header — inside the container, matching the other Food pages */}
-      <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[#eef0f4]">
-        <div className="w-10 h-10 bg-[#4EBEE3]/10 rounded-lg flex items-center justify-center shrink-0">
-          <Utensils size={20} className="text-[#4EBEE3]" strokeWidth={2} />
+      {/* One header row: page identity on the left, menu/serving meta on the
+          right. It used to be a page header stacked on top of a CardHead that
+          repeated the same context, which cost ~180px before any control. */}
+      <div className="flex items-center justify-between gap-4 px-5 py-3.5 border-b border-[#e7e9f0]">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 bg-[#4EBEE3]/10 rounded-lg flex items-center justify-center shrink-0">
+            <Utensils size={20} className="text-[#4EBEE3]" strokeWidth={2} />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-[18px] leading-tight font-semibold text-[#16274D] font-['Poppins',sans-serif]">
+              Patient Kiosk · <span className="text-[#5d6678]">Who is ordering?</span>
+            </h1>
+            <p className="text-[13px] text-[#6B7280] font-['Poppins',sans-serif]" dir="rtl">من يطلب؟</p>
+          </div>
         </div>
-        <div className="min-w-0">
-          <h1 className="text-[22px] font-semibold text-[#16274D] font-['Poppins',sans-serif]">Patient Kiosk</h1>
-          <p className="text-[14px] text-[#6B7280] font-['Poppins',sans-serif]">Order meals for patients and their companions.</p>
+        <div className="text-[13px] text-[#5d6678] text-right shrink-0 hidden sm:block">
+          {`Menu: ${liveSet.name} · Serving ${dayLabel(k.day)} · closes ${db.win.close}`}
         </div>
       </div>
-      <CardHead
-        title={<Bi en="Who is ordering?" ar="من يطلب؟" />}
-        sub={`Menu: ${liveSet.name} · Serving ${dayLabel(k.day)} · ordering closes ${db.win.close}`}
-      />
-      <div className="p-4 sm:p-5 bg-[#f6f8fc] space-y-4">
-        <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-4">
+      <div className="p-3.5 sm:p-4 bg-[#f6f8fc] space-y-3">
+        {/* Patient, eater and serving day sit on one row — they are three short
+            choices, not three sections. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr_1fr] gap-3">
+        <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-3.5">
         <div className="font-semibold text-[#16274D] mb-1.5"><Bi en="Patient" ar="المريض" /></div>
         {(() => {
           const p = k.patientIdx >= 0 ? db.patients[k.patientIdx] : null;
@@ -381,10 +410,9 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
         })()}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Who is this meal for? */}
-          <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-4">
-            <div className="font-semibold text-[#16274D] mb-2.5"><Bi en="Who is this meal for?" ar="لمن هذه الوجبة؟" /></div>
+          <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-3.5">
+            <div className="font-semibold text-[#16274D] mb-2"><Bi en="Who is this meal for?" ar="لمن هذه الوجبة؟" /></div>
             <div className="grid grid-cols-2 gap-2.5">
               {([
                 { e: 'Patient', icon: User, en: 'Patient', ar: 'المريض' },
@@ -396,7 +424,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
                     key={e}
                     onClick={() => setKiosk((kk) => ({ ...kk, eater: e, sel: {} }))}
                     className={cx(
-                      'relative flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all cursor-pointer',
+                      'relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all cursor-pointer',
                       on ? 'border-[#4EBEE3] bg-[#4EBEE3]/5 ring-1 ring-[#4EBEE3]/30' : 'border-[#e7e9f0] bg-white hover:border-[#4EBEE3]/60',
                     )}
                   >
@@ -412,7 +440,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
                 );
               })}
             </div>
-            <p className="text-[12px] text-[#5d6678] mt-2.5 leading-snug flex items-center gap-1.5">
+            <p className="text-[12px] text-[#5d6678] mt-2 leading-snug flex items-center gap-1.5">
               <ShieldCheck size={14} className="text-[#1f9e75] shrink-0" />
               {k.patientIdx < 0
                 ? 'Select a patient to see diet & allergy info.'
@@ -423,8 +451,8 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
           </div>
 
           {/* Serving day */}
-          <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-4">
-            <div className="font-semibold text-[#16274D] mb-2.5"><Bi en="Serving day" ar="يوم التقديم" /></div>
+          <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-3.5">
+            <div className="font-semibold text-[#16274D] mb-2"><Bi en="Serving day" ar="يوم التقديم" /></div>
             <div className="grid grid-cols-2 gap-2.5">
               {([
                 { code: todayCode(), en: 'Today', ar: 'اليوم' },
@@ -436,7 +464,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
                     key={d.en}
                     onClick={() => setKiosk((kk) => ({ ...kk, day: d.code, sel: {} }))}
                     className={cx(
-                      'relative flex items-center gap-2.5 rounded-xl border p-3 text-left transition-all cursor-pointer',
+                      'relative flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left transition-all cursor-pointer',
                       on ? 'border-[#4EBEE3] bg-[#4EBEE3]/5 ring-1 ring-[#4EBEE3]/30' : 'border-[#e7e9f0] bg-white hover:border-[#4EBEE3]/60',
                     )}
                   >
@@ -456,8 +484,8 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
         </div>
 
         {/* Select a meal */}
-        <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-4">
-          <div className="font-semibold text-[#16274D] mb-2.5"><Bi en="Select a meal" ar="اختر الوجبة" /></div>
+        <div className="rounded-2xl border border-[#e7edf5] bg-white shadow-sm p-3.5">
+          <div className="font-semibold text-[#16274D] mb-2"><Bi en="Select a meal" ar="اختر الوجبة" /></div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {liveMeals.map((m: string) => {
               const on = k.meal === m;
@@ -467,7 +495,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
                   key={m}
                   onClick={() => setKiosk((kk) => ({ ...kk, meal: m, sel: {} }))}
                   className={cx(
-                    'flex items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition-all cursor-pointer',
+                    'flex items-center gap-3 rounded-2xl border px-3.5 py-2.5 text-left transition-all cursor-pointer',
                     on ? 'border-[#4EBEE3] bg-[#4EBEE3]/5 ring-1 ring-[#4EBEE3]/30' : 'border-[#e7e9f0] bg-white hover:border-[#4EBEE3]/60',
                   )}
                 >
@@ -625,11 +653,6 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
             );
           })}
 
-          <div className="mt-4">
-            <Btn variant="neutral" onClick={kAutoFill} className="w-full">
-              <Wand2 size={16} /> <BiMini en="Auto-fill empty sections" ar="تعبئة تلقائية" />
-            </Btn>
-          </div>
         </div>
 
         <Bar>
@@ -852,6 +875,15 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
 
   return (
     <FoodPage current="kiosk" onNavigate={onNavigate} narrow>
+      {returnTo && (
+        <button
+          onClick={() => onNavigate(returnTo.route)}
+          className="mb-3 inline-flex items-center gap-2 px-3.5 py-2 rounded-[10px] border border-[#d6dae6] bg-white hover:bg-[#f7f8fb] text-[#16274D] text-[13px] font-semibold transition-colors cursor-pointer"
+        >
+          <ArrowLeft size={16} />
+          {returnTo.label}
+        </button>
+      )}
       {k.stage === 'context' && kioskContext()}
       {k.stage === 'order' && kioskOrder()}
       {k.stage === 'review' && kioskReview()}
