@@ -574,7 +574,7 @@ export default function KitchenPage({
   const appYesterday = shiftDays(appToday, -1);
   const appTomorrow = shiftDays(appToday, 1);
   const [selectedDate, setSelectedDate] = useState<string>(appToday);
-  const [mainTab, setMainTab] = useState<'queue' | 'summary' | 'missing'>('summary');
+  const [mainTab, setMainTab] = useState<'queue' | 'summary' | 'missing' | 'dietchanged'>('summary');
   // "Not ordered" tab — its own filters so switching tabs doesn't carry the
   // queue's filter state (and its Date/Guest-status filters) across.
   const [missSearch, setMissSearch] = useState('');
@@ -1702,6 +1702,120 @@ export default function KitchenPage({
   const notOrderedPeople =
     distinctPeople(notOrderedRows, 'Patient') + distinctPeople(notOrderedRows, 'Guest');
 
+  /**
+   * Orders whose diet was changed after the patient submitted.
+   *
+   * These are the risky ones: the tray may already have been picked or
+   * printed against the old diet, so the kitchen needs to re-check them
+   * rather than trust the ticket in hand.
+   */
+  const dietChangedRows = buildOrdersForDate(selectedDate)
+    .filter((o: any) => o.dietChanged)
+    .sort((a: any, b: any) => {
+      const f = String(orderFloor(a)).localeCompare(String(orderFloor(b)), undefined, { numeric: true });
+      if (f !== 0) return f;
+      const r = String(a.room).localeCompare(String(b.room), undefined, { numeric: true });
+      if (r !== 0) return r;
+      return String(a.bed).localeCompare(String(b.bed));
+    });
+
+  // People affected, not meals — one patient with three changed meals is one
+  // person to chase, which is what the tab badge should say.
+  const dietChangedPeople = new Set(dietChangedRows.map((o: any) => pairKey(o) + '|' + o.name)).size;
+
+  const renderDietChangedPage = () => {
+    const row = (o: any) => {
+      const isGuest = isCompanionOrder(o);
+      const loc = `Room ${o.room}${o.bed ? ` · Bed ${o.bed}` : ''} · Floor ${orderFloor(o)}`;
+      return (
+        <div
+          key={o.id}
+          className="flex items-center gap-3 px-4 py-2.5 border-b border-[#eef0f4] last:border-b-0 hover:bg-[#f9fbfd] transition-colors"
+        >
+          <span className={cx('w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white',
+            isGuest ? 'bg-[#4EBEE3]' : 'bg-[#16274D]')}>
+            {isGuest ? <User size={16} /> : <BedDouble size={16} />}
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-[13.5px] text-[#16274D] truncate">{basePatientName(o)}</span>
+              <span className={cx('px-1.5 py-0.5 rounded-full text-[10px] font-bold text-white',
+                isGuest ? 'bg-[#4EBEE3]' : 'bg-[#16274D]')}>
+                {isGuest ? 'Guest' : 'Patient'}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-[#eef1f6] text-[#5d6678]">{o.meal}</span>
+            </div>
+            <div className="text-[11.5px] text-[#9099ab] truncate">{loc} · Order #{o.orderNo || String(o.id).replace(/^\w+-/, '')}</div>
+          </div>
+          {/* The change itself is the point of the row — old diet struck out,
+              new diet in its own colour. */}
+          <div className="flex items-center gap-2 shrink-0">
+            {o.prevDiet && (
+              <span className="px-2 py-0.5 rounded-lg text-[12px] font-semibold text-[#9099ab] line-through whitespace-nowrap">
+                {o.prevDiet}
+              </span>
+            )}
+            <ChevronRight size={14} className="text-[#b6bdc9] shrink-0" />
+            <span
+              className="px-2.5 py-1 rounded-lg text-[12px] font-bold whitespace-nowrap"
+              style={{ color: dietColor(db, o.diet), backgroundColor: dietColor(db, o.diet) + '16' }}
+            >
+              {o.diet}
+            </span>
+          </div>
+          <span
+            className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+            style={o.status === 'Printed'
+              ? { color: '#96650A', backgroundColor: '#fbf1de' }
+              : o.status === 'Delivered'
+              ? { color: '#157F5C', backgroundColor: '#e7f6f0' }
+              : { color: '#0A6CA6', backgroundColor: '#E7F3FB' }}
+            title={o.status === 'Submitted' ? 'Not printed yet — the new diet will be on the ticket'
+              : 'Already printed or delivered against the previous diet — re-check this tray'}
+          >
+            {o.status}
+          </span>
+        </div>
+      );
+    };
+
+    // Printed or delivered means a tray may already be out on the old diet.
+    const atRisk = dietChangedRows.filter((o: any) => o.status !== 'Submitted').length;
+
+    return (
+      <div className="space-y-4">
+        <Card className="!overflow-visible">
+          <div className="px-5 py-4 border-b border-[#e7e9f0]">
+            <div className="font-['Poppins',sans-serif] font-semibold text-[18px] text-[#16274D] flex items-center gap-2">
+              <ShieldAlert size={18} className="text-[#C0392B]" /> Diet changed after submission
+            </div>
+            <div className="text-[13px] text-[#5d6678] mt-0.5">
+              {fmtDate(selectedDate)} · {dietChangedPeople} {dietChangedPeople === 1 ? 'person' : 'people'} ·{' '}
+              {dietChangedRows.length} meal{dietChangedRows.length === 1 ? '' : 's'} affected
+            </div>
+            {atRisk > 0 && (
+              <div className="mt-2 inline-flex items-start gap-2 px-3 py-1.5 rounded-lg bg-[#fdeeee] text-[#C0392B] text-[12.5px] font-semibold">
+                <AlertTriangle size={14} className="shrink-0 mt-[1px]" />
+                {atRisk} already printed or delivered on the previous diet — re-check those trays.
+              </div>
+            )}
+          </div>
+          {dietChangedRows.length === 0 ? (
+            <div className="text-center py-12 px-5">
+              <CheckCircle2 size={40} className="mx-auto text-[#1f9e75]" />
+              <div className="font-semibold text-[#16274D] mt-3">No diet changes</div>
+              <div className="text-[13px] text-[#5d6678] mt-1">
+                Every order for {fmtDate(selectedDate)} still matches the diet it was submitted under.
+              </div>
+            </div>
+          ) : (
+            <div>{dietChangedRows.map(row)}</div>
+          )}
+        </Card>
+      </div>
+    );
+  };
+
   const renderNotOrderedPage = () => {
     const groups = new Map<string, any[]>();
     if (missGroupBy === 'none') {
@@ -2333,9 +2447,25 @@ export default function KitchenPage({
                   </span>
                 ) : undefined,
               },
+              {
+                id: 'dietchanged',
+                label: 'Diet Changed',
+                /* Red rather than amber: a changed diet after submission can
+                   mean a tray already went out on the wrong one. */
+                icon: dietChangedPeople > 0 ? (
+                  <span
+                    className={cx(
+                      'min-w-[20px] px-1.5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center tabular-nums',
+                      mainTab === 'dietchanged' ? 'bg-white/25 text-white' : 'bg-[#fdeeee] text-[#C0392B]'
+                    )}
+                  >
+                    {dietChangedPeople}
+                  </span>
+                ) : undefined,
+              },
             ]}
             activeTab={mainTab}
-            onChange={(id) => setMainTab(id as 'queue' | 'summary' | 'missing')}
+            onChange={(id) => setMainTab(id as 'queue' | 'summary' | 'missing' | 'dietchanged')}
           />
         </div>
 
@@ -2346,6 +2476,8 @@ export default function KitchenPage({
         renderSummaryPage()
       ) : mainTab === 'missing' ? (
         renderNotOrderedPage()
+      ) : mainTab === 'dietchanged' ? (
+        renderDietChangedPage()
       ) : (
       <>
       {isHistory && (
