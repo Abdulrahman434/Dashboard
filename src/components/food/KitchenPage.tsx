@@ -1055,12 +1055,11 @@ export default function KitchenPage({
           _group: dv.group,
         });
 
-        // The first three beds always get a companion order, so the board (and
-        // the printed batch) opens with three complete patient/guest pairs —
-        // the sequence someone reviewing or testing the tickets needs to see.
-        // Beyond those, roughly 1 in 4 rooms has one.
-        const guaranteedPair = idx < 3;
-        if (guaranteedPair || seed % 4 === 0) {
+        // Every bed gets a guest order in the sample data, so the board and the
+        // printed batch are a strict patient/guest sequence with no runs of
+        // lone patients. Real data simply won't create the guest order when a
+        // bed has no guest — the layout handles a lone patient sheet fine.
+        {
           const cLines: [string, string][] = sections
             .map((sec, si) => {
               const dishes = db.dishes.filter((x: any) => x.section === sec && x.on);
