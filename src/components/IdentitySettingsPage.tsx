@@ -19,9 +19,9 @@ interface IdentitySettings {
 const defaultSettings: IdentitySettings = {
   logo: null,
   logoName: '',
-  hospitalName: 'Dallah Hospital',
-  hospitalNameAr: 'مستشفى دلة',
-  hospitalShortName: 'Dallah',
+  hospitalName: 'Dr. Soliman Fakeeh Hospital',
+  hospitalNameAr: 'مستشفى الدكتور سليمان فقيه',
+  hospitalShortName: 'DSFH',
   hospitalImage: null,
   hospitalImageName: '',
   primaryColor: '#4EBEE3',

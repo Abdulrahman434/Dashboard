@@ -233,9 +233,12 @@ export function timeRangeAr(start: string, end: string): string {
  * Guarded for non-browser contexts (server render, tests) and for a corrupt
  * value, so a print never fails over branding.
  */
+export const HOSPITAL_EN = 'Dr. Soliman Fakeeh Hospital';
+export const HOSPITAL_AR = 'مستشفى الدكتور سليمان فقيه';
+
 export function hospitalNames(
-  fallbackEn = 'CareInn Hospital',
-  fallbackAr = '',
+  fallbackEn = HOSPITAL_EN,
+  fallbackAr = HOSPITAL_AR,
 ): { en: string; ar: string } {
   try {
     if (typeof localStorage === 'undefined') return { en: fallbackEn, ar: fallbackAr };
