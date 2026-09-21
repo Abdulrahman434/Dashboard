@@ -541,11 +541,11 @@ export default function KitchenPage({
     const n = parseInt(String(o.room), 10);
     return Number.isFinite(n) ? String(Math.floor(n / 100) * 100) : '—';
   };
-  // Patient ↔ companion pairing: a companion order is "Companion — <patient>" in
+  // Patient ↔ guest pairing: a guest order is "Guest — <patient>" in
   // the same room/bed/meal. pairKey is shared by a patient and their companion.
-  const isCompanionOrder = (o: any) => String(o.name || '').toLowerCase().includes('companion');
+  const isCompanionOrder = (o: any) => String(o.name || '').toLowerCase().match(/companion|guest/) !== null;
   const basePatientName = (o: any) =>
-    isCompanionOrder(o) ? String(o.name).replace(/^\s*companion\s*[—–-]\s*/i, '').trim() : String(o.name || '');
+    isCompanionOrder(o) ? String(o.name).replace(/^\s*(?:companion|guest)\s*[—–-]\s*/i, '').trim() : String(o.name || '');
   const pairKey = (o: any) => `${o.room}|${o.bed}|${o.meal}|${basePatientName(o).toLowerCase()}`;
   // Return [patient, companion] for an order (whichever exist in the pool), ordered.
   const pairList = (order: any, pool: any[]) => {
@@ -576,7 +576,7 @@ export default function KitchenPage({
   const [selectedDate, setSelectedDate] = useState<string>(appToday);
   const [mainTab, setMainTab] = useState<'queue' | 'summary' | 'missing'>('summary');
   // "Not ordered" tab — its own filters so switching tabs doesn't carry the
-  // queue's filter state (and its Date/Companion-status filters) across.
+  // queue's filter state (and its Date/Guest-status filters) across.
   const [missSearch, setMissSearch] = useState('');
   const [missMeals, setMissMeals] = useState<string[]>([]);
   const [missDiets, setMissDiets] = useState<string[]>([]);
@@ -636,7 +636,7 @@ export default function KitchenPage({
   const [selectedMeals, setSelectedMeals] = useState<string[]>([]);
   const [selectedWards, setSelectedWards] = useState<string[]>([]);
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
-  const [selectedMealFor, setSelectedMealFor] = useState<string[]>([]); // Patient / Companion
+  const [selectedMealFor, setSelectedMealFor] = useState<string[]>([]); // Patient / Guest
   const [companionFilter, setCompanionFilter] = useState<'all' | 'with' | 'without'>('all'); // has a companion?
   const [expandedCards, setExpandedCards] = useState<string[]>([]); // order ids whose card is expanded
 
@@ -1055,9 +1055,12 @@ export default function KitchenPage({
           _group: dv.group,
         });
 
-        // ~1 in 4 rooms also has a companion meal accompanying the patient
-        // (uses the same meal's sections so it's meal-appropriate)
-        if (seed % 4 === 0) {
+        // The first three beds always get a companion order, so the board (and
+        // the printed batch) opens with three complete patient/guest pairs —
+        // the sequence someone reviewing or testing the tickets needs to see.
+        // Beyond those, roughly 1 in 4 rooms has one.
+        const guaranteedPair = idx < 3;
+        if (guaranteedPair || seed % 4 === 0) {
           const cLines: [string, string][] = sections
             .map((sec, si) => {
               const dishes = db.dishes.filter((x: any) => x.section === sec && x.on);
@@ -1069,7 +1072,7 @@ export default function KitchenPage({
           list.push({
             id: `GEN-${dateStr}-${dv.deviceId}-${meal}-C`,
             orderNo: 1000 + ((seed + 4321) % 9000),
-            name: `Companion — ${name}`,
+            name: `Guest — ${name}`,
             room: roomStr,
             bed: bedStr,
             diet: 'Regular',
@@ -1149,7 +1152,7 @@ export default function KitchenPage({
     const matchDiet = selectedDiets.length === 0 || selectedDiets.includes(o.diet);
     const matchWard = selectedWards.length === 0 || selectedWards.includes(o.room);
     const matchStatus = queueStatus === 'all' || o.status === queueStatus;
-    const mealFor = String(o.name).toLowerCase().includes('companion') ? 'Companion' : 'Patient';
+    const mealFor = String(o.name).toLowerCase().match(/companion|guest/) !== null ? 'Guest' : 'Patient';
     const matchMealFor = selectedMealFor.length === 0 || selectedMealFor.includes(mealFor);
     const hasCompanion = companionPairKeys.has(pairKey(o));
     const matchCompanion = companionFilter === 'all' || (companionFilter === 'with' ? hasCompanion : !hasCompanion);
@@ -1225,7 +1228,7 @@ export default function KitchenPage({
     const allSel = sorted.length > 0 && sorted.every((o: any) => selectedOrderIds.includes(o.id));
 
     const allergiesFor = (o: any) => {
-      if (String(o.name).toLowerCase().includes('companion')) return [];
+      if (String(o.name).toLowerCase().match(/companion|guest/) !== null) return [];
       const p = db.patients.find((p: any) => p.name === o.name);
       return p && p.allergies.length ? p.allergies : [];
     };
@@ -1255,7 +1258,7 @@ export default function KitchenPage({
     );
 
     const renderRow = (o: any) => {
-      const isCompanion = String(o.name).toLowerCase().includes('companion');
+      const isCompanion = String(o.name).toLowerCase().match(/companion|guest/) !== null;
       const allg = allergiesFor(o);
       const items = (o.lines || []).map((l: any) => (Array.isArray(l) ? l[1] : l?.name)).filter(Boolean);
       const ds = deliveryState(o);
@@ -1272,7 +1275,7 @@ export default function KitchenPage({
           <td className="px-3 py-3">
             <div className="flex flex-wrap items-center gap-1 mb-0.5">
               <span className={cx("inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-white", isCompanion ? 'bg-[#4EBEE3]' : 'bg-[#16274D]')}>
-                {isCompanion ? 'Companion' : 'Patient'}
+                {isCompanion ? 'Guest' : 'Patient'}
               </span>
               <span className="inline-block px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#E5F6FC] text-[#0A7C9E]">
                 Submitted
@@ -1360,7 +1363,7 @@ export default function KitchenPage({
       queueGroupBy === 'meal' ? o.meal
       : queueGroupBy === 'diet' ? String(o.diet || 'Regular')
       : queueGroupBy === 'floor' ? orderFloor(o)
-      : String(o.name).toLowerCase().includes('companion') ? 'Companion' : 'Patient';
+      : String(o.name).toLowerCase().match(/companion|guest/) !== null ? 'Guest' : 'Patient';
     const groupKeys =
       queueGroupBy === 'meal'
         ? MEAL_ORDER.filter((m) => sorted.some((o: any) => o.meal === m))
@@ -1611,9 +1614,9 @@ export default function KitchenPage({
      no tray — the roster is the source of truth for who exists, and the
      tickets say who has ordered.
 
-     Companions: there is no companion roster in the data — a companion only
+     Guests: there is no guest roster in the data — a guest only
      exists once they have an order. A bed is therefore treated as having a
-     companion when a companion order exists for it on the chosen day or today,
+     guest when a guest order exists for it on the chosen day or today,
      and any of that day's meals without one is reported as not ordered. */
   const notOrderedRows = useMemo(() => {
     const dayOrders = buildOrdersForDate(missDate);
@@ -1654,7 +1657,7 @@ export default function KitchenPage({
         if (companionOrdered.has(`${bedKey}|${meal}`)) return;
         rows.push({
           key: `c|${bedKey}|${meal}`,
-          kind: 'Companion',
+          kind: 'Guest',
           name: basePatientName(sample),
           room: sample.room,
           bed: sample.bed,
@@ -1696,9 +1699,9 @@ export default function KitchenPage({
   const distinctPeople = (rows: any[], kind: string) =>
     new Set(rows.filter((r: any) => r.kind === kind).map((r: any) => `${r.room}|${r.bed}|${r.name}`)).size;
   const notOrderedPatients = distinctPeople(notOrderedFiltered, 'Patient');
-  const notOrderedCompanions = distinctPeople(notOrderedFiltered, 'Companion');
+  const notOrderedCompanions = distinctPeople(notOrderedFiltered, 'Guest');
   const notOrderedPeople =
-    distinctPeople(notOrderedRows, 'Patient') + distinctPeople(notOrderedRows, 'Companion');
+    distinctPeople(notOrderedRows, 'Patient') + distinctPeople(notOrderedRows, 'Guest');
 
   const renderNotOrderedPage = () => {
     const groups = new Map<string, any[]>();
@@ -1722,10 +1725,10 @@ export default function KitchenPage({
         <span
           className={cx(
             'w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-white',
-            r.kind === 'Companion' ? 'bg-[#4EBEE3]' : 'bg-[#16274D]'
+            r.kind === 'Guest' ? 'bg-[#4EBEE3]' : 'bg-[#16274D]'
           )}
         >
-          {r.kind === 'Companion' ? <User size={16} /> : <BedDouble size={16} />}
+          {r.kind === 'Guest' ? <User size={16} /> : <BedDouble size={16} />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0">
@@ -1733,7 +1736,7 @@ export default function KitchenPage({
             <span
               className={cx(
                 'shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-semibold text-white',
-                r.kind === 'Companion' ? 'bg-[#4EBEE3]' : 'bg-[#16274D]'
+                r.kind === 'Guest' ? 'bg-[#4EBEE3]' : 'bg-[#16274D]'
               )}
             >
               {r.kind}
@@ -1785,7 +1788,7 @@ export default function KitchenPage({
               </div>
               <div className="text-[13px] text-[#5d6678] mt-0.5">
                 {fmtDate(missDate)} · {notOrderedPatients} patient{notOrderedPatients === 1 ? '' : 's'} and{' '}
-                {notOrderedCompanions} companion{notOrderedCompanions === 1 ? '' : 's'} with no order ·{' '}
+                {notOrderedCompanions} guest{notOrderedCompanions === 1 ? '' : 's'} with no order ·{' '}
                 {notOrderedFiltered.length} meal{notOrderedFiltered.length === 1 ? '' : 's'} to chase
               </div>
               {missDate === appToday && (
@@ -1883,10 +1886,10 @@ export default function KitchenPage({
                   Order For
                 </label>
                 <MultiSelectDropdown
-                  options={['Patient', 'Companion']}
+                  options={['Patient', 'Guest']}
                   selectedValues={missFor}
                   onChange={setMissFor}
-                  placeholder="Patient & Companion"
+                  placeholder="Patient & Guest"
                   className="text-[12px]"
                 />
               </div>
@@ -1933,7 +1936,7 @@ export default function KitchenPage({
               </div>
               <div className="text-[#5d6678] mt-1">
                 {notOrderedRows.length === 0
-                  ? 'Every patient and companion has a submitted order for tomorrow.'
+                  ? 'Every patient and guest has a submitted order for tomorrow.'
                   : 'Clear a filter to see the rest of the list.'}
               </div>
             </div>
@@ -2505,10 +2508,10 @@ export default function KitchenPage({
                   Order For
                 </label>
                 <MultiSelectDropdown
-                  options={['Patient', 'Companion']}
+                  options={['Patient', 'Guest']}
                   selectedValues={selectedMealFor}
                   onChange={setSelectedMealFor}
-                  placeholder="Patient & Companion"
+                  placeholder="Patient & Guest"
                   className="text-[12px]"
                 />
               </div>
@@ -2660,7 +2663,7 @@ export default function KitchenPage({
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 p-4 items-start">
           {(() => {
           const renderInnerCard = ({ o, idx }: { o: any; idx: number }) => {
-            const isCompanion = o.name.toLowerCase().includes('companion');
+            const isCompanion = o.name.toLowerCase().match(/companion|guest/) !== null;
             const info = getDeviceAndOccupancy(o, idx);
 
             // Categorize lines
@@ -2853,7 +2856,7 @@ export default function KitchenPage({
                       </div>
                     </div>
 
-                    {/* Bilingual detail table (no Companion Status) */}
+                    {/* Bilingual detail table (no Guest Status) */}
                     <div>
                       {detailRow(Utensils, 'Meal Type', 'نوع الوجبة', o.meal, mealArabic)}
                       {detailRow(Salad, 'Diet Type', 'نوع النظام الغذائي', o.diet, dietArabic, dietClr)}
@@ -2921,6 +2924,8 @@ export default function KitchenPage({
             // Grayed-out placeholder shown when a patient has no companion order.
             // It stretches to the patient card's height (grid stretch) and centres the
             // "No order placed for a guest" message.
+            const counterpart = patientEntry || companionEntry;
+            const pairExpanded = !!counterpart && expandedCards.includes(counterpart.o.id);
             const emptyCard = (role: 'Patient' | 'Guest') => (
               <div className="rounded-[14px] border border-dashed border-[#dfe3ea] bg-[#f6f7f9] overflow-hidden flex flex-col h-full">
                 <div className="flex items-start gap-3 p-3.5 bg-[#eceef2]">
@@ -2938,12 +2943,18 @@ export default function KitchenPage({
                     <div className="text-[11px] text-[#b6bdc9] mt-0.5 truncate">{loc}</div>
                   </div>
                 </div>
-                <div className="flex-1 flex items-center justify-center py-6 text-center">
-                  <div>
-                    <div className="text-[12.5px] font-medium text-[#9099ab]">No order placed for a guest</div>
-                    <div className="text-[11px] text-[#b6bdc9] mt-0.5" dir="rtl">لا يوجد طلب مرافق</div>
+                {pairExpanded && (
+                  <div className="flex-1 flex items-center justify-center py-6 text-center">
+                    <div>
+                      <div className="text-[12.5px] font-medium text-[#9099ab]">
+                        {role === 'Guest' ? 'No order placed for a guest' : 'No order placed for the patient'}
+                      </div>
+                      <div className="text-[11px] text-[#b6bdc9] mt-0.5" dir="rtl">
+                        {role === 'Guest' ? 'لا يوجد طلب مرافق' : 'لا يوجد طلب للمريض'}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             );
 
@@ -2975,7 +2986,7 @@ export default function KitchenPage({
                 {/* Patient (left) + companion (right); grayed placeholder when missing.
                     Stretch so the "No order" placeholder matches the patient card's height;
                     real pairs keep natural (independent) heights. */}
-                <div className={cx("grid gap-3 grid-cols-1 lg:grid-cols-2", (patientEntry && companionEntry) ? "items-start" : "items-stretch")}>
+                <div className={cx("grid gap-3 grid-cols-1 lg:grid-cols-2", (patientEntry && companionEntry) || !pairExpanded ? "items-start" : "items-stretch")}>
                   {patientEntry ? renderInnerCard(patientEntry) : emptyCard('Patient')}
                   {companionEntry ? renderInnerCard(companionEntry) : emptyCard('Guest')}
                 </div>

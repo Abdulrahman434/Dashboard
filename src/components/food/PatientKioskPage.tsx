@@ -36,7 +36,7 @@ type Stage = 'context' | 'order' | 'review' | 'done';
 interface KioskState {
   stage: Stage;
   patientIdx: number;
-  eater: 'Patient' | 'Companion';
+  eater: 'Patient' | 'Guest';
   meal: string;
   day: string;
   sel: Record<string, string[]>;
@@ -126,7 +126,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
       ...kk,
       stage: 'context',
       patientIdx: idx,
-      eater: pre.eater === 'Companion' ? 'Companion' : 'Patient',
+      eater: pre.eater === 'Guest' ? 'Guest' : 'Patient',
       meal: pre.meal || kk.meal,
       day: pre.day === 'today' ? todayCode() : tomorrowCode(),
       sel: {},
@@ -156,7 +156,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
 
   // ---- Bilingual helpers (patient screen is EN + AR) ----
   const MEAL_AR: Record<string, string> = { Breakfast: 'الإفطار', Lunch: 'الغداء', Dinner: 'العشاء' };
-  const EATER_AR: Record<string, string> = { Patient: 'المريض', Companion: 'المرافق' };
+  const EATER_AR: Record<string, string> = { Patient: 'المريض', Guest: 'المرافق' };
   const secAr = (name: string): string => (db.sections.find((s: any) => s.en === name)?.ar) || '';
   const dietAr = (name: string): string => (db.diets.find((d: any) => d.en === name)?.ar) || '';
   const mealAr = (name: string): string => (db.mealMeta?.[name]?.ar) || MEAL_AR[name] || '';
@@ -180,7 +180,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
     code === todayCode() ? 'Today' : code === tomorrowCode() ? 'Tomorrow' : code;
 
   const curDiet = (kk: KioskState): string =>
-    kk.eater === 'Companion' ? 'Regular' : db.patients[kk.patientIdx].diet;
+    kk.eater === 'Guest' ? 'Regular' : db.patients[kk.patientIdx].diet;
 
   // ---- Reusable tile ----
   function Tile({ on, disabled, onClick, children }: any) {
@@ -258,7 +258,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
     updateFood((d: any) => {
       d.orders.unshift({
         id: orderId,
-        name: k.eater === 'Companion' ? `Companion — ${p.name}` : p.name,
+        name: k.eater === 'Guest' ? `Guest — ${p.name}` : p.name,
         eater: k.eater,
         room: p.room,
         bed: p.bed,
@@ -416,7 +416,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
             <div className="grid grid-cols-2 gap-2.5">
               {([
                 { e: 'Patient', icon: User, en: 'Patient', ar: 'المريض' },
-                { e: 'Companion', icon: Users, en: 'Companion', ar: 'المرافق' },
+                { e: 'Guest', icon: Users, en: 'Guest', ar: 'المرافق' },
               ] as const).map(({ e, icon: Icon, en, ar }) => {
                 const on = k.eater === e;
                 return (
@@ -444,7 +444,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
               <ShieldCheck size={14} className="text-[#1f9e75] shrink-0" />
               {k.patientIdx < 0
                 ? 'Select a patient to see diet & allergy info.'
-                : k.eater === 'Companion'
+                : k.eater === 'Guest'
                 ? `${db.patients[k.patientIdx].name.split(' ')[0]}’s companion · Regular diet · no restrictions`
                 : `${db.patients[k.patientIdx].diet} diet · allergy-checked`}
             </p>
@@ -575,12 +575,12 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
           <div className="min-w-0 flex-1">
             <div className="font-semibold flex items-center gap-2 flex-wrap">
               {p.name}
-              {k.eater === 'Companion' && (
-                <span className="bg-[#4EBEE3] text-white text-[10.5px] font-semibold px-2 py-0.5 rounded-full">Companion · مرافق</span>
+              {k.eater === 'Guest' && (
+                <span className="bg-[#4EBEE3] text-white text-[10.5px] font-semibold px-2 py-0.5 rounded-full">Guest · مرافق</span>
               )}
             </div>
             <div className="text-[12.5px] text-[#bcd0ee]">
-              {k.eater === 'Companion' ? 'Guest · ' : ''}{`Room ${p.room} · Bed ${p.bed} · ${k.meal} · ${dayLabel(k.day)}`}
+              {k.eater === 'Guest' ? 'Guest · ' : ''}{`Room ${p.room} · Bed ${p.bed} · ${k.meal} · ${dayLabel(k.day)}`}
             </div>
           </div>
           <span className="bg-[#4EBEE3]/25 text-white text-[12px] px-2.5 py-[3px] rounded-[7px]">
@@ -697,8 +697,8 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
     return (
       <Card>
         <CardHead
-          title={<span className="inline-flex items-center gap-2 flex-wrap"><Bi en="Review order" ar="مراجعة الطلب" />{k.eater === 'Companion' && <span className="bg-[#4EBEE3] text-white text-[10.5px] font-semibold px-2 py-0.5 rounded-full">Companion · مرافق</span>}</span>}
-          sub={`${k.eater === 'Companion' ? 'Guest · ' : ''}${p.name} · Room ${p.room}-${p.bed} · ${k.meal} · ${dayLabel(k.day)}`}
+          title={<span className="inline-flex items-center gap-2 flex-wrap"><Bi en="Review order" ar="مراجعة الطلب" />{k.eater === 'Guest' && <span className="bg-[#4EBEE3] text-white text-[10.5px] font-semibold px-2 py-0.5 rounded-full">Guest · مرافق</span>}</span>}
+          sub={`${k.eater === 'Guest' ? 'Guest · ' : ''}${p.name} · Room ${p.room}-${p.bed} · ${k.meal} · ${dayLabel(k.day)}`}
           right={<Badge tone="info">{diet}{dietAr(diet) ? ` · ${dietAr(diet)}` : ''}</Badge>}
         />
         <div>
@@ -757,7 +757,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
             Order confirmed · تم تأكيد الطلب
           </div>
           <div className="text-[13.5px] text-[#5d6678] mt-1">
-            {`${k.eater === 'Companion' ? 'Companion (guest) of ' : ''}${p.name} · ${k.meal} ${dayLabel(k.day).toLowerCase()} · sent to the kitchen`}
+            {`${k.eater === 'Guest' ? 'Guest of ' : ''}${p.name} · ${k.meal} ${dayLabel(k.day).toLowerCase()} · sent to the kitchen`}
           </div>
           <div className="flex justify-center gap-2 mt-5">
             <Btn variant="neutral" onClick={() => setKiosk(freshContext())}>
@@ -781,7 +781,7 @@ export default function PatientKioskPage({ onNavigate }: { onNavigate: (route: s
   const trayConfirmModal = () => {
     const p = db.patients[k.patientIdx];
     const diet = curDiet(k);
-    const isCompanion = k.eater === 'Companion';
+    const isCompanion = k.eater === 'Guest';
     const cfg = resolve(activeMenu, diet, k.meal, k.day);
     const mealItems: string[] = [];
     const accompaniments: string[] = [];

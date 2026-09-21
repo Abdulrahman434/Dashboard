@@ -43,7 +43,7 @@ export type KioskPrefill = {
   floor?: string;
   meal?: string;
   day?: 'today' | 'tomorrow';
-  eater?: 'Patient' | 'Companion';
+  eater?: 'Patient' | 'Guest';
   /** Route to offer as a way back, and what to call it. */
   returnTo?: string;
   returnLabel?: string;

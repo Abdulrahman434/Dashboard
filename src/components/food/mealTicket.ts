@@ -55,15 +55,16 @@ export type Sheet = {
   sortKey: string;
 };
 
-const COMPANION_RE = /^companion\s*[—–-]\s*/i;
+// Accepts either word so orders created before the rename still pair up.
+const GUEST_RE = /^(?:companion|guest)\s*[—–-]\s*/i;
 
 export function isCompanionOrder(o: any): boolean {
-  return COMPANION_RE.test(String(o.name || '')) || /companion/i.test(String(o.name || ''));
+  return GUEST_RE.test(String(o.name || '')) || /companion|guest/i.test(String(o.name || ''));
 }
 
 // The patient a companion order belongs to — companions are named after them.
 export function basePatientNameOf(o: any): string {
-  return String(o.name || '').replace(COMPANION_RE, '').replace(/'s companion$/i, '').trim();
+  return String(o.name || '').replace(GUEST_RE, '').replace(/'s (?:companion|guest)$/i, '').trim();
 }
 
 // A recipient is one person on one bed: the patient, or their companion. Both
