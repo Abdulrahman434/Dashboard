@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChefHat, Tablet, Printer, Check, CheckCheck, User, Clock, Utensils, CheckCircle2, Edit, BedDouble, Gem, Crown, ShieldAlert, AlertTriangle, LayoutGrid, Table as TableIcon, ChevronUp, ChevronDown, ChevronRight, PlusCircle, MoreVertical, Wheat, Egg, Croissant, Milk, Soup, Salad, Beef, CupSoda, CakeSlice, ClipboardList, Package, TrendingUp, Download, Plus, Search, X, MapPin, Link2, Layers } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { useFood, updateFood, resolve, MEAL_SECTIONS, sectionRule, nextOrderId, setKioskPrefill } from './foodStore';
+import { useFood, updateFood, resolve, MEAL_SECTIONS, sectionRule, nextOrderId, setKioskPrefill, dietColor, dietAr, mealAr, allergenAr } from './foodStore';
 import { buildSheets, type Sheet } from './mealTicket';
 import { MealSheet, MealTicketPrintStyles } from './MealTicketSheet';
 import { cx, Btn, Badge, Card, FoodPage } from './foodAtoms';
@@ -638,6 +638,7 @@ export default function KitchenPage({
   const [selectedDiets, setSelectedDiets] = useState<string[]>([]);
   const [selectedMealFor, setSelectedMealFor] = useState<string[]>([]); // Patient / Companion
   const [companionFilter, setCompanionFilter] = useState<'all' | 'with' | 'without'>('all'); // has a companion?
+  const [expandedCards, setExpandedCards] = useState<string[]>([]); // order ids whose card is expanded
 
   // Print queue state
   /** The orders behind the sheets currently queued for print. */
@@ -2513,14 +2514,15 @@ export default function KitchenPage({
               </div>
               <div className="relative !overflow-visible">
                 <label className="block text-[10.5px] font-semibold text-[#5d6678] mb-1 font-['Poppins',sans-serif]">
-                  Companion Status
+                  Guest
                 </label>
                 <SingleSelectDropdown
+                  size="md"
                   className="text-[12px]"
                   options={[
                     { value: '', label: 'All patients' },
-                    { value: 'with', label: 'With companion' },
-                    { value: 'without', label: 'Without companion' },
+                    { value: 'with', label: 'With guest' },
+                    { value: 'without', label: 'Without guest' },
                   ]}
                   value={companionFilter === 'all' ? '' : companionFilter}
                   onChange={(v) => setCompanionFilter((v || 'all') as 'all' | 'with' | 'without')}
@@ -2681,11 +2683,6 @@ export default function KitchenPage({
               ? patientObj.allergies.join(', ')
               : 'None';
 
-            // Determine visual tones for patient vs companion (colors kept identical to before)
-            const avatarBg = isCompanion ? 'bg-[#4EBEE3]' : 'bg-[#16274D]';
-            const roleBadge = isCompanion
-              ? 'bg-[#eaf7fc] text-[#0a84b1]'
-              : 'bg-[#eef2f7] text-[#16274D]';
 
             // Status badge styling (single source of truth for label + colors)
             const statusMeta =
@@ -2701,61 +2698,134 @@ export default function KitchenPage({
             const allDishes = [...mealItems, ...accompaniments];
             const timeRange = o.meal === 'Breakfast' ? '8:00 AM – 9:00 AM' : o.meal === 'Lunch' ? '1:00 PM – 2:00 PM' : '7:00 PM – 8:00 PM';
 
+            // Bilingual + diet-colour data (single source of truth = the store).
+            const dietClr = dietColor(db, o.diet);
+            // Header is a softened (≈88% opacity) wash of the diet's own colour, white text on top.
+            const roleStyle = {
+              bg: dietClr + 'E0',
+              avBg: 'rgba(255,255,255,0.22)',
+              avIcon: '#ffffff',
+              pillBg: 'rgba(255,255,255,0.92)',
+              pillText: dietClr,
+            };
+            const mealArabic = mealAr(db, o.meal);
+            const dietArabic = dietAr(db, o.diet);
+            const floorNum = Math.floor(parseInt(o.room, 10) / 100);
+            const floor = String(o._floor ?? (patientObj && patientObj.floor) ?? (isNaN(floorNum) ? '' : floorNum));
+            const bldg = o.building || (patientObj && patientObj.building) || '';
+            const allergyArr: string[] = isCompanion ? (o.allergies || []) : ((patientObj && patientObj.allergies) || o.allergies || []);
+            const hasAllergy = allergyArr.length > 0;
+            const allergiesEn = hasAllergy ? allergyArr.join(', ') : 'None known';
+            const allergiesArText = hasAllergy ? allergyArr.map((a) => allergenAr(db, a) || a).join('، ') : 'لا توجد حساسية معروفة';
+            const roomWardEn = `Room ${o.room}${o.bed ? ` · Bed ${o.bed}` : ''} · Floor ${floor}${bldg ? ` · Bldg ${bldg}` : ''}`;
+            const roomWardAr = `غرفة ${o.room}${o.bed ? ` · سرير ${o.bed}` : ''} · الدور ${floor}${bldg ? ` · المبنى ${bldg}` : ''}`;
+            const roleLabel = isCompanion ? 'Guest' : 'Patient';
+            const roleLabelAr = isCompanion ? 'مرافق' : 'مريض';
+            const expanded = expandedCards.includes(o.id);
+
+            // One bilingual label/value row in the detail table.
+            const detailRow = (
+              Icon: any,
+              en: string, ar: string,
+              valEn: string, valAr: string,
+              valColor?: string,
+            ) => (
+              <div className="flex items-start justify-between gap-3 px-3.5 py-2 border-t border-[#eef1f6]">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Icon size={14} className="text-[#9099ab] shrink-0" />
+                  <div className="leading-tight min-w-0">
+                    <div className="text-[11.5px] font-semibold text-[#5d6678]">{en}</div>
+                    <div className="text-[10px] text-[#a2abbb]" dir="rtl">{ar}</div>
+                  </div>
+                </div>
+                <div className="text-right leading-tight min-w-0">
+                  <div className="text-[12px] font-semibold" style={{ color: valColor || '#16274D' }}>{valEn}</div>
+                  <div className="text-[10px] text-[#a2abbb]" dir="rtl">{valAr}</div>
+                </div>
+              </div>
+            );
+
             return (
               <div
                 key={o.id}
                 id={`korder-${o.id}`}
                 className={cx(
-                  "rounded-[14px] border bg-white p-3.5 flex flex-col transition-all",
+                  "rounded-[14px] border bg-white overflow-hidden flex flex-col transition-all",
                   focusOrderId === o.id
                     ? "border-[#4EBEE3] ring-4 ring-[#4EBEE3]/40 shadow-lg"
                     : isSelected ? "border-[#4EBEE3] ring-1 ring-[#4EBEE3] shadow-sm" : "border-[#e7e9f0] hover:shadow-md"
                 )}
               >
-                {/* Identity row */}
-                <div className="flex items-start gap-3">
-                  <div className={cx("w-10 h-10 rounded-full flex items-center justify-center text-white shrink-0", avatarBg)}>
-                    <User size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className={cx("inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide", roleBadge)}>
-                          {isCompanion ? 'Companion' : 'Patient'}
-                        </span>
-                        <div className="font-bold text-[#16274D] text-[15px] truncate mt-1">
-                          {displayName}{isCompanion ? ' (Companion)' : ''}
+                {/* Header — clickable summary; click toggles the details open/closed */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedCards((prev) => (prev.includes(o.id) ? prev.filter((x) => x !== o.id) : [...prev, o.id]))}
+                  className="text-left w-full cursor-pointer border-0 p-0"
+                  style={{ backgroundColor: roleStyle.bg }}
+                  aria-expanded={expanded}
+                >
+                  <div className="flex items-start gap-3 p-3.5">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0" style={{ backgroundColor: roleStyle.avBg, color: roleStyle.avIcon }}>
+                      <User size={18} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[12.5px] font-bold text-white">{roleLabel}</span>
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-white/90"
+                              style={{ color: statusMeta.text }}
+                            >
+                              {statusMeta.label}
+                            </span>
+                          </div>
+                          <div className="font-bold text-white text-[15px] truncate mt-1">
+                            {displayName}
+                          </div>
+                          <div className="text-[11px] text-white/80 mt-0.5 truncate">{roomWardEn}</div>
+                        </div>
+                        <div className="flex items-start gap-2 shrink-0">
+                          <div className="text-right">
+                            <div className="font-bold text-[13.5px] text-white">
+                              {o.orderNo || o.id.replace('ORD-', '')}
+                            </div>
+                            <span
+                              className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold"
+                              style={{ color: roleStyle.pillText, backgroundColor: roleStyle.pillBg }}
+                            >
+                              {o.meal}
+                            </span>
+                          </div>
+                          <ChevronDown size={18} className={cx("text-white/80 mt-0.5 transition-transform", expanded && "rotate-180")} />
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <div className="font-bold text-[13.5px] text-[#16274D]">
-                          #{o.orderNo || o.id.replace('ORD-', '')}
-                        </div>
-                        {/* Workflow status only. This slot used to show the word
-                            "Companion" for a companion order, which hid whether
-                            that tray had been printed or delivered — and the role
-                            is already on the badge to the left. */}
+
+                      {/* Prominent diet tag + allergies (always visible) */}
+                      <div className="flex items-center gap-2 flex-wrap mt-2">
                         <span
-                          className="inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
-                          style={{ color: statusMeta.text, backgroundColor: statusMeta.bg }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11.5px] font-bold bg-white"
+                          style={{ color: dietClr }}
                         >
-                          {statusMeta.label}
+                          <Salad size={12} /> {o.diet}
                         </span>
+                        {hasAllergy ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11.5px] font-bold text-[#C0392B] bg-white">
+                            <AlertTriangle size={12} strokeWidth={2.5} /> {allergiesEn}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-white bg-white/20">
+                            No known allergies
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <div className="text-[11.5px] text-[#5d6678] mt-1.5 leading-relaxed">
-                      Meal Type: <span className="text-[#16274D] font-semibold">{o.meal}</span>
-                      <span className="text-[#c9cfda] px-1.5">|</span>
-                      Diet: <span className="text-[#16274D] font-semibold">{o.diet}</span>
-                      <span className="text-[#c9cfda] px-1.5">|</span>
-                      Allergies: <span className="text-[#16274D] font-semibold">{allergiesList}</span>
-                    </div>
                   </div>
-                </div>
+                </button>
 
                 {/* Diet-change alert */}
                 {o.dietChanged && (
-                  <div className="flex items-center gap-2 mt-2.5 px-2.5 py-1.5 rounded-lg bg-[#fbf1de] text-[#b9770b]">
+                  <div className="flex items-center gap-2 mx-3.5 mt-2.5 px-2.5 py-1.5 rounded-lg bg-[#fbf1de] text-[#b9770b]">
                     <AlertTriangle size={13} className="shrink-0" strokeWidth={2.5} />
                     <span className="text-[11.5px] font-semibold">
                       Diet changed after order submission{o.prevDiet ? ` · ${o.prevDiet} → ${o.diet}` : ''}
@@ -2763,43 +2833,52 @@ export default function KitchenPage({
                   </div>
                 )}
 
-                {/* Delivery */}
-                <div className="flex items-center gap-2 mt-3 text-[12.5px] text-[#5d6678]">
-                  <Clock size={14} className="text-[#9099ab] shrink-0" />
-                  <span>Delivery: <span className="font-semibold text-[#16274D]">{timeRange}</span> · {fmtDate(o.date)}</span>
-                </div>
+                {/* Expanded details */}
+                {expanded && (
+                  <>
+                    {/* Delivery + meal items band */}
+                    <div className="px-3.5 py-2.5 border-t border-[#eef1f6]">
+                      <div className="flex items-center gap-2 text-[12.5px] text-[#5d6678]">
+                        <Clock size={14} className="text-[#9099ab] shrink-0" />
+                        <span>Delivery: <span className="font-semibold text-[#16274D]">{timeRange}</span> · {fmtDate(o.date)}</span>
+                      </div>
+                      <div className="flex items-start gap-2 mt-2 text-[12.5px]">
+                        <Utensils size={14} className="text-[#9099ab] shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <span className="text-[#5d6678]">Meal items ({allDishes.length}): </span>
+                          <span className="text-[#16274D] font-medium">
+                            {allDishes.length > 0 ? allDishes.join(', ') : 'None selected'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
 
-                {/* Meal items */}
-                <div className="flex items-start gap-2 mt-2 text-[12.5px]">
-                  <Utensils size={14} className="text-[#9099ab] shrink-0 mt-0.5" />
-                  <div className="min-w-0">
-                    <span className="text-[#5d6678]">Meal items ({allDishes.length}): </span>
-                    <span className="text-[#16274D] font-medium">
-                      {allDishes.length > 0 ? allDishes.join(', ') : 'None selected'}
-                    </span>
-                  </div>
-                </div>
+                    {/* Bilingual detail table (no Companion Status) */}
+                    <div>
+                      {detailRow(Utensils, 'Meal Type', 'نوع الوجبة', o.meal, mealArabic)}
+                      {detailRow(Salad, 'Diet Type', 'نوع النظام الغذائي', o.diet, dietArabic, dietClr)}
+                      {detailRow(BedDouble, 'Room / Ward', 'الغرفة / الجناح', roomWardEn, roomWardAr)}
+                      {detailRow(AlertTriangle, 'Allergies', 'الحساسية', allergiesEn, allergiesArText, hasAllergy ? '#C0392B' : '#16274D')}
+                    </div>
 
                 {/* Footer actions */}
-                <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-[#eef1f6]">
+                <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-t border-[#eef1f6] bg-[#fbfcfe]">
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide"
+                    style={{ color: isCompanion ? '#0a84b1' : '#16274D', backgroundColor: isCompanion ? '#eaf7fc' : '#eef2f7' }}
+                  >
+                    {roleLabel}
+                    <span className="font-medium normal-case" dir="rtl">{roleLabelAr}</span>
+                  </span>
+                  <div className="flex items-center gap-2">
                   {o.status === 'Submitted' && (
-                    <>
-                      <Btn variant="neutral" onClick={() => startEdit(o)}>
-                        <Edit size={14} />
-                        Edit
-                      </Btn>
-                      <Btn variant="accent" onClick={() => printSingle(o)}>
-                        <Printer size={16} />
-                        Print
-                      </Btn>
-                    </>
+                    <Btn variant="accent" onClick={() => printSingle(o)}>
+                      <Printer size={16} />
+                      Print
+                    </Btn>
                   )}
                   {o.status === 'Printed' && (
                     <>
-                      <Btn variant="neutral" onClick={() => startEdit(o)} title="Edit Order">
-                        <Edit size={14} />
-                        Edit
-                      </Btn>
                       <Btn variant="neutral" onClick={() => printSingle(o)} title="Reprint Ticket">
                         <Printer size={16} />
                         Reprint
@@ -2811,18 +2890,15 @@ export default function KitchenPage({
                     </>
                   )}
                   {o.status === 'Delivered' && (
-                    <>
-                      <Btn variant="neutral" onClick={() => startEdit(o)} title="Edit Order">
-                        <Edit size={14} />
-                        Edit
-                      </Btn>
-                      <Btn variant="neutral" onClick={() => printSingle(o)} title="Reprint Ticket">
-                        <Printer size={16} />
-                        Reprint
-                      </Btn>
-                    </>
+                    <Btn variant="neutral" onClick={() => printSingle(o)} title="Reprint Ticket">
+                      <Printer size={16} />
+                      Reprint
+                    </Btn>
                   )}
+                  </div>
                 </div>
+                  </>
+                )}
               </div>
             );
           };
@@ -2830,24 +2906,51 @@ export default function KitchenPage({
           // A pair = a patient card + its companion card (when present), wrapped in one
           // container with a shared Room · Bed · Floor header, matching the ticket style.
           const renderPair = (group: { o: any; idx: number }[]) => {
-            const patientEntry = group.find((g) => !isCompanionOrder(g.o)) || group[0];
-            const po = patientEntry.o;
-            const pInfo = getDeviceAndOccupancy(po, patientEntry.idx);
+            const patientEntry = group.find((g) => !isCompanionOrder(g.o)) || null;
+            const companionEntry = group.find((g) => isCompanionOrder(g.o)) || null;
+            const anchor = patientEntry || companionEntry!;   // for location + key
+            const po = anchor.o;
+            const pInfo = getDeviceAndOccupancy(po, anchor.idx);
             const pIsReal = !po._deviceId;
-            const hasCompanion = group.some((g) => isCompanionOrder(g.o));
-            const hasPatient = group.some((g) => !isCompanionOrder(g.o));
-            const pairLabel = hasPatient && hasCompanion ? 'Patient & Companion' : hasCompanion ? 'Companion' : 'Patient';
+            const pairLabel = patientEntry && companionEntry ? 'Patient & Companion' : patientEntry ? 'Patient' : 'Companion';
             const baseLoc = pIsReal ? `Room ${po.room}${po.bed ? ` · Bed ${po.bed}` : ''}` : pInfo.locationDetails;
             const loc = /floor/i.test(baseLoc) ? baseLoc : `${baseLoc} · Floor ${orderFloor(po)}`;
             const pairIds = group.map((g) => g.o.id);
             const allSel = pairIds.length > 0 && pairIds.every((id) => selectedOrderIds.includes(id));
+
+            // Grayed-out placeholder shown when a patient has no companion order.
+            // It stretches to the patient card's height (grid stretch) and centres the
+            // "No order placed for a guest" message.
+            const emptyCard = (role: 'Patient' | 'Guest') => (
+              <div className="rounded-[14px] border border-dashed border-[#dfe3ea] bg-[#f6f7f9] overflow-hidden flex flex-col h-full">
+                <div className="flex items-start gap-3 p-3.5 bg-[#eceef2]">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center bg-[#dfe3ea] text-[#9aa3b2] shrink-0">
+                    <User size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[12.5px] font-bold text-[#9099ab]">{role}</span>
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-[#e3e6ec] text-[#9099ab]">
+                        No order
+                      </span>
+                    </div>
+                    <div className="font-bold text-[#aab2c0] text-[15px] mt-1">{role === 'Guest' ? 'No guest order' : 'No patient order'}</div>
+                    <div className="text-[11px] text-[#b6bdc9] mt-0.5 truncate">{loc}</div>
+                  </div>
+                </div>
+                <div className="flex-1 flex items-center justify-center py-6 text-center">
+                  <div>
+                    <div className="text-[12.5px] font-medium text-[#9099ab]">No order placed for a guest</div>
+                    <div className="text-[11px] text-[#b6bdc9] mt-0.5" dir="rtl">لا يوجد طلب مرافق</div>
+                  </div>
+                </div>
+              </div>
+            );
+
             return (
               <div
                 key={'pair-' + pairKey(po)}
-                className={cx(
-                  "rounded-[18px] border border-[#dbe7f2] bg-gradient-to-b from-[#f3f8fc] to-[#eef4fa] p-3",
-                  group.length > 1 && "xl:col-span-2"
-                )}
+                className="rounded-[18px] border border-[#dbe7f2] bg-gradient-to-b from-[#f3f8fc] to-[#eef4fa] p-3 xl:col-span-2"
               >
                 {/* Shared header */}
                 <div className="flex items-center gap-2.5 px-1 pb-2.5 flex-wrap">
@@ -2868,14 +2971,13 @@ export default function KitchenPage({
                     <MapPin size={14} className="text-[#5d6678]" />
                     {loc}
                   </div>
-                  <div className="flex items-center gap-1 text-[12px] font-medium text-[#0a84b1]">
-                    <Link2 size={13} />
-                    {pairLabel}
-                  </div>
                 </div>
-                {/* Patient + companion side by side */}
-                <div className={cx("grid gap-3", group.length > 1 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1")}>
-                  {group.map(renderInnerCard)}
+                {/* Patient (left) + companion (right); grayed placeholder when missing.
+                    Stretch so the "No order" placeholder matches the patient card's height;
+                    real pairs keep natural (independent) heights. */}
+                <div className={cx("grid gap-3 grid-cols-1 lg:grid-cols-2", (patientEntry && companionEntry) ? "items-start" : "items-stretch")}>
+                  {patientEntry ? renderInnerCard(patientEntry) : emptyCard('Patient')}
+                  {companionEntry ? renderInnerCard(companionEntry) : emptyCard('Guest')}
                 </div>
               </div>
             );
