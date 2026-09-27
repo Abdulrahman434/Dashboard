@@ -193,16 +193,9 @@ export default function App() {
       });
     };
 
-    // Run immediately
+    // Run once on mount / login state change
     removeInjectedDivs();
-
-    // Run on interval to catch dynamically added images
-    const interval = setInterval(removeInjectedDivs, 500);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [isLoggedIn]); // Re-run when page changes
+  }, [isLoggedIn]);
 
   const handleLogin = (email: string, name: string) => {
     const user = { email, name };

@@ -1,0 +1,4 @@
+# CareInn Dashboard - Internal System
+# Disallow all automated crawlers and bots to prevent unnecessary edge requests
+User-agent: *
+Disallow: /
