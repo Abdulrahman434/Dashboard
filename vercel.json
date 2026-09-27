@@ -2,16 +2,8 @@
   "outputDirectory": "build",
   "rewrites": [
     {
-      "source": "/assets/(.*)",
-      "destination": "/assets/$1"
-    },
-    {
-      "source": "/(favicon\\.(ico|png|svg)|robots\\.txt)",
-      "destination": "/$1"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "/"
     }
   ],
   "headers": [
@@ -25,15 +17,6 @@
       ]
     },
     {
-      "source": "/(favicon\\.(ico|png|svg)|robots\\.txt)",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400, stale-while-revalidate=86400"
-        }
-      ]
-    },
-    {
       "source": "/(.*)",
       "headers": [
         {
@@ -43,24 +26,6 @@
         {
           "key": "X-Frame-Options",
           "value": "SAMEORIGIN"
-        }
-      ]
-    },
-    {
-      "source": "/",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
-        }
-      ]
-    },
-    {
-      "source": "/index.html",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
         }
       ]
     }
