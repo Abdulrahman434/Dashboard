@@ -569,16 +569,18 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
           </Note>
         )}
 
-        {/* selected category: name, state and order controls */}
-        {!isAll && (
+        {/* view title: All items / category name, state and order controls */}
+        {(
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <div className="flex items-center gap-2.5">
-                <h2 className="text-[18px] font-semibold text-[#16274D] truncate">{category ? category.nameEn : 'Uncategorized'}</h2>
+                <h2 className="text-[18px] font-semibold text-[#16274D] truncate">{isAll ? 'All items' : category ? category.nameEn : 'Uncategorized'}</h2>
                 {category && <Badge tone={category.active ? 'ok' : 'mute'}>{category.active ? 'Active' : 'Hidden from patients'}</Badge>}
               </div>
               <p className="text-[13px] text-[#6B7280]">
-                {category
+                {isAll
+                  ? 'Every item across all categories. Pick a category to see and change the order patients see.'
+                  : category
                   ? reordering
                     ? 'Drag items by the handle, then save. Patients see them in this order.'
                     : 'Items are listed in the order patients see them.'

@@ -34,7 +34,7 @@ export default function CategoryPanel({
         onClick={() => !on && !locked && onSelect(id)}
         disabled={locked && !on}
         className={cx(
-          'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-colors border',
+          'w-full flex items-center gap-2 px-2.5 py-2.5 rounded-lg text-left transition-colors border',
           on ? 'bg-[#eaf7fc] border-[#4EBEE3]' : 'border-transparent hover:bg-[#f7f8fb]',
           locked && !on ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
         )}
@@ -42,7 +42,7 @@ export default function CategoryPanel({
       >
         <span className={cx('shrink-0', on ? 'text-[#1d7da3]' : 'text-[#5d6678]')}>{icon}</span>
         <span className="min-w-0 flex-1">
-          <span className={cx('block text-[13.5px] leading-snug break-words', on ? 'font-semibold text-[#16274D]' : muted ? 'text-[#5d6678]' : 'text-[#19233a]')}>
+          <span className={cx('block text-[13.5px] leading-snug', on ? 'font-semibold text-[#16274D]' : muted ? 'text-[#5d6678]' : 'text-[#19233a]')}>
             {label}
           </span>
           {sub && <span className="block text-[12px] text-[#9099ab]">{sub}</span>}
@@ -53,7 +53,7 @@ export default function CategoryPanel({
   };
 
   return (
-    <div className="w-[200px] shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden self-start font-['Poppins',sans-serif]">
+    <div className="w-[216px] shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden self-start font-['Poppins',sans-serif]">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
         <span className="font-semibold text-[14px] text-[#16274D]">Categories</span>
         <button
