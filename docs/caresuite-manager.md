@@ -14,7 +14,7 @@ entries **Items Manager** and **Categories Manager** open the matching tab.
 | CareSuite Manager → Library | **Items Manager** tab — category list on the left (All items, each category in patient order, Uncategorized); search, Type / Group / Status filters, group by, bulk Quick Actions (Edit, Activate, Deactivate, Delete) |
 | Control Panel → Team Categories | **Categories Manager** tab (the Control Panel entry is gone; its old link opens this tab) |
 | No ordering | Drag categories to set their order on the patient screen (saved on drop) |
-| — | Pick a category on the left to see its items in patient order and **Reorder Items → Save / Cancel**. "Manage Items" in Categories Manager opens Items Manager on that category. |
+| — | Pick a category on the left to see its items in patient order; drag rows to reorder, then **Save order** or **Cancel**. Group by Type or Group works inside a category too. "Manage Items" in Categories Manager opens Items Manager on that category. |
 | — | Category **Active** toggle |
 | Delete blocked while in use | Delete dialog with three options (below) |
 

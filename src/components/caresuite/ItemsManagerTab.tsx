@@ -239,12 +239,13 @@ const GROUP_BY_OPTIONS = [
 ];
 const groupLabel = (g?: string) => (!g || g === 'All' ? 'All Groups' : g);
 const byOrder = (a: LibraryItem, b: LibraryItem) => (a.order ?? 0) - (b.order ?? 0);
+const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
 
 /**
  * Items Manager tab: category list on the left (All items, each category in
- * patient order, Uncategorized) and the items table on the right. With one
- * category selected the table is in patient-facing order and "Reorder Items"
- * edits that order (draft → Save / Cancel). Archived items are hidden.
+ * patient order, Uncategorized) and the items table on the right. In a
+ * category the table is in patient-facing order and rows can be dragged; a
+ * changed order is a draft until Save order (or Cancel). Archived items are hidden.
  */
 export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: number; headerSlot?: HTMLElement | null }) {
   const { categories, library } = useCareSuite();
@@ -261,6 +262,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const [perPage, setPerPage] = useState(10);
   const [sortDir, setSortDir] = useState<SortDir>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  /** unsaved item order for the selected category (full id list), null when nothing changed */
   const [draft, setDraft] = useState<string[] | null>(null);
   // undefined = closed, null = adding, item = editing
   const [editing, setEditing] = useState<LibraryItem | null | undefined>(undefined);
@@ -269,7 +271,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const current = cat === ALL || cat === UNCATEGORIZED || categories.some((c) => c.id === cat) ? cat : ALL;
   const category = categories.find((c) => c.id === current);
   const isAll = current === ALL;
-  const reordering = draft !== null && !!category;
+  const dirty = draft !== null && !!category;
 
   useAddSignal(addSignal, () => setEditing(null));
 
@@ -298,6 +300,13 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
     isAll ? true : current === UNCATEGORIZED ? !i.categoryId || !categories.some((c) => c.id === i.categoryId) : i.categoryId === current,
   );
 
+  // patient order of the selected category: the draft if there is one, else the saved order
+  const savedIds = category ? [...inScope].sort(byOrder).map((i) => i.id) : [];
+  const orderedIds = draft
+    ? [...draft.filter((id) => savedIds.includes(id)), ...savedIds.filter((id) => !draft.includes(id))]
+    : savedIds;
+  const position = new Map(orderedIds.map((id, n) => [id, n + 1]));
+
   const q = search.trim().toLowerCase();
   const hasFilters = !!q || fTypes.length + fGroups.length + fStatus.length > 0;
   const filtered = inScope.filter((item) => {
@@ -308,6 +317,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
     return true;
   });
 
+  const grouping = groupBy !== 'none';
   const groupOf = (item: LibraryItem): { key: string; label: string; rank: number } => {
     if (groupBy === 'type') return { key: item.type, label: typeLabel(item.type), rank: TYPE_OPTIONS.findIndex((t) => t.value === item.type) };
     if (groupBy === 'group') {
@@ -316,7 +326,6 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
     }
     return { key: '', label: '', rank: 0 };
   };
-  const grouping = isAll && groupBy !== 'none';
 
   const byCategory = (a: LibraryItem, b: LibraryItem) => {
     const an = categoryName(a.categoryId);
@@ -325,29 +334,41 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
     return sortDir === 'asc' ? an.localeCompare(bn) : bn.localeCompare(an);
   };
 
-  let rows: LibraryItem[];
-  if (reordering) {
-    const all = [...inScope].sort(byOrder);
-    rows = draft!.map((id) => all.find((i) => i.id === id)).filter(Boolean) as LibraryItem[];
-  } else if (category) {
-    rows = [...filtered].sort(byOrder); // patient-facing order
-  } else {
-    rows = [...filtered].sort((a, b) => {
-      if (grouping) {
-        const d = groupOf(a).rank - groupOf(b).rank;
-        if (d) return d;
-      }
-      return isAll && sortDir ? byCategory(a, b) : 0;
-    });
-  }
+  const rows = [...filtered].sort((a, b) => {
+    if (grouping) {
+      const d = groupOf(a).rank - groupOf(b).rank;
+      if (d) return d;
+    }
+    if (category) return (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0); // patient order
+    return isAll && sortDir ? byCategory(a, b) : 0; // stable: stored order otherwise
+  });
   const groupCounts = new Map<string, number>();
   if (grouping) rows.forEach((r) => groupCounts.set(groupOf(r).key, (groupCounts.get(groupOf(r).key) || 0) + 1));
 
   const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
   const currentPage = Math.min(page, totalPages);
-  const pageRows = reordering ? rows : rows.slice((currentPage - 1) * perPage, currentPage * perPage);
-  // patient position of each row (category view only)
-  const position = new Map(category ? [...inScope].sort(byOrder).map((i, n) => [i.id, n + 1]) : []);
+  const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage);
+
+  // dragging only means one thing when the whole category is listed in patient order
+  const canDrag = !!category && !hasFilters && !grouping;
+  const dragHint = !category
+    ? undefined
+    : canDrag
+      ? undefined
+      : 'Clear the search, filters and grouping to reorder';
+
+  /** A drag on this page: put the page's items into their new order inside the full category order. */
+  const reorderPage = (newPageIds: string[]) => {
+    const slots = newPageIds.map((id) => orderedIds.indexOf(id)).sort((a, b) => a - b);
+    const next = [...orderedIds];
+    slots.forEach((slot, k) => (next[slot] = newPageIds[k]));
+    setDraft(sameOrder(next, savedIds) ? null : next);
+  };
+  const saveOrder = () => {
+    careSuiteService.setCategoryItemOrder(current, orderedIds);
+    setDraft(null);
+    toast.success('Item order saved');
+  };
 
   // select-all covers the filtered rows, not just this page
   const allSelected = rows.length > 0 && rows.every((r) => selected.includes(r.id));
@@ -363,16 +384,6 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const setActiveSelected = (active: boolean) => {
     selected.forEach((id) => careSuiteService.updateLibraryItem(id, { active }));
     toast.success(`${selected.length} item${selected.length === 1 ? '' : 's'} ${active ? 'activated' : 'deactivated'}`);
-  };
-
-  const startReorder = () => {
-    setSelected([]);
-    setDraft([...inScope].sort(byOrder).map((i) => i.id));
-  };
-  const saveOrder = () => {
-    careSuiteService.setCategoryItemOrder(current, draft!);
-    setDraft(null);
-    toast.success('Item order saved');
   };
 
   const clearFilters = () => {
@@ -405,14 +416,27 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
 
   const showCategoryCol = isAll;
   const showOrderCol = !!category;
-  const colCount = 8 + (showCategoryCol ? 1 : 0) + (showOrderCol ? 1 : 0);
+  const colCount = 8 + (showCategoryCol ? 1 : 0) + (showOrderCol ? 2 : 0);
 
-  /** Every cell after the leading checkbox / drag-handle cell. */
+  const checkboxCell = (item: LibraryItem) => (
+    <td className={tdCls}>
+      <input
+        type="checkbox"
+        className={checkboxCls}
+        checked={selected.includes(item.id)}
+        onChange={() => toggleOne(item.id)}
+        onClick={(e) => e.stopPropagation()}
+        aria-label={`Select ${item.nameEn}`}
+      />
+    </td>
+  );
+
+  /** Every cell after the checkbox. */
   const cells = (item: LibraryItem) => (
     <>
       {showOrderCol && (
         <td className={tdCls}>
-          <OrderBadge n={reordering ? rows.indexOf(item) + 1 : position.get(item.id) ?? 0} />
+          <OrderBadge n={position.get(item.id) ?? 0} />
         </td>
       )}
       <td className={tdCls}>
@@ -436,51 +460,62 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
       <td className={tdCls}>
         <Switch
           on={item.active}
-          disabled={reordering}
           label={`${item.nameEn} active`}
           onChange={() => careSuiteService.updateLibraryItem(item.id, { active: !item.active })}
         />
       </td>
       <td className={tdCls}>
-        {!reordering && (
-          <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditing(item);
-              }}
-              className="p-1.5 rounded-lg hover:bg-[#4EBEE3]/10 transition-colors cursor-pointer"
-              title="Edit"
-            >
-              <Pencil size={18} className="text-[#4EBEE3]" />
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                confirmRemoveItem(item);
-              }}
-              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-              title="Delete"
-            >
-              <Trash2 size={18} className="text-red-500" />
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(item);
+            }}
+            className="p-1.5 rounded-lg hover:bg-[#4EBEE3]/10 transition-colors cursor-pointer"
+            title="Edit"
+          >
+            <Pencil size={18} className="text-[#4EBEE3]" />
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              confirmRemoveItem(item);
+            }}
+            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+            title="Delete"
+          >
+            <Trash2 size={18} className="text-red-500" />
+          </button>
+        </div>
       </td>
     </>
   );
+
+  const groupHeader = (item: LibraryItem, i: number) => {
+    const g = groupOf(item);
+    if (!grouping || (i > 0 && groupOf(pageRows[i - 1]).key === g.key)) return null;
+    return (
+      <tr key={`g-${g.key}`} className="bg-[#F8FAFC]">
+        <td colSpan={colCount} className="px-4 py-2.5">
+          <span className="text-[13px] font-semibold text-[#16274D]">{g.label}</span>
+          <span className="ml-2 text-[12px] text-gray-500">
+            {groupCounts.get(g.key)} {groupCounts.get(g.key) === 1 ? 'item' : 'items'}
+          </span>
+        </td>
+      </tr>
+    );
+  };
 
   const table = (
     <table className="w-full">
       <thead className="border-b border-gray-200">
         <tr>
+          {showOrderCol && <th className={thCls} style={{ width: 36 }} title={dragHint} />}
           <th className={thCls} style={{ width: 44 }}>
-            {!reordering && (
-              <input type="checkbox" className={checkboxCls} checked={allSelected} onChange={toggleAll} aria-label="Select all items" />
-            )}
+            <input type="checkbox" className={checkboxCls} checked={allSelected} onChange={toggleAll} aria-label="Select all items" />
           </th>
           {showOrderCol && (
-            <th className={thCls} style={{ width: 70 }} title="Position on the patient-facing screen">
+            <th className={thCls} style={{ width: 64 }} title="Position on the patient-facing screen">
               Order
             </th>
           )}
@@ -502,46 +537,33 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
         </tr>
       </thead>
       <tbody className="divide-y divide-gray-200">
-        {reordering
-          ? pageRows.map((item) => (
-              <SortableTr key={item.id} id={item.id} className="bg-white">
-                {(handle) => (
-                  <>
-                    <td className={tdCls}>{handle}</td>
-                    {cells(item)}
-                  </>
-                )}
-              </SortableTr>
-            ))
-          : pageRows.map((item, i) => {
-              const g = groupOf(item);
-              const startsGroup = grouping && (i === 0 || groupOf(pageRows[i - 1]).key !== g.key);
-              return [
-                startsGroup && (
-                  <tr key={`g-${g.key}`} className="bg-[#F8FAFC]">
-                    <td colSpan={colCount} className="px-4 py-2.5">
-                      <span className="text-[13px] font-semibold text-[#16274D]">{g.label}</span>
-                      <span className="ml-2 text-[12px] text-gray-500">
-                        {groupCounts.get(g.key)} {groupCounts.get(g.key) === 1 ? 'item' : 'items'}
-                      </span>
-                    </td>
-                  </tr>
-                ),
-                <tr key={item.id} onClick={() => setEditing(item)} className="hover:bg-[#F8FAFC] transition-colors cursor-pointer">
-                  <td className={tdCls}>
-                    <input
-                      type="checkbox"
-                      className={checkboxCls}
-                      checked={selected.includes(item.id)}
-                      onChange={() => toggleOne(item.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      aria-label={`Select ${item.nameEn}`}
-                    />
+        {pageRows.map((item, i) => [
+          groupHeader(item, i),
+          category ? (
+            <SortableTr
+              key={item.id}
+              id={item.id}
+              disabled={!canDrag}
+              onClick={() => setEditing(item)}
+              className="bg-white hover:bg-[#F8FAFC] transition-colors cursor-pointer"
+            >
+              {(handle) => (
+                <>
+                  <td className="py-3 pl-3 pr-0 align-middle" title={dragHint}>
+                    {handle}
                   </td>
+                  {checkboxCell(item)}
                   {cells(item)}
-                </tr>,
-              ];
-            })}
+                </>
+              )}
+            </SortableTr>
+          ) : (
+            <tr key={item.id} onClick={() => setEditing(item)} className="hover:bg-[#F8FAFC] transition-colors cursor-pointer">
+              {checkboxCell(item)}
+              {cells(item)}
+            </tr>
+          ),
+        ])}
       </tbody>
     </table>
   );
@@ -557,7 +579,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
           selected={current}
           onSelect={selectCategory}
           onCollapse={() => setPanelOpen(false)}
-          locked={reordering}
+          locked={dirty}
         />
       )}
 
@@ -569,101 +591,92 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
           </Note>
         )}
 
-        {/* view title: All items / category name, state and order controls */}
-        {(
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-[18px] font-semibold text-[#16274D] truncate">{isAll ? 'All items' : category ? category.nameEn : 'Uncategorized'}</h2>
-                {category && <Badge tone={category.active ? 'ok' : 'mute'}>{category.active ? 'Active' : 'Hidden from patients'}</Badge>}
-              </div>
-              <p className="text-[13px] text-[#6B7280]">
-                {isAll
-                  ? 'Every item across all categories. Pick a category to see and change the order patients see.'
-                  : category
-                  ? reordering
-                    ? 'Drag items by the handle, then save. Patients see them in this order.'
-                    : 'Items are listed in the order patients see them.'
-                  : 'These items have no category and are not shown to patients. Assign a category to show them.'}
-              </p>
+        {/* view title: All items / category name and state; Save / Cancel while the order is changed */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-[18px] font-semibold text-[#16274D] truncate">
+                {isAll ? 'All items' : category ? category.nameEn : 'Uncategorized'}
+              </h2>
+              {category && <Badge tone={category.active ? 'ok' : 'mute'}>{category.active ? 'Active' : 'Hidden from patients'}</Badge>}
+              {dirty && <Badge tone="warn">Unsaved order</Badge>}
             </div>
-            {category && (
-              <div className="flex gap-2 shrink-0">
-                {reordering ? (
-                  <>
-                    <Btn variant="neutral" onClick={() => setDraft(null)}>
-                      Cancel
-                    </Btn>
-                    <Btn variant="primary" onClick={saveOrder}>
-                      Save order
-                    </Btn>
-                  </>
-                ) : (
-                  <Btn variant="primary" onClick={startReorder} disabled={inScope.length < 2}>
-                    <ArrowUpDown size={16} />
-                    Reorder Items
-                  </Btn>
-                )}
-              </div>
-            )}
+            <p className="text-[13px] text-[#6B7280]">
+              {isAll
+                ? 'Every item across all categories. Pick a category to see and change the order patients see.'
+                : category
+                  ? dirty
+                    ? 'Save to apply the new order on the patient screen, or cancel to keep the current one.'
+                    : 'Items are listed in the order patients see them. Drag rows by the handle to change it.'
+                  : 'These items have no category and are not shown to patients. Assign a category to show them.'}
+            </p>
           </div>
-        )}
+          {dirty && (
+            <div className="flex gap-2 shrink-0">
+              <Btn variant="neutral" onClick={() => setDraft(null)}>
+                Cancel
+              </Btn>
+              <Btn variant="primary" onClick={saveOrder}>
+                Save order
+              </Btn>
+            </div>
+          )}
+        </div>
 
-        {/* search (left) · filters + group by (right) — hidden while reordering, which always shows the whole category */}
-        {!reordering && (
-          <div className="flex items-center gap-3 flex-wrap">
-            {!panelOpen && (
+        {/* search (left) · filters + group by (right); locked while an order change is unsaved */}
+        <div className="flex items-center gap-3 flex-wrap" title={dirty ? 'Save or cancel the new order first' : undefined}>
+          {!panelOpen && (
+            <button
+              onClick={() => setPanelOpen(true)}
+              className="inline-flex items-center gap-2 h-[44px] px-3.5 bg-white border border-gray-300 rounded-lg text-[14px] text-[#16274D] hover:border-gray-400 cursor-pointer"
+              title="Show categories"
+            >
+              <PanelLeftOpen size={17} className="text-[#4EBEE3]" />
+              {isAll ? 'All items' : category?.nameEn ?? 'Uncategorized'}
+            </button>
+          )}
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              disabled={dirty}
+              onChange={(e) => narrow(setSearch)(e.target.value)}
+              placeholder="Search items by name"
+              className="w-full h-[44px] pl-11 pr-10 bg-white border border-gray-300 rounded-lg text-[14px] text-[#19233a] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/40 focus:border-[#4EBEE3] transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
+            />
+            {search && !dirty && (
               <button
-                onClick={() => setPanelOpen(true)}
-                className="inline-flex items-center gap-2 h-[44px] px-3.5 bg-white border border-gray-300 rounded-lg text-[14px] text-[#16274D] hover:border-gray-400 cursor-pointer"
-                title="Show categories"
+                onClick={() => narrow(setSearch)('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                title="Clear search"
               >
-                <PanelLeftOpen size={17} className="text-[#4EBEE3]" />
-                {isAll ? 'All items' : category?.nameEn ?? 'Uncategorized'}
+                <X size={16} />
               </button>
             )}
-            <div className="relative flex-1 min-w-[220px]">
-              <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                value={search}
-                onChange={(e) => narrow(setSearch)(e.target.value)}
-                placeholder="Search items by name"
-                className="w-full h-[44px] pl-11 pr-10 bg-white border border-gray-300 rounded-lg text-[14px] text-[#19233a] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/40 focus:border-[#4EBEE3] transition-all"
-              />
-              {search && (
-                <button
-                  onClick={() => narrow(setSearch)('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  title="Clear search"
-                >
-                  <X size={16} />
-                </button>
-              )}
-            </div>
-            <MultiSelectDropdown options={TYPE_OPTIONS} selectedValues={fTypes} onChange={narrow(setFTypes)} placeholder="Type" className="min-w-[130px]" showSelectAll={false} />
-            <MultiSelectDropdown
-              options={GROUP_OPTIONS.map((g) => ({ value: g.value, label: groupLabel(g.value) }))}
-              selectedValues={fGroups}
-              onChange={narrow(setFGroups)}
-              placeholder="Group"
-              className="min-w-[130px]"
-              showSelectAll={false}
-            />
-            <MultiSelectDropdown options={STATUS_OPTIONS} selectedValues={fStatus} onChange={narrow(setFStatus)} placeholder="Status" className="min-w-[120px]" showSelectAll={false} />
-            {isAll && (
-              <SingleSelectDropdown
-                options={GROUP_BY_OPTIONS}
-                value={groupBy}
-                onChange={(v: string) => {
-                  setGroupBy(v as GroupBy);
-                  setPage(1);
-                }}
-                size="md"
-                className="min-w-[175px]"
-              />
-            )}
           </div>
-        )}
+          <MultiSelectDropdown options={TYPE_OPTIONS} selectedValues={fTypes} onChange={narrow(setFTypes)} placeholder="Type" className="min-w-[120px]" showSelectAll={false} disabled={dirty} />
+          <MultiSelectDropdown
+            options={GROUP_OPTIONS.map((g) => ({ value: g.value, label: groupLabel(g.value) }))}
+            selectedValues={fGroups}
+            onChange={narrow(setFGroups)}
+            placeholder="Group"
+            className="min-w-[120px]"
+            showSelectAll={false}
+            disabled={dirty}
+          />
+          <MultiSelectDropdown options={STATUS_OPTIONS} selectedValues={fStatus} onChange={narrow(setFStatus)} placeholder="Status" className="min-w-[115px]" showSelectAll={false} disabled={dirty} />
+          <SingleSelectDropdown
+            options={GROUP_BY_OPTIONS}
+            value={groupBy}
+            onChange={(v: string) => {
+              setGroupBy(v as GroupBy);
+              setPage(1);
+            }}
+            size="md"
+            className="min-w-[170px]"
+            disabled={dirty}
+          />
+        </div>
 
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           {rows.length === 0 ? (
@@ -693,26 +706,24 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
           ) : (
             <>
               <div className="overflow-x-auto">
-                {reordering ? (
-                  <SortableRows ids={rows.map((i) => i.id)} onReorder={setDraft}>
+                {category ? (
+                  <SortableRows ids={pageRows.map((i) => i.id)} onReorder={reorderPage}>
                     {table}
                   </SortableRows>
                 ) : (
                   table
                 )}
               </div>
-              {!reordering && (
-                <TablePagination
-                  alwaysShow
-                  className="px-5 py-3.5 border-t border-gray-200 bg-white"
-                  currentPage={currentPage}
-                  totalItems={rows.length}
-                  itemsPerPage={perPage}
-                  onPageChange={setPage}
-                  onItemsPerPageChange={setPerPage}
-                  itemLabel={rows.length === 1 ? 'item' : 'items'}
-                />
-              )}
+              <TablePagination
+                alwaysShow
+                className="px-5 py-3.5 border-t border-gray-200 bg-white"
+                currentPage={currentPage}
+                totalItems={rows.length}
+                itemsPerPage={perPage}
+                onPageChange={setPage}
+                onItemsPerPageChange={setPerPage}
+                itemLabel={rows.length === 1 ? 'item' : 'items'}
+              />
             </>
           )}
         </div>
