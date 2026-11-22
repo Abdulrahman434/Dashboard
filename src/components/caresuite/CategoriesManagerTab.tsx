@@ -6,14 +6,10 @@ import { careSuiteService, categoryDisplayEn, categoryDisplayAr, type TeamCatego
 import { Toggle, Note } from './careSuiteAtoms';
 import { useAddSignal } from './ItemsManagerTab';
 import CategoryFormModal from './CategoryFormModal';
+import CategoryItemsView from './CategoryItemsView';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 
-// dashboard-table tokens
-export const thLeft = "py-3 px-4 text-left text-[12px] font-semibold text-[#16274D] font-['Poppins',sans-serif]";
-export const thCenter = "py-3 px-4 text-center text-[12px] font-semibold text-[#16274D] font-['Poppins',sans-serif]";
-export const tdCls = 'py-3.5 px-4';
-export const trCls = 'hover:bg-[#F8FAFC] transition-colors cursor-pointer';
-export const nameCls = "font-medium text-[#19233a] text-[13.5px] font-['Poppins',sans-serif]";
+import { thLeft, thCenter, tdCls, trCls, nameCls } from './tableTokens';
 
 /** Categories Manager tab — order, Active, Manage Items, Edit, Delete. */
 export default function CategoriesManagerTab({ addSignal }: { addSignal: number }) {
@@ -34,11 +30,17 @@ export default function CategoriesManagerTab({ addSignal }: { addSignal: number 
   };
 
   if (managingId) {
-    // Task 5 replaces this with the Manage Items view
     return (
-      <button className="text-[#4EBEE3]" onClick={() => setManagingId(null)}>
-        Back
-      </button>
+      <>
+        {/* keyed so switching category drops any unsaved reorder draft */}
+        <CategoryItemsView
+          key={managingId}
+          categoryId={managingId}
+          onBack={() => setManagingId(null)}
+          onSelectCategory={setManagingId}
+        />
+        {editing !== undefined && <CategoryFormModal category={editing} onClose={() => setEditing(undefined)} />}
+      </>
     );
   }
 
