@@ -11,10 +11,10 @@ entries **Items Manager** and **Categories Manager** open the matching tab.
 
 | Before | Now |
 |---|---|
-| CareSuite Manager → Library | **Items Manager** tab — same list, form, toggle and delete as before |
+| CareSuite Manager → Library | **Items Manager** tab — category list on the left (All items, each category in patient order, Uncategorized); search, Type / Group / Status filters, group by, bulk Quick Actions (Edit, Activate, Deactivate, Delete) |
 | Control Panel → Team Categories | **Categories Manager** tab (the Control Panel entry is gone; its old link opens this tab) |
 | No ordering | Drag categories to set their order on the patient screen (saved on drop) |
-| — | **Manage Items** per category: that category's items only, **Reorder Items → Save / Cancel** |
+| — | Pick a category on the left to see its items in patient order and **Reorder Items → Save / Cancel**. "Manage Items" in Categories Manager opens Items Manager on that category. |
 | — | Category **Active** toggle |
 | Delete blocked while in use | Delete dialog with three options (below) |
 
@@ -110,7 +110,7 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
 
 ## Behaviour to be aware of
 
-- **Deleting an item now archives it** — in Items Manager, Manage Items and the category
+- **Deleting an item now archives it** — in Items Manager (single or bulk) and the category
   "delete items" option alike. It disappears everywhere admins and patients look, but
   existing requests keep showing its name. There is no restore screen yet.
 - **Users linked to a category** (Control Panel → Users, "Team Category") are counted in
@@ -137,12 +137,11 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
   categories not flagged in the "move to" list; no error message if the target category was
   deleted in another tab meanwhile.
 - Category form: a legacy Arabic name can't be cleared (it falls back to the old value).
-- The header "Add Category" button stays visible inside Manage Items.
 - Category delete writes items, teams, users and categories separately (no rollback; moot
   once a backend does it in one transaction).
 - A few extra "nothing else changed" assertions would strengthen the tests.
 - Production build passes.
 - Driven in headless Chrome against the dev server: tab routing and sidebar, archived items
   hidden, category drag + reload, Active toggle, add / duplicate-name check, Teams page still
-  shows internal names, Manage Items reorder with Save / Cancel / switch category, each
+  shows internal names, reordering a category's items with Save / Cancel, each
   delete option, and the Admin dashboard still naming requests after items were archived.

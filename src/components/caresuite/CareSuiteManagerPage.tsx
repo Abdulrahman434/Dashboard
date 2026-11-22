@@ -4,6 +4,7 @@ import PillTabs from '../PillTabs';
 import { Btn } from './careSuiteAtoms';
 import ItemsManagerTab from './ItemsManagerTab';
 import CategoriesManagerTab from './CategoriesManagerTab';
+import { openItemsForCategory } from './caresuiteNav';
 
 export type CareSuiteManagerTab = 'items' | 'categories';
 
@@ -68,7 +69,14 @@ export default function CareSuiteManagerPage({
         {tab === 'items' ? (
           <ItemsManagerTab key="items" addSignal={addSignal} headerSlot={headerSlot} />
         ) : (
-          <CategoriesManagerTab key="categories" addSignal={addSignal} />
+          <CategoriesManagerTab
+            key="categories"
+            addSignal={addSignal}
+            onManageItems={(id) => {
+              openItemsForCategory(id);
+              onNavigate(CARESUITE_TAB_ROUTE.items);
+            }}
+          />
         )}
       </div>
     </div>

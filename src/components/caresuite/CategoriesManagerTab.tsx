@@ -6,18 +6,16 @@ import { careSuiteService, categoryDisplayEn, categoryDisplayAr, type TeamCatego
 import { Toggle, Note } from './careSuiteAtoms';
 import { useAddSignal } from './ItemsManagerTab';
 import CategoryFormModal from './CategoryFormModal';
-import CategoryItemsView from './CategoryItemsView';
 import DeleteCategoryDialog from './DeleteCategoryDialog';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 
 import { thLeft, thCenter, tdCls, trCls, nameCls } from './tableTokens';
 
 /** Categories Manager tab — order, Active, Manage Items, Edit, Delete. */
-export default function CategoriesManagerTab({ addSignal }: { addSignal: number }) {
+export default function CategoriesManagerTab({ addSignal, onManageItems }: { addSignal: number; onManageItems: (categoryId: string) => void }) {
   const { categories, library } = useCareSuite();
   // undefined = closed, null = adding, category = editing
   const [editing, setEditing] = useState<TeamCategory | null | undefined>(undefined);
-  const [managingId, setManagingId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<TeamCategory | null>(null);
 
   useAddSignal(addSignal, () => setEditing(null));
@@ -29,21 +27,6 @@ export default function CategoriesManagerTab({ addSignal }: { addSignal: number 
     careSuiteService.setCategoryOrder(ids);
     toast.success('Category order saved');
   };
-
-  if (managingId) {
-    return (
-      <>
-        {/* keyed so switching category drops any unsaved reorder draft */}
-        <CategoryItemsView
-          key={managingId}
-          categoryId={managingId}
-          onBack={() => setManagingId(null)}
-          onSelectCategory={setManagingId}
-        />
-        {editing !== undefined && <CategoryFormModal category={editing} onClose={() => setEditing(undefined)} />}
-      </>
-    );
-  }
 
   return (
     <>
@@ -87,7 +70,7 @@ export default function CategoriesManagerTab({ addSignal }: { addSignal: number 
                   {categories.map((c, idx) => {
                     const n = itemCount(c.id);
                     return (
-                      <SortableTr key={c.id} id={c.id} className={trCls} onClick={() => setManagingId(c.id)}>
+                      <SortableTr key={c.id} id={c.id} className={trCls} onClick={() => onManageItems(c.id)}>
                         {(handle) => (
                           <>
                             <td className={`${tdCls} text-center`}>{handle}</td>
@@ -119,7 +102,7 @@ export default function CategoriesManagerTab({ addSignal }: { addSignal: number 
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setManagingId(c.id);
+                                  onManageItems(c.id);
                                 }}
                                 className="inline-flex items-center gap-2 px-3.5 py-1.5 border border-[#4EBEE3] text-[#1d7da3] rounded-lg text-[13px] font-medium hover:bg-[#eaf7fc] transition-colors cursor-pointer whitespace-nowrap"
                                 title="Manage this category's items and their order"

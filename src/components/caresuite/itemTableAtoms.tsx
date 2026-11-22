@@ -17,7 +17,7 @@ const pill = 'inline-flex items-center px-2.5 py-1 rounded-md border text-[11.5p
 /** Item image on a warm tile; falls back to a package icon. */
 export function ItemThumb({ src, alt }: { src?: string; alt: string }) {
   return (
-    <span className="inline-flex w-[86px] h-[56px] rounded-lg bg-[#F3EEE8] items-center justify-center overflow-hidden text-[#b7ab9c]">
+    <span className="inline-flex w-[72px] h-[48px] rounded-lg bg-[#F3EEE8] items-center justify-center overflow-hidden text-[#b7ab9c]">
       {src ? <img src={src} alt={alt} className="max-w-full max-h-full object-contain" /> : <Package size={22} />}
     </span>
   );
