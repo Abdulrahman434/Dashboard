@@ -164,3 +164,67 @@ test('categoryUsage counts non-archived items and teams', () => {
   put(K.library, [item('x1', 'A'), item('x2', 'A', { archived: true }), item('y1', 'B')]);
   assert.deepEqual(cs.categoryUsage('A'), { items: 1, teams: 1 });
 });
+
+// ---- Task 2: deleting a category ----------------------------------------
+
+const MODES = [
+  { mode: 'delete-items' },
+  { mode: 'move-items', targetCategoryId: 'B' },
+  { mode: 'uncategorize' },
+] as const;
+
+for (const opts of MODES) {
+  test(`deleteCategory (${opts.mode}) strips team associations and removes the category`, () => {
+    cs.deleteCategory('A', opts as any);
+    assert.deepEqual(cs.listTeams()[0].categoryIds, ['B']);
+    assert.deepEqual(ids(cs.listCategories()), ['B']);
+  });
+
+  test(`deleteCategory (${opts.mode}) leaves requests untouched and resolvable`, () => {
+    const before = store.get(K.requests);
+    cs.deleteCategory('A', opts as any);
+    assert.equal(store.get(K.requests), before);
+    for (const r of cs.listRequests()) {
+      assert.ok(cs.listLibrary().some((i) => i.id === r.libraryItemId), `request ${r.id} lost its item`);
+    }
+  });
+}
+
+test('delete-items archives but keeps records', () => {
+  cs.deleteCategory('A', { mode: 'delete-items' });
+  const x1 = cs.listLibrary().find((i) => i.id === 'x1')!;
+  assert.equal(x1.archived, true);
+  assert.equal(cs.listCategoryItems('A').length, 0);
+  assert.equal(cs.listLibrary().find((i) => i.id === 'y1')!.archived, undefined);
+});
+
+test('move-items appends to target and keeps other fields', () => {
+  put(K.library, [
+    item('x1', 'A', { type: 'Issue', priority: 'High', active: false }),
+    item('y1', 'B'),
+    item('x2', 'A'),
+  ]);
+  cs.setCategoryItemOrder('A', ['x2', 'x1']);
+  cs.deleteCategory('A', { mode: 'move-items', targetCategoryId: 'B' });
+  assert.deepEqual(ids(cs.listCategoryItems('B')), ['y1', 'x2', 'x1']);
+  const x1 = cs.listLibrary().find((i) => i.id === 'x1')!;
+  assert.deepEqual(
+    { type: x1.type, priority: x1.priority, active: x1.active, nameEn: x1.nameEn, categoryId: x1.categoryId },
+    { type: 'Issue', priority: 'High', active: false, nameEn: 'x1', categoryId: 'B' },
+  );
+});
+
+test('move-items rejects a missing or same target', () => {
+  assert.throws(() => cs.deleteCategory('A', { mode: 'move-items', targetCategoryId: 'nope' }), /target category/);
+  assert.throws(() => cs.deleteCategory('A', { mode: 'move-items', targetCategoryId: 'A' }), /target category/);
+  assert.deepEqual(ids(cs.listCategories()), ['A', 'B']); // nothing deleted
+});
+
+test('uncategorize sets categoryId null and hides items from the patient menu', () => {
+  cs.deleteCategory('A', { mode: 'uncategorize' });
+  const lib = cs.listLibrary();
+  assert.equal(lib.find((i) => i.id === 'x1')!.categoryId, null);
+  assert.equal(lib.find((i) => i.id === 'x1')!.archived, undefined);
+  const menuItems = cs.listPatientMenu().flatMap((c) => ids(c.items));
+  assert.ok(!menuItems.includes('x1') && !menuItems.includes('x2'));
+});

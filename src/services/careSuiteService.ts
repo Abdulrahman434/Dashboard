@@ -74,6 +74,12 @@ export interface PatientMenuCategory {
   items: LibraryItem[];
 }
 
+/** What happens to a deleted category's items. */
+export type DeleteCategoryMode =
+  | { mode: 'delete-items' }
+  | { mode: 'move-items'; targetCategoryId: string }
+  | { mode: 'uncategorize' };
+
 export function categoryDisplayEn(c: TeamCategory): string {
   return c.displayNameEn || c.nameEn;
 }
@@ -280,6 +286,36 @@ export const careSuiteService = {
   },
   removeCategory(id: string): void {
     write(CATEGORIES_KEY, this.listCategories().filter((c) => c.id !== id));
+  },
+  /**
+   * Delete a category. Every mode removes the category and strips it from all
+   * teams' `categoryIds`; requests are never modified. Its items are archived
+   * (records kept for request history), moved to the end of another category,
+   * or left uncategorized (hidden from patients until reassigned).
+   */
+  deleteCategory(id: string, opts: DeleteCategoryMode): void {
+    const cats = this.listCategories();
+    if (opts.mode === 'move-items') {
+      const target = opts.targetCategoryId;
+      if (target === id || !cats.some((c) => c.id === target)) {
+        throw new Error('deleteCategory: target category must be another existing category');
+      }
+    }
+    const items = this.listLibrary();
+    const moving = this.listCategoryItems(id).map((i) => i.id); // saved order
+    const base = opts.mode === 'move-items' ? nextItemOrder(items, opts.targetCategoryId) : 0;
+    write(LIBRARY_KEY, items.map((i) => {
+      if (i.categoryId !== id) return i;
+      if (opts.mode === 'delete-items') return { ...i, archived: true };
+      if (opts.mode === 'uncategorize') return { ...i, categoryId: null };
+      const pos = moving.indexOf(i.id);
+      // archived items follow the category id too, so history lookups stay consistent
+      return { ...i, categoryId: opts.targetCategoryId, order: base + (pos < 0 ? moving.length : pos) };
+    }));
+    write(TEAMS_KEY, this.listTeams().map((t) =>
+      t.categoryIds.includes(id) ? { ...t, categoryIds: t.categoryIds.filter((c) => c !== id) } : t,
+    ));
+    write(CATEGORIES_KEY, cats.filter((c) => c.id !== id));
   },
   isCategoryNameTaken(name: string, excludeId?: string): boolean {
     const n = name.trim().toLowerCase();
