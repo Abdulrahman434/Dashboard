@@ -21,7 +21,7 @@ const sectionCls = 'text-[12px] font-semibold uppercase tracking-[0.06em] text-[
 
 /**
  * Add (`category = null`) or edit a category: internal Name, Display Names,
- * Active, and how it looks on the patient screen (icon, heading, colour, card
+ * Active, and how it looks on the patient screen (icon, line under the name, colour, card
  * style, multiple items per request) with a live preview.
  */
 export default function CategoryFormModal({ category, onClose }: { category: TeamCategory | null; onClose: () => void }) {
@@ -31,8 +31,6 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
   const [displayAr, setDisplayAr] = useState(category ? categoryDisplayAr(category) : '');
   const [active, setActive] = useState(category?.active ?? true);
   const [icon, setIcon] = useState(category?.icon ?? '');
-  const [headingEn, setHeadingEn] = useState(category?.headingEn ?? '');
-  const [headingAr, setHeadingAr] = useState(category?.headingAr ?? '');
   const [subEn, setSubEn] = useState(category?.subheadingEn ?? '');
   const [subAr, setSubAr] = useState(category?.subheadingAr ?? '');
   const [tone, setTone] = useState<CategoryTone>(category?.tone ?? 'primary');
@@ -59,8 +57,6 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
       displayNameAr: t(displayAr),
       active,
       icon: icon || undefined,
-      headingEn: t(headingEn),
-      headingAr: t(headingAr),
       subheadingEn: t(subEn),
       subheadingAr: t(subAr),
       tone,
@@ -132,19 +128,11 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls} htmlFor="cat-heading-en">Heading (EN)</label>
-                  <input id="cat-heading-en" className={inputCls} value={headingEn} onChange={(e) => setHeadingEn(e.target.value)} placeholder={shownName} />
-                </div>
-                <div>
-                  <label className={labelCls} htmlFor="cat-heading-ar">Heading (AR)</label>
-                  <input id="cat-heading-ar" className={inputCls} dir="rtl" value={headingAr} onChange={(e) => setHeadingAr(e.target.value)} placeholder={displayAr || 'العنوان'} />
-                </div>
-                <div>
-                  <label className={labelCls} htmlFor="cat-sub-en">Line under heading (EN)</label>
+                  <label className={labelCls} htmlFor="cat-sub-en">Line under the name (EN)</label>
                   <input id="cat-sub-en" className={inputCls} value={subEn} onChange={(e) => setSubEn(e.target.value)} placeholder="e.g. Let us know what your room needs." />
                 </div>
                 <div>
-                  <label className={labelCls} htmlFor="cat-sub-ar">Line under heading (AR)</label>
+                  <label className={labelCls} htmlFor="cat-sub-ar">Line under the name (AR)</label>
                   <input id="cat-sub-ar" className={inputCls} dir="rtl" value={subAr} onChange={(e) => setSubAr(e.target.value)} placeholder="مثال: أخبرنا بما تحتاجه غرفتك." />
                 </div>
               </div>
@@ -216,7 +204,7 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
                   {shownName}
                 </div>
                 <div className="bg-white rounded-lg p-3">
-                  <div className="text-[14px] font-semibold text-[#16274D] leading-tight">{headingEn.trim() || shownName}</div>
+                  <div className="text-[14px] font-semibold text-[#16274D] leading-tight">{shownName}</div>
                   {subEn.trim() && <div className="text-[11.5px] text-[#5d6678] mt-0.5">{subEn.trim()}</div>}
                   <div className="grid grid-cols-2 gap-2 mt-3">
                     {(sampleItems.length ? sampleItems : [null, null]).slice(0, 2).map((it, i) => (

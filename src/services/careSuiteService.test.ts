@@ -286,12 +286,12 @@ test('legacy categories get patient-screen defaults', () => {
 test('category look settings persist', () => {
   cs.updateCategory('A', {
     tone: 'alert', cardStyle: 'icon', allowMultiple: true, icon: 'wrench',
-    headingEn: 'Report an issue', headingAr: 'أبلغ عن مشكلة', subheadingEn: 'Tell us what needs attention.', subheadingAr: 'أخبرنا بما يحتاج إلى اهتمام.',
+    subheadingEn: 'Tell us what needs attention.', subheadingAr: 'أخبرنا بما يحتاج إلى اهتمام.',
   });
   const a = cs.listCategories().find((c) => c.id === 'A')!;
   assert.deepEqual(
-    [a.tone, a.cardStyle, a.allowMultiple, a.icon, a.headingEn, a.subheadingAr],
-    ['alert', 'icon', true, 'wrench', 'Report an issue', 'أخبرنا بما يحتاج إلى اهتمام.'],
+    [a.tone, a.cardStyle, a.allowMultiple, a.icon, a.subheadingAr],
+    ['alert', 'icon', true, 'wrench', 'أخبرنا بما يحتاج إلى اهتمام.'],
   );
 });
 
@@ -301,17 +301,25 @@ test('createCategory accepts look settings', () => {
   assert.deepEqual([got.tone, got.cardStyle, got.allowMultiple, got.icon], ['alert', 'icon', true, 'sparkles']);
 });
 
-test('patient menu carries look settings with heading fallbacks', () => {
+test('patient menu carries look settings; the display name is the heading', () => {
   cs.updateCategory('A', { displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', tone: 'primary', cardStyle: 'icon', icon: 'sparkles' });
-  cs.updateCategory('B', { headingEn: 'What do you need today?', subheadingEn: 'Tap what you would like us to bring.', allowMultiple: true });
+  cs.updateCategory('B', { subheadingEn: 'Tap what you would like us to bring.', allowMultiple: true });
   const [a, b] = cs.listPatientMenu();
   assert.deepEqual(
-    { tone: a.tone, cardStyle: a.cardStyle, allowMultiple: a.allowMultiple, icon: a.icon, headingEn: a.headingEn, headingAr: a.headingAr, subheadingEn: a.subheadingEn },
-    { tone: 'primary', cardStyle: 'icon', allowMultiple: false, icon: 'sparkles', headingEn: 'Room Care', headingAr: 'العناية بالغرفة', subheadingEn: '' },
+    { displayNameEn: a.displayNameEn, displayNameAr: a.displayNameAr, tone: a.tone, cardStyle: a.cardStyle, allowMultiple: a.allowMultiple, icon: a.icon, subheadingEn: a.subheadingEn },
+    { displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', tone: 'primary', cardStyle: 'icon', allowMultiple: false, icon: 'sparkles', subheadingEn: '' },
   );
-  assert.equal(b.headingEn, 'What do you need today?');
+  assert.equal(b.subheadingEn, 'Tap what you would like us to bring.');
   assert.equal(b.allowMultiple, true);
   assert.equal(b.icon, '');
+});
+
+test('patient menu has no separate heading, even for data saved with one', () => {
+  put(K.categories, [{ id: 'A', nameEn: 'A', displayNameEn: 'Room Care', headingEn: 'Room care request' }]);
+  const [a] = cs.listPatientMenu();
+  assert.equal('headingEn' in a, false);
+  assert.equal('headingAr' in a, false);
+  assert.equal(a.displayNameEn, 'Room Care');
 });
 
 test('items keep an icon name alongside their image', () => {

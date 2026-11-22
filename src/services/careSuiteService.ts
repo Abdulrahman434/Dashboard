@@ -56,9 +56,7 @@ export interface TeamCategory {
   allowMultiple?: boolean;
   /** lucide icon name (kebab-case) shown beside the category in the patient menu. */
   icon?: string;
-  /** Patient-screen heading and line above the items; heading falls back to the display name. */
-  headingEn?: string;
-  headingAr?: string;
+  /** Line under the category's display name on the patient screen (the display name is the heading). */
   subheadingEn?: string;
   subheadingAr?: string;
 }
@@ -96,8 +94,6 @@ export interface PatientMenuCategory {
   cardStyle: CardStyle;
   allowMultiple: boolean;
   icon: string;
-  headingEn: string;
-  headingAr: string;
   subheadingEn: string;
   subheadingAr: string;
   items: LibraryItem[];
@@ -232,9 +228,9 @@ function seedIfEmpty(): void {
   if (localStorage.getItem(SEEDED_KEY)) return;
 
   const categories: TeamCategory[] = [
-    { id: 'cat-need', nameEn: 'I Need Something', displayNameEn: 'I Need Something', displayNameAr: 'أحتاج إلى شيء', active: true, order: 0, tone: 'primary', cardStyle: 'image', allowMultiple: true, icon: 'hand-helping', headingEn: 'What do you need today?', headingAr: 'ماذا تحتاج اليوم؟', subheadingEn: "Tap what you'd like us to bring.", subheadingAr: 'اختر ما تريد أن نحضره لك.' },
-    { id: 'cat-room-care', nameEn: 'Room Care', displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', active: true, order: 1, tone: 'primary', cardStyle: 'icon', allowMultiple: true, icon: 'sparkles', headingEn: 'Room care request', headingAr: 'طلب العناية بالغرفة', subheadingEn: 'Let us know what your room needs.', subheadingAr: 'أخبرنا بما تحتاجه غرفتك.' },
-    { id: 'cat-issue', nameEn: 'Report an Issue', displayNameEn: 'Report an Issue', displayNameAr: 'أبلغ عن مشكلة', active: true, order: 2, tone: 'alert', cardStyle: 'icon', allowMultiple: false, icon: 'wrench', headingEn: 'Report an issue', headingAr: 'أبلغ عن مشكلة', subheadingEn: 'Tell us what needs attention.', subheadingAr: 'أخبرنا بما يحتاج إلى اهتمام.' },
+    { id: 'cat-need', nameEn: 'I Need Something', displayNameEn: 'I Need Something', displayNameAr: 'أحتاج إلى شيء', active: true, order: 0, tone: 'primary', cardStyle: 'image', allowMultiple: true, icon: 'hand-helping', subheadingEn: "Tap what you'd like us to bring.", subheadingAr: 'اختر ما تريد أن نحضره لك.' },
+    { id: 'cat-room-care', nameEn: 'Room Care', displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', active: true, order: 1, tone: 'primary', cardStyle: 'icon', allowMultiple: true, icon: 'sparkles', subheadingEn: 'Let us know what your room needs.', subheadingAr: 'أخبرنا بما تحتاجه غرفتك.' },
+    { id: 'cat-issue', nameEn: 'Report an Issue', displayNameEn: 'Report an Issue', displayNameAr: 'أبلغ عن مشكلة', active: true, order: 2, tone: 'alert', cardStyle: 'icon', allowMultiple: false, icon: 'wrench', subheadingEn: 'Tell us what needs attention.', subheadingAr: 'أخبرنا بما يحتاج إلى اهتمام.' },
   ];
 
   const library: LibraryItem[] = [
@@ -394,8 +390,6 @@ export const careSuiteService = {
         cardStyle: c.cardStyle ?? 'image',
         allowMultiple: c.allowMultiple ?? false,
         icon: c.icon || '',
-        headingEn: c.headingEn || categoryDisplayEn(c),
-        headingAr: c.headingAr || categoryDisplayAr(c),
         subheadingEn: c.subheadingEn || '',
         subheadingAr: c.subheadingAr || '',
         items: this.listCategoryItems(c.id).filter((i) => i.active),

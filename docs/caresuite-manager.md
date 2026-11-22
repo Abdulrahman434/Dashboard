@@ -64,8 +64,8 @@ careSuiteService.listPatientMenu(): {
   cardStyle: 'image' | 'icon'; // photo cards (item.image) or icon cards (item.icon)
   allowMultiple: boolean;      // several items in one request, or tap = send
   icon: string;                // menu icon, lucide name ('' = none)
-  headingEn: string; headingAr: string;       // falls back to the display name
-  subheadingEn: string; subheadingAr: string; // '' when not set
+  subheadingEn: string; subheadingAr: string; // line under the heading, '' when not set
+                                              // (the heading is always displayNameEn / displayNameAr)
   items: LibraryItem[];    // active, non-archived items, in saved order (item.icon = lucide name)
 }[]                        // active categories only, in saved order
 ```
@@ -99,7 +99,7 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
 | Category | `tone` | `primary` |
 | Category | `cardStyle` | `image` |
 | Category | `allowMultiple` | `false` |
-| Category | `icon`, `headingEn/Ar`, `subheadingEn/Ar` | none (heading falls back to the display name) |
+| Category | `icon`, `subheadingEn/Ar` | none |
 | Item | `icon` | none |
 
 ### Drawing categories on the patient screen
