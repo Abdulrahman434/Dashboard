@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 interface TablePaginationProps {
@@ -9,6 +10,12 @@ interface TablePaginationProps {
   itemLabel?: string; // e.g., "assets", "devices", "notifications"
   showRowsPerPage?: boolean;
   rowsPerPageOptions?: number[];
+  /** Render even with one page (keeps the "Showing…" summary and rows-per-page visible). */
+  alwaysShow?: boolean;
+  /** Replaces the outer container classes (e.g. when the bar sits in its own card). */
+  className?: string;
+  /** Extra content after the "Showing…" text, e.g. a bulk action. */
+  leftExtra?: ReactNode;
 }
 
 export default function TablePagination({
@@ -19,14 +26,17 @@ export default function TablePagination({
   onItemsPerPageChange,
   itemLabel = 'items',
   showRowsPerPage = true,
-  rowsPerPageOptions = [10, 25, 50, 100]
+  rowsPerPageOptions = [10, 25, 50, 100],
+  alwaysShow = false,
+  className = 'px-6 py-4 border-t border-gray-200 bg-white',
+  leftExtra,
 }: TablePaginationProps) {
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
   // Don't show pagination if there are no items or only one page
-  if (totalItems === 0 || totalPages <= 1) {
+  if (!alwaysShow && (totalItems === 0 || totalPages <= 1)) {
     return null;
   }
 
@@ -69,12 +79,13 @@ export default function TablePagination({
   const visiblePages = getVisiblePages();
 
   return (
-    <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-white">
+    <div className={`flex items-center justify-between flex-wrap gap-3 ${className}`}>
       {/* Left side - Item count */}
       <div className="flex items-center gap-2">
         <span className="text-[13px] text-gray-600 font-['Poppins',sans-serif]">
           Showing {startItem} to {endItem} of {totalItems} {itemLabel}
         </span>
+        {leftExtra}
       </div>
 
       {/* Right side - Controls */}
@@ -163,7 +174,7 @@ export default function TablePagination({
           {/* Next page button */}
           <button
             onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
+            disabled={currentPage >= totalPages}
             className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             title="Next page"
           >
@@ -173,7 +184,7 @@ export default function TablePagination({
           {/* Last page button */}
           <button
             onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages}
+            disabled={currentPage >= totalPages}
             className="p-1.5 rounded-lg hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             title="Last page"
           >

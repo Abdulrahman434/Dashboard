@@ -3,7 +3,8 @@ import { ArrowLeft, ArrowUpDown, Edit2, Layers, Package, Plus, Trash2 } from 'lu
 import { toast } from 'sonner@2.0.3';
 import { useCareSuite } from '../../hooks/useCareSuite';
 import { careSuiteService, type LibraryItem } from '../../services/careSuiteService';
-import { Btn, Badge, Toggle, TypeBadge, cx } from './careSuiteAtoms';
+import { Btn, Badge, cx } from './careSuiteAtoms';
+import { ItemThumb, TypePill, Switch } from './itemTableAtoms';
 import { ItemFormModal, confirmRemoveItem } from './ItemsManagerTab';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 import { thLeft, thCenter, tdCls, trCls, nameCls } from './tableTokens';
@@ -155,7 +156,7 @@ export default function CategoryItemsView({
                       <th className={thCenter} style={{ width: 70 }}>
                         Order
                       </th>
-                      <th className={thCenter} style={{ width: 76 }} />
+                      <th className={thCenter} style={{ width: 120 }} />
                       <th className={thLeft}>Item Name (EN)</th>
                       <th className={thLeft}>Item Name (AR)</th>
                       <th className={thCenter}>Type</th>
@@ -183,17 +184,7 @@ export default function CategoryItemsView({
                               <OrderBadge n={idx + 1} />
                             </td>
                             <td className={`${tdCls} text-center`}>
-                              {item.image ? (
-                                <img
-                                  src={item.image}
-                                  alt={item.nameEn}
-                                  className="w-11 h-11 rounded-lg object-cover border border-[#e7e9f0] inline-block"
-                                />
-                              ) : (
-                                <span className="w-11 h-11 rounded-lg bg-[#f7f8fb] border border-[#e7e9f0] inline-flex items-center justify-center text-[#9099ab]">
-                                  <Package size={18} />
-                                </span>
-                              )}
+                              <ItemThumb src={item.image} alt={item.nameEn} />
                             </td>
                             <td className={tdCls}>
                               <span className={nameCls}>{item.nameEn}</span>
@@ -202,16 +193,15 @@ export default function CategoryItemsView({
                               {item.nameAr || <span className="text-[#9099ab]">—</span>}
                             </td>
                             <td className={`${tdCls} text-center`}>
-                              <TypeBadge type={item.type} />
+                              <TypePill type={item.type} />
                             </td>
                             <td className={`${tdCls} text-center`}>
-                              <span className="inline-flex" onClick={(e) => e.stopPropagation()}>
-                                <Toggle
+                              <Switch
                                   on={item.active}
                                   disabled={reordering}
-                                  onClick={() => careSuiteService.updateLibraryItem(item.id, { active: !item.active })}
+                                  label={`${item.nameEn} active`}
+                                  onChange={() => careSuiteService.updateLibraryItem(item.id, { active: !item.active })}
                                 />
-                              </span>
                             </td>
                             {!reordering && (
                               <td className={tdCls}>
