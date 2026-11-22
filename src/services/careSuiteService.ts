@@ -27,10 +27,24 @@ export const CARESUITE_EVENT = 'careinn:caresuite-changed';
 export type RequestType = 'Service Request' | 'Issue';
 export type Priority = 'High' | 'Medium' | 'Low';
 
+/**
+ * One category record serves two purposes:
+ *  - `nameEn` is the internal Name (Team Assignment dropdowns, Items Manager).
+ *  - `displayNameEn` / `displayNameAr` are shown on the patient-facing screen.
+ * Every field added after v5 is optional and defaulted at read time, so
+ * already-stored data needs no migration.
+ */
 export interface TeamCategory {
   id: string;
   nameEn: string;
+  /** Legacy Arabic name — used as the Arabic display name when `displayNameAr` is unset. */
   nameAr?: string;
+  displayNameEn?: string;
+  displayNameAr?: string;
+  /** Shown on the patient-facing screen. Default true. Never affects routing. */
+  active?: boolean;
+  /** Position on the patient-facing screen (ascending). */
+  order?: number;
 }
 
 export interface LibraryItem {
@@ -43,6 +57,48 @@ export interface LibraryItem {
   categoryId: string | null; // -> TeamCategory.id
   active: boolean;
   group?: string;
+  /** Position within its own category (ascending). Never affects routing. */
+  order?: number;
+  /**
+   * Removed from management and the patient screen, but the record is kept so
+   * existing requests (which reference it by id) stay readable.
+   */
+  archived?: boolean;
+}
+
+/** What the patient-facing app reads: active categories in order, each with its visible items in order. */
+export interface PatientMenuCategory {
+  id: string;
+  displayNameEn: string;
+  displayNameAr: string;
+  items: LibraryItem[];
+}
+
+export function categoryDisplayEn(c: TeamCategory): string {
+  return c.displayNameEn || c.nameEn;
+}
+
+export function categoryDisplayAr(c: TeamCategory): string {
+  return c.displayNameAr || c.nameAr || '';
+}
+
+const byOrder = (a: { order?: number }, b: { order?: number }) => (a.order ?? 0) - (b.order ?? 0);
+
+/** Defaults for records stored before ordering / Active existed: order = stored position, active = true. */
+function normaliseCategories(cats: TeamCategory[]): TeamCategory[] {
+  return cats
+    .map((c, i) => ({ ...c, active: c.active ?? true, order: c.order ?? i }))
+    .sort(byOrder);
+}
+
+function normaliseItems(items: LibraryItem[]): LibraryItem[] {
+  return items.map((it, i) => ({ ...it, order: it.order ?? i }));
+}
+
+/** Next free position at the end of a category's items. */
+function nextItemOrder(items: LibraryItem[], categoryId: string | null): number {
+  const inCat = items.filter((i) => i.categoryId === categoryId);
+  return inCat.length ? Math.max(...inCat.map((i) => i.order ?? 0)) + 1 : 0;
 }
 
 export interface WorkflowStep {
@@ -129,21 +185,21 @@ function seedIfEmpty(): void {
   if (localStorage.getItem(SEEDED_KEY)) return;
 
   const categories: TeamCategory[] = [
-    { id: 'cat-housekeeping', nameEn: 'Housekeeping', nameAr: 'التدبير المنزلي' },
-    { id: 'cat-maintenance', nameEn: 'Maintenance', nameAr: 'الصيانة' },
-    { id: 'cat-it', nameEn: 'IT Support', nameAr: 'الدعم الفني' },
+    { id: 'cat-need', nameEn: 'I Need Something', displayNameEn: 'I Need Something', displayNameAr: 'أحتاج إلى شيء', active: true, order: 0 },
+    { id: 'cat-room-care', nameEn: 'Room Care', displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', active: true, order: 1 },
+    { id: 'cat-issue', nameEn: 'Report an Issue', displayNameEn: 'Report an Issue', displayNameAr: 'أبلغ عن مشكلة', active: true, order: 2 },
   ];
 
   const library: LibraryItem[] = [
-    { id: 'lib-towel', nameEn: 'Extra towel', nameAr: 'منشفة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-housekeeping', active: true },
-    { id: 'lib-water', nameEn: 'Water bottle', nameAr: 'زجاجة ماء', type: 'Service Request', priority: 'Low', categoryId: 'cat-housekeeping', active: true },
-    { id: 'lib-clean', nameEn: 'Room cleaning', nameAr: 'تنظيف الغرفة', type: 'Service Request', priority: 'Medium', categoryId: 'cat-housekeeping', active: true },
-    { id: 'lib-pillow', nameEn: 'Extra pillow', nameAr: 'وسادة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-housekeeping', active: true },
-    { id: 'lib-ac', nameEn: 'Air conditioning', nameAr: 'التكييف', type: 'Issue', priority: 'High', categoryId: 'cat-maintenance', active: true },
-    { id: 'lib-plumbing', nameEn: 'Toilet / plumbing', nameAr: 'السباكة', type: 'Issue', priority: 'High', categoryId: 'cat-maintenance', active: true },
-    { id: 'lib-lights', nameEn: 'Lights', nameAr: 'الإضاءة', type: 'Issue', priority: 'Medium', categoryId: 'cat-maintenance', active: true },
-    { id: 'lib-tv', nameEn: 'TV not working', nameAr: 'التلفاز لا يعمل', type: 'Issue', priority: 'Medium', categoryId: 'cat-it', active: true },
-    { id: 'lib-wifi', nameEn: 'Wi-Fi / tablet issue', nameAr: 'مشكلة في الواي فاي', type: 'Issue', priority: 'Medium', categoryId: 'cat-it', active: true },
+    { id: 'lib-towel', nameEn: 'Extra towel', nameAr: 'منشفة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true },
+    { id: 'lib-water', nameEn: 'Water bottle', nameAr: 'زجاجة ماء', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true },
+    { id: 'lib-clean', nameEn: 'Room cleaning', nameAr: 'تنظيف الغرفة', type: 'Service Request', priority: 'Medium', categoryId: 'cat-room-care', active: true },
+    { id: 'lib-pillow', nameEn: 'Extra pillow', nameAr: 'وسادة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true },
+    { id: 'lib-ac', nameEn: 'Air conditioning', nameAr: 'التكييف', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true },
+    { id: 'lib-plumbing', nameEn: 'Toilet / plumbing', nameAr: 'السباكة', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true },
+    { id: 'lib-lights', nameEn: 'Lights', nameAr: 'الإضاءة', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true },
+    { id: 'lib-tv', nameEn: 'TV not working', nameAr: 'التلفاز لا يعمل', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true },
+    { id: 'lib-wifi', nameEn: 'Wi-Fi / tablet issue', nameAr: 'مشكلة في الواي فاي', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true },
   ];
 
   const workflow: WorkflowStep[] = [
@@ -154,8 +210,8 @@ function seedIfEmpty(): void {
   ];
 
   const teams: Team[] = [
-    { id: 'team-hk-f4', name: 'Housekeeping F4', categoryIds: ['cat-housekeeping'], roomDeviceIds: ['1', '21', '26'], defaultAssignedUserId: null },
-    { id: 'team-hk-f3', name: 'Housekeeping F3', categoryIds: ['cat-housekeeping', 'cat-maintenance'], roomDeviceIds: ['7', '13', '2'], defaultAssignedUserId: null },
+    { id: 'team-hk-f4', name: 'Housekeeping F4', categoryIds: ['cat-need', 'cat-room-care'], roomDeviceIds: ['1', '21', '26'], defaultAssignedUserId: null },
+    { id: 'team-hk-f3', name: 'Housekeeping F3', categoryIds: ['cat-need', 'cat-room-care', 'cat-issue'], roomDeviceIds: ['7', '13', '2'], defaultAssignedUserId: null },
   ];
 
   const now = Date.now();
@@ -198,36 +254,102 @@ export const careSuiteService = {
   },
 
   // ---- Team Categories ------------------------------------------------
+  /** Categories in patient-facing order, with defaults applied. */
   listCategories(): TeamCategory[] {
     seedIfEmpty();
-    return read<TeamCategory[]>(CATEGORIES_KEY, []);
+    return normaliseCategories(read<TeamCategory[]>(CATEGORIES_KEY, []));
   },
-  createCategory(input: { nameEn: string; nameAr?: string }): TeamCategory {
+  createCategory(input: { nameEn: string; displayNameEn?: string; displayNameAr?: string; active?: boolean }): TeamCategory {
     const cats = this.listCategories();
-    const cat: TeamCategory = { id: makeId('cat'), nameEn: input.nameEn.trim(), nameAr: input.nameAr?.trim() || undefined };
+    const cat: TeamCategory = {
+      id: makeId('cat'),
+      nameEn: input.nameEn.trim(),
+      displayNameEn: input.displayNameEn?.trim() || undefined,
+      displayNameAr: input.displayNameAr?.trim() || undefined,
+      active: input.active ?? true,
+      order: cats.length ? Math.max(...cats.map((c) => c.order ?? 0)) + 1 : 0,
+    };
     write(CATEGORIES_KEY, [...cats, cat]);
     return cat;
   },
-  updateCategory(id: string, patch: Partial<Pick<TeamCategory, 'nameEn' | 'nameAr'>>): void {
+  updateCategory(
+    id: string,
+    patch: Partial<Pick<TeamCategory, 'nameEn' | 'nameAr' | 'displayNameEn' | 'displayNameAr' | 'active'>>,
+  ): void {
     write(CATEGORIES_KEY, this.listCategories().map((c) => (c.id === id ? { ...c, ...patch } : c)));
   },
   removeCategory(id: string): void {
     write(CATEGORIES_KEY, this.listCategories().filter((c) => c.id !== id));
   },
+  isCategoryNameTaken(name: string, excludeId?: string): boolean {
+    const n = name.trim().toLowerCase();
+    return this.listCategories().some((c) => c.id !== excludeId && c.nameEn.trim().toLowerCase() === n);
+  },
+  /** Patient-facing order only — team assignments and items are untouched. */
+  setCategoryOrder(orderedIds: string[]): void {
+    const pos = new Map(orderedIds.map((id, i) => [id, i]));
+    const cats = this.listCategories();
+    // ids missing from the list keep their relative order after the listed ones
+    const next = cats.map((c, i) => ({ ...c, order: pos.has(c.id) ? pos.get(c.id)! : orderedIds.length + i }));
+    write(CATEGORIES_KEY, next.sort(byOrder).map((c, i) => ({ ...c, order: i })));
+  },
+  /** Non-archived item / team counts that reference a category. */
+  categoryUsage(id: string): { items: number; teams: number } {
+    return {
+      items: this.listLibrary().filter((i) => i.categoryId === id && !i.archived).length,
+      teams: this.listTeams().filter((t) => t.categoryIds.includes(id)).length,
+    };
+  },
+  /** The contract for the patient-facing app: active categories, display names, visible items, saved order. */
+  listPatientMenu(): PatientMenuCategory[] {
+    return this.listCategories()
+      .filter((c) => c.active)
+      .map((c) => ({
+        id: c.id,
+        displayNameEn: categoryDisplayEn(c),
+        displayNameAr: categoryDisplayAr(c),
+        items: this.listCategoryItems(c.id).filter((i) => i.active),
+      }));
+  },
 
   // ---- Library items ----------------------------------------------------
+  /**
+   * Every item, archived ones included — request history resolves item names
+   * through this. Management screens filter `archived` themselves.
+   */
   listLibrary(): LibraryItem[] {
     seedIfEmpty();
-    return read<LibraryItem[]>(LIBRARY_KEY, []);
+    return normaliseItems(read<LibraryItem[]>(LIBRARY_KEY, []));
+  },
+  /** One category's non-archived items in their saved order. */
+  listCategoryItems(categoryId: string): LibraryItem[] {
+    return this.listLibrary()
+      .filter((i) => i.categoryId === categoryId && !i.archived)
+      .sort(byOrder);
+  },
+  /** Writes `order` for this category's items only; ids from other categories are ignored. */
+  setCategoryItemOrder(categoryId: string, orderedItemIds: string[]): void {
+    const inCat = new Set(this.listCategoryItems(categoryId).map((i) => i.id));
+    const listed = orderedItemIds.filter((id) => inCat.has(id));
+    const rest = this.listCategoryItems(categoryId).map((i) => i.id).filter((id) => !listed.includes(id));
+    const pos = new Map([...listed, ...rest].map((id, i) => [id, i]));
+    write(LIBRARY_KEY, this.listLibrary().map((i) => (pos.has(i.id) ? { ...i, order: pos.get(i.id)! } : i)));
   },
   createLibraryItem(input: Omit<LibraryItem, 'id'>): LibraryItem {
     const items = this.listLibrary();
-    const item: LibraryItem = { ...input, id: makeId('lib') };
+    const item: LibraryItem = { ...input, id: makeId('lib'), order: nextItemOrder(items, input.categoryId) };
     write(LIBRARY_KEY, [...items, item]);
     return item;
   },
+  /** A change of category appends the item to the end of its new category; nothing else about order changes. */
   updateLibraryItem(id: string, patch: Partial<Omit<LibraryItem, 'id'>>): void {
-    write(LIBRARY_KEY, this.listLibrary().map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    const items = this.listLibrary();
+    write(LIBRARY_KEY, items.map((i) => {
+      if (i.id !== id) return i;
+      const moved = 'categoryId' in patch && patch.categoryId !== i.categoryId;
+      const { order: _ignored, ...rest } = patch;
+      return { ...i, ...rest, ...(moved ? { order: nextItemOrder(items, patch.categoryId ?? null) } : {}) };
+    }));
   },
   removeLibraryItem(id: string): void {
     write(LIBRARY_KEY, this.listLibrary().filter((i) => i.id !== id));
