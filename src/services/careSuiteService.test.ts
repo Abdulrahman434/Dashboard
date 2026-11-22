@@ -162,7 +162,7 @@ test('listCategoryItems excludes archived items', () => {
 
 test('categoryUsage counts non-archived items and teams', () => {
   put(K.library, [item('x1', 'A'), item('x2', 'A', { archived: true }), item('y1', 'B')]);
-  assert.deepEqual(cs.categoryUsage('A'), { items: 1, teams: 1 });
+  assert.deepEqual(cs.categoryUsage('A'), { items: 1, teams: 1, users: 0 });
 });
 
 // ---- Task 2: deleting a category ----------------------------------------
@@ -227,4 +227,49 @@ test('uncategorize sets categoryId null and hides items from the patient menu', 
   assert.equal(lib.find((i) => i.id === 'x1')!.archived, undefined);
   const menuItems = cs.listPatientMenu().flatMap((c) => ids(c.items));
   assert.ok(!menuItems.includes('x1') && !menuItems.includes('x2'));
+});
+
+// ---- final review fixes ----------------------------------------------------
+
+test('removeLibraryItem archives the item so request history still resolves', () => {
+  cs.removeLibraryItem('x1');
+  const x1 = cs.listLibrary().find((i) => i.id === 'x1');
+  assert.ok(x1, 'record kept for request history');
+  assert.equal(x1!.archived, true);
+  assert.deepEqual(ids(cs.listCategoryItems('A')), ['x2']);
+  assert.ok(!cs.listPatientMenu().some((c) => c.items.some((i) => i.id === 'x1')));
+});
+
+const USERS = 'careinn_users';
+const seedUsers = () =>
+  put(USERS, [
+    { id: 'u1', username: 'Jane', teamCategoryId: 'A' },
+    { id: 'u2', username: 'Sam', teamCategoryId: 'B' },
+    { id: 'u3', username: 'Lee' },
+  ]);
+
+test('categoryUsage counts users linked to the category', () => {
+  seedUsers();
+  assert.equal(cs.categoryUsage('A').users, 1);
+  assert.equal(cs.categoryUsage('B').users, 1);
+});
+
+for (const opts of MODES) {
+  test(`deleteCategory (${opts.mode}) clears the deleted category from users only`, () => {
+    seedUsers();
+    cs.deleteCategory('A', opts as any);
+    const users = get(USERS);
+    assert.equal(users.find((u: any) => u.id === 'u1').teamCategoryId, undefined);
+    assert.equal(users.find((u: any) => u.id === 'u2').teamCategoryId, 'B');
+    assert.equal(users.find((u: any) => u.id === 'u1').username, 'Jane');
+  });
+}
+
+test('demo seed: every seeded user points at a seeded category', async () => {
+  store.clear(); // fresh install: both seeds run
+  const { userService } = await import('./userService.ts');
+  const catIds = new Set(cs.listCategories().map((c) => c.id));
+  const linked = userService.listUsers().filter((u) => u.teamCategoryId);
+  assert.ok(linked.length > 0);
+  for (const u of linked) assert.ok(catIds.has(u.teamCategoryId!), `${u.username} -> ${u.teamCategoryId}`);
 });

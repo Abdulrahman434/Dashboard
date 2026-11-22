@@ -39,7 +39,7 @@ export default function DeleteCategoryDialog({
   onClose: () => void;
   onDeleted: () => void;
 }) {
-  const { items, teams } = careSuiteService.categoryUsage(category.id);
+  const { items, teams, users } = careSuiteService.categoryUsage(category.id);
   const others = careSuiteService.listCategories().filter((c) => c.id !== category.id);
   // with no items there is nothing to decide
   const [mode, setMode] = useState<Mode | null>(items === 0 ? 'uncategorize' : null);
@@ -76,13 +76,18 @@ export default function DeleteCategoryDialog({
         />
         <div className="p-5 space-y-4">
           <div className="text-[14px] text-[#19233a]">
-            <span className="font-semibold">{plural(items, 'item')}</span> and{' '}
-            <span className="font-semibold">{plural(teams, 'team')}</span> are linked to this category.
+            <span className="font-semibold">{plural(items, 'item')}</span>,{' '}
+            <span className="font-semibold">{plural(teams, 'team')}</span> and{' '}
+            <span className="font-semibold">{plural(users, 'user')}</span> are linked to this category.
           </div>
 
-          {teams > 0 && (
+          {teams + users > 0 && (
             <Note tone="warn" icon={<AlertTriangle size={16} />}>
-              The {plural(teams, 'team')} assigned to this category will lose this association. Request history is kept.
+              {[teams > 0 && `the ${plural(teams, 'team')} assigned to it`, users > 0 && `the ${plural(users, 'user')} linked to it`]
+                .filter(Boolean)
+                .join(' and ')
+                .replace(/^t/, 'T')}{' '}
+              will lose this association. Request history is kept.
             </Note>
           )}
 

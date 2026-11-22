@@ -49,9 +49,9 @@ function seedIfEmpty(): void {
 
   const users: User[] = [
     { id: 'user-1', username: 'John Doe', userRole: 'IT', department: 'IT Support', userType: 'Staff' },
-    { id: 'user-2', username: 'Jane Smith', userRole: 'Nurse Station', department: 'Housekeeping', teamCategoryId: 'cat-housekeeping', userType: 'Nurse' },
+    { id: 'user-2', username: 'Jane Smith', userRole: 'Nurse Station', department: 'Housekeeping', teamCategoryId: 'cat-need', userType: 'Nurse' },
     { id: 'user-3', username: 'Mike Johnson', userRole: 'PX', department: 'Patient Experience', userType: 'Staff' },
-    { id: 'user-4', username: 'Sarah Williams', userRole: 'Nurse Station', department: 'Maintenance', teamCategoryId: 'cat-maintenance', userType: 'Nurse' },
+    { id: 'user-4', username: 'Sarah Williams', userRole: 'Nurse Station', department: 'Maintenance', teamCategoryId: 'cat-issue', userType: 'Nurse' },
   ];
 
   write(USERS_KEY, users);

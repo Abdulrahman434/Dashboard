@@ -20,6 +20,9 @@ const TEAMS_KEY = 'careinn_caresuite_teams';
 const REQUESTS_KEY = 'careinn_caresuite_requests';
 const SEEDED_KEY = 'careinn_caresuite_seeded_v5';
 const DEVICES_KEY = 'careinn_devices'; // single source of truth (Device Manager)
+// Users (userService) may point at a category via `teamCategoryId`; cleared when that category is deleted.
+const USERS_KEY = 'careinn_users';
+const USER_EVENT = 'careinn:users-changed'; // mirrors userService.USER_EVENT
 
 /** Custom event so the sidebar / User Roles / dashboards re-read after a write. */
 export const CARESUITE_EVENT = 'careinn:caresuite-changed';
@@ -177,6 +180,11 @@ function read<T>(key: string, fallback: T): T {
   return safeParse<T>(localStorage.getItem(key), fallback);
 }
 
+/** Raw user records (owned by userService) — only `teamCategoryId` is read or cleared here. */
+function readUsers(): { id: string; teamCategoryId?: string }[] {
+  return read<{ id: string; teamCategoryId?: string }[]>(USERS_KEY, []);
+}
+
 function write<T>(key: string, value: T): void {
   if (typeof window === 'undefined') return;
   // TODO(backend): replace with the appropriate POST/PUT/DELETE call
@@ -312,6 +320,12 @@ export const careSuiteService = {
     write(TEAMS_KEY, this.listTeams().map((t) =>
       t.categoryIds.includes(id) ? { ...t, categoryIds: t.categoryIds.filter((c) => c !== id) } : t,
     ));
+    const users = readUsers();
+    if (users.some((u) => u.teamCategoryId === id)) {
+      // TODO(backend): replace with the appropriate PUT call
+      localStorage.setItem(USERS_KEY, JSON.stringify(users.map((u) => (u.teamCategoryId === id ? { ...u, teamCategoryId: undefined } : u))));
+      window.dispatchEvent(new CustomEvent(USER_EVENT));
+    }
     write(CATEGORIES_KEY, cats.filter((c) => c.id !== id));
   },
   isCategoryNameTaken(name: string, excludeId?: string): boolean {
@@ -327,10 +341,11 @@ export const careSuiteService = {
     write(CATEGORIES_KEY, next.sort(byOrder).map((c, i) => ({ ...c, order: i })));
   },
   /** Non-archived item / team counts that reference a category. */
-  categoryUsage(id: string): { items: number; teams: number } {
+  categoryUsage(id: string): { items: number; teams: number; users: number } {
     return {
       items: this.listLibrary().filter((i) => i.categoryId === id && !i.archived).length,
       teams: this.listTeams().filter((t) => t.categoryIds.includes(id)).length,
+      users: readUsers().filter((u) => u.teamCategoryId === id).length,
     };
   },
   /** The contract for the patient-facing app: active categories, display names, visible items, saved order. */
@@ -384,8 +399,9 @@ export const careSuiteService = {
       return { ...i, ...rest, ...(moved ? { order: nextItemOrder(items, patch.categoryId ?? null) } : {}) };
     }));
   },
+  /** Archives the item: hidden everywhere, but the record stays so requests that reference it remain readable. */
   removeLibraryItem(id: string): void {
-    write(LIBRARY_KEY, this.listLibrary().filter((i) => i.id !== id));
+    write(LIBRARY_KEY, this.listLibrary().map((i) => (i.id === id ? { ...i, archived: true } : i)));
   },
 
   // ---- Workflow -----------------------------------------------------------
