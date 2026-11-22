@@ -28,6 +28,8 @@ export default function CareSuiteManagerPage({
 }) {
   // Incremented by the header's Add button; the active tab opens its own form.
   const [addSignal, setAddSignal] = useState(0);
+  // The active tab portals its selection controls (Quick Actions) here, beside Add.
+  const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
 
   return (
     <div className="h-full flex flex-col font-['Poppins',sans-serif]">
@@ -45,10 +47,13 @@ export default function CareSuiteManagerPage({
                 </p>
               </div>
             </div>
-            <Btn variant="primary" onClick={() => setAddSignal((n) => n + 1)} className="shrink-0">
-              <Plus size={16} />
-              {tab === 'items' ? 'Add Item' : 'Add Category'}
-            </Btn>
+            <div className="flex items-center gap-3 shrink-0">
+              <div ref={setHeaderSlot} className="contents" />
+              <Btn variant="primary" onClick={() => setAddSignal((n) => n + 1)} className="shrink-0">
+                <Plus size={16} />
+                {tab === 'items' ? 'Add Item' : 'Add Category'}
+              </Btn>
+            </div>
           </div>
           <PillTabs
             tabs={TABS}
@@ -61,7 +66,7 @@ export default function CareSuiteManagerPage({
       <div className="flex-1 overflow-auto px-6 py-4">
         {/* key resets each tab's local state (search, open views) when switching */}
         {tab === 'items' ? (
-          <ItemsManagerTab key="items" addSignal={addSignal} />
+          <ItemsManagerTab key="items" addSignal={addSignal} headerSlot={headerSlot} />
         ) : (
           <CategoriesManagerTab key="categories" addSignal={addSignal} />
         )}

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { Package, Search, Pencil, Trash2, X, Info, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Package, Search, Pencil, Trash2, X, Info, ArrowUpDown, ArrowUp, ArrowDown, Power, PowerOff } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useCareSuite } from '../../hooks/useCareSuite';
 import { careSuiteService, type LibraryItem, type RequestType, type Priority } from '../../services/careSuiteService';
 import { Btn, Toggle, Note, Card, CardHead, Bar } from './careSuiteAtoms';
 import { ItemThumb, TypePill, CategoryPill, GroupPill, Switch, typeLabel } from './itemTableAtoms';
 import TablePagination from '../TablePagination';
+import QuickActionsPill from './QuickActionsPill';
 import { SingleSelectDropdown, MultiSelectDropdown } from '../UnifiedDropdown';
 import InlineImageUpload from '../InlineImageUpload';
 
@@ -238,7 +240,7 @@ const GROUP_BY_OPTIONS = [
 const groupLabel = (g?: string) => (!g || g === 'All' ? 'All Groups' : g);
 
 /** Items Manager tab — the former CareSuite Library (archived items hidden), in the Library table layout. */
-export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
+export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: number; headerSlot?: HTMLElement | null }) {
   const { categories, library } = useCareSuite();
 
   const [search, setSearch] = useState('');
@@ -325,6 +327,27 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
     setSelected([]);
   };
 
+  const setActiveSelected = (active: boolean) => {
+    selected.forEach((id) => careSuiteService.updateLibraryItem(id, { active }));
+    toast.success(`${selected.length} item${selected.length === 1 ? '' : 's'} ${active ? 'activated' : 'deactivated'}`);
+  };
+
+  const quickActions = (
+    <QuickActionsPill
+      count={selected.length}
+      noun={['Item', 'Items']}
+      onDeselect={() => setSelected([])}
+      actions={[
+        ...(selected.length === 1
+          ? [{ label: 'Edit', icon: <Pencil size={16} />, tone: 'accent' as const, onClick: () => setEditing(library.find((i) => i.id === selected[0]) ?? undefined) }]
+          : []),
+        { label: 'Activate', icon: <Power size={16} />, tone: 'ok', onClick: () => setActiveSelected(true) },
+        { label: 'Deactivate', icon: <PowerOff size={16} />, tone: 'mute', onClick: () => setActiveSelected(false) },
+        { label: 'Delete', icon: <Trash2 size={16} />, tone: 'danger', onClick: deleteSelected, separated: true },
+      ]}
+    />
+  );
+
   const clearFilters = () => {
     setSearch('');
     setFTypes([]);
@@ -353,6 +376,7 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
 
   return (
     <div className="space-y-4 font-['Poppins',sans-serif]">
+      {selected.length > 0 && headerSlot && createPortal(quickActions, headerSlot)}
       {categories.length === 0 && (
         <Note tone="info" icon={<Info size={16} />}>
           No categories yet — items can still be added, but showing them to patients and routing them to a team
@@ -409,25 +433,6 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
           className="min-w-[190px]"
         />
       </div>
-
-      {/* bulk actions — only while rows are ticked */}
-      {selected.length > 0 && (
-        <div className="flex items-center justify-between gap-3 px-5 py-2.5 rounded-xl border border-[#bfe6f4] bg-[#eef9fd]">
-          <span className="text-[14px] text-[#16274D]">
-            <b className="font-semibold">{selected.length}</b> {selected.length === 1 ? 'item' : 'items'} selected
-            <button onClick={() => setSelected([])} className="ml-3 text-[13px] text-[#1d7da3] underline cursor-pointer">
-              Clear
-            </button>
-          </span>
-          <button
-            onClick={deleteSelected}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-lg text-[13.5px] font-medium transition-colors cursor-pointer shadow-sm"
-          >
-            <Trash2 size={15} />
-            Delete ({selected.length})
-          </button>
-        </div>
-      )}
 
       {/* table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
