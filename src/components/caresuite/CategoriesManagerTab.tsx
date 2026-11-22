@@ -10,10 +10,13 @@ import DeleteCategoryDialog from './DeleteCategoryDialog';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 
 import { thLeft, thCenter, tdCls, trCls, nameCls } from './tableTokens';
+import { CareSuiteIcon } from './careSuiteIcons';
+import { ToneIconTile, toneColor, useBrandPrimary } from './categoryTone';
 
 /** Categories Manager tab — order, Active, Manage Items, Edit, Delete. */
 export default function CategoriesManagerTab({ addSignal, onManageItems }: { addSignal: number; onManageItems: (categoryId: string) => void }) {
   const { categories, library } = useCareSuite();
+  const primary = useBrandPrimary();
   // undefined = closed, null = adding, category = editing
   const [editing, setEditing] = useState<TeamCategory | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<TeamCategory | null>(null);
@@ -59,6 +62,9 @@ export default function CategoriesManagerTab({ addSignal, onManageItems }: { add
                   <th className={thLeft}>Display Name (EN)</th>
                   <th className={thLeft}>Display Name (AR)</th>
                   <th className={thCenter}>Items</th>
+                  <th className={thLeft} title="How the category looks on the patient screen">
+                    Patient card
+                  </th>
                   <th className={thCenter}>Active</th>
                   <th className={thCenter} />
                   <th className={thCenter} style={{ width: 96 }}>
@@ -86,6 +92,19 @@ export default function CategoriesManagerTab({ addSignal, onManageItems }: { add
                             </td>
                             <td className={`${tdCls} text-center text-[13.5px] text-[#19233a] whitespace-nowrap`}>
                               {n} {n === 1 ? 'item' : 'items'}
+                            </td>
+                            <td className={tdCls}>
+                              <span className="inline-flex items-center gap-2.5">
+                                <ToneIconTile color={toneColor(c.tone, primary)} size={30}>
+                                  <CareSuiteIcon name={c.icon} size={15} />
+                                </ToneIconTile>
+                                <span className="text-[12.5px] leading-tight text-[#19233a] whitespace-nowrap">
+                                  {c.cardStyle === 'icon' ? 'Icon cards' : 'Photo cards'}
+                                  <span className="block text-[11.5px] text-[#9099ab]">
+                                    {c.tone === 'alert' ? 'Alert red' : 'Brand'} · {c.allowMultiple ? 'Several items' : 'One item'}
+                                  </span>
+                                </span>
+                              </span>
                             </td>
                             <td className={`${tdCls} text-center`}>
                               <span className="inline-flex" onClick={(e) => e.stopPropagation()}>

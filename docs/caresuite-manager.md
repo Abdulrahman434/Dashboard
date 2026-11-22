@@ -60,7 +60,13 @@ careSuiteService.listPatientMenu(): {
   id: string;
   displayNameEn: string;   // Display Name (EN), falls back to the internal Name
   displayNameAr: string;   // Display Name (AR), '' when not set
-  items: LibraryItem[];    // active, non-archived items, in saved order
+  tone: 'primary' | 'alert';   // colour: client brand primary, or alert red
+  cardStyle: 'image' | 'icon'; // photo cards (item.image) or icon cards (item.icon)
+  allowMultiple: boolean;      // several items in one request, or tap = send
+  icon: string;                // menu icon, lucide name ('' = none)
+  headingEn: string; headingAr: string;       // falls back to the display name
+  subheadingEn: string; subheadingAr: string; // '' when not set
+  items: LibraryItem[];    // active, non-archived items, in saved order (item.icon = lucide name)
 }[]                        // active categories only, in saved order
 ```
 
@@ -90,7 +96,31 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
 | Category | `order` | stored array position |
 | Item | `order` (within its category) | stored array position |
 | Item | `archived` | not archived |
+| Category | `tone` | `primary` |
+| Category | `cardStyle` | `image` |
+| Category | `allowMultiple` | `false` |
+| Category | `icon`, `headingEn/Ar`, `subheadingEn/Ar` | none (heading falls back to the display name) |
+| Item | `icon` | none |
 
+### Drawing categories on the patient screen
+
+- **Colour.** `tone: 'primary'` means the client's brand primary from Identity Settings
+  (`careinn-identity-settings` → `primaryColor`). Never store or hard-code the hex per
+  category: a rebrand must not need category edits. `alert` is a fixed red (`#E5484D` in
+  the dashboard previews).
+- **Icons** are lucide names in kebab-case (`air-vent`, `shower-head`, …,
+  https://lucide.dev/icons/). The dashboard offers a curated set in
+  `src/components/caresuite/careSuiteIcons.tsx`. Unknown or empty names should fall back to
+  a neutral icon (the dashboard uses `circle-help`).
+- **Shading is drawn by the app, not baked into icons.** Icon cards: the icon in the tone
+  colour, inside a circle filled with the tone colour at ~12% opacity (with a faint ~6%
+  ring), on a card top washed with the tone colour at ~10% → 4%. The selected menu row uses
+  the solid tone colour. One plain icon then serves every client, both tones and dark mode.
+- **Photo cards** show `item.image` as uploaded. Ask admins for product shots on a plain
+  light or transparent background; the app supplies the card frame and title.
+- **Several items** (`allowMultiple`): the patient selects items, then sends once. Off:
+  tapping an item sends immediately. How a multi-item request is stored is still open (see
+  below).
 ## Remaining integration work
 
 1. **Backend persistence and API.** The dashboard still saves to the browser's localStorage,
@@ -99,14 +129,18 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
    Every write in `careSuiteService.ts` is marked `TODO(backend)`.
 2. **Patient app**: read that endpoint, show categories and items in the saved order with
    the display names, and hide inactive categories, inactive / archived / uncategorized items.
-3. **Request creation (patient app)**: keep sending `libraryItemId`; routing to teams is by
+3. **Multi-item requests (not built yet, agreed for later).** Today one request holds one
+   `libraryItemId`. For categories with `allowMultiple`, the recommendation is one request
+   carrying a list of item ids, so the team handles them together; the Admin / team
+   dashboards and the Nurse Station would then need to show several items per request.
+4. **Request creation (patient app)**: keep sending `libraryItemId`; routing to teams is by
    the item's category exactly as today, so no change is needed there.
-4. **Archived items in the backend**: keep archived item records (or snapshot the item name
+5. **Archived items in the backend**: keep archived item records (or snapshot the item name
    onto requests) so request history stays readable after an item or category is deleted.
    Consider an admin "restore archived item" screen.
-5. **Live refresh**: the patient app should pick up order / Active changes without a
+6. **Live refresh**: the patient app should pick up order / Active changes without a
    reinstall (poll or push), since admins change them at any time.
-6. **Out of scope this round** (agreed): Team Members and team Active fields on the team form.
+7. **Out of scope this round** (agreed): Team Members and team Active fields on the team form.
 
 ## Behaviour to be aware of
 

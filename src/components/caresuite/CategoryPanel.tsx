@@ -1,6 +1,7 @@
 import { Layers, LayoutList, PanelLeftClose, FolderX } from 'lucide-react';
 import type { TeamCategory } from '../../services/careSuiteService';
 import { cx } from './careSuiteAtoms';
+import { CareSuiteIcon } from './careSuiteIcons';
 
 export const ALL = '__all';
 export const UNCATEGORIZED = '__none';
@@ -67,7 +68,7 @@ export default function CategoryPanel({
       <div className="p-2 space-y-1">
         {row(ALL, 'All items', <LayoutList size={17} />)}
         <div className="border-t border-gray-100 my-1.5" />
-        {categories.map((c) => row(c.id, c.nameEn, <Layers size={17} />, c.active ? undefined : 'Hidden from patients'))}
+        {categories.map((c) => row(c.id, c.nameEn, c.icon ? <CareSuiteIcon name={c.icon} size={17} /> : <Layers size={17} />, c.active ? undefined : 'Hidden from patients'))}
         {(counts[UNCATEGORIZED] ?? 0) > 0 && row(UNCATEGORIZED, 'Uncategorized', <FolderX size={17} />, 'Not shown to patients', true)}
       </div>
     </div>

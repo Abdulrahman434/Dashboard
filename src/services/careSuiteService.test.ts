@@ -273,3 +273,48 @@ test('demo seed: every seeded user points at a seeded category', async () => {
   assert.ok(linked.length > 0);
   for (const u of linked) assert.ok(catIds.has(u.teamCategoryId!), `${u.username} -> ${u.teamCategoryId}`);
 });
+
+// ---- patient-screen look per category ----------------------------------------
+
+test('legacy categories get patient-screen defaults', () => {
+  const [a] = cs.listCategories();
+  assert.equal(a.tone, 'primary');
+  assert.equal(a.cardStyle, 'image');
+  assert.equal(a.allowMultiple, false);
+});
+
+test('category look settings persist', () => {
+  cs.updateCategory('A', {
+    tone: 'alert', cardStyle: 'icon', allowMultiple: true, icon: 'wrench',
+    headingEn: 'Report an issue', headingAr: 'أبلغ عن مشكلة', subheadingEn: 'Tell us what needs attention.', subheadingAr: 'أخبرنا بما يحتاج إلى اهتمام.',
+  });
+  const a = cs.listCategories().find((c) => c.id === 'A')!;
+  assert.deepEqual(
+    [a.tone, a.cardStyle, a.allowMultiple, a.icon, a.headingEn, a.subheadingAr],
+    ['alert', 'icon', true, 'wrench', 'Report an issue', 'أخبرنا بما يحتاج إلى اهتمام.'],
+  );
+});
+
+test('createCategory accepts look settings', () => {
+  const c = cs.createCategory({ nameEn: 'C', tone: 'alert', cardStyle: 'icon', allowMultiple: true, icon: 'sparkles' });
+  const got = cs.listCategories().find((x) => x.id === c.id)!;
+  assert.deepEqual([got.tone, got.cardStyle, got.allowMultiple, got.icon], ['alert', 'icon', true, 'sparkles']);
+});
+
+test('patient menu carries look settings with heading fallbacks', () => {
+  cs.updateCategory('A', { displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', tone: 'primary', cardStyle: 'icon', icon: 'sparkles' });
+  cs.updateCategory('B', { headingEn: 'What do you need today?', subheadingEn: 'Tap what you would like us to bring.', allowMultiple: true });
+  const [a, b] = cs.listPatientMenu();
+  assert.deepEqual(
+    { tone: a.tone, cardStyle: a.cardStyle, allowMultiple: a.allowMultiple, icon: a.icon, headingEn: a.headingEn, headingAr: a.headingAr, subheadingEn: a.subheadingEn },
+    { tone: 'primary', cardStyle: 'icon', allowMultiple: false, icon: 'sparkles', headingEn: 'Room Care', headingAr: 'العناية بالغرفة', subheadingEn: '' },
+  );
+  assert.equal(b.headingEn, 'What do you need today?');
+  assert.equal(b.allowMultiple, true);
+  assert.equal(b.icon, '');
+});
+
+test('items keep an icon name alongside their image', () => {
+  cs.updateLibraryItem('x1', { icon: 'bed' });
+  assert.equal(cs.listLibrary().find((i) => i.id === 'x1')!.icon, 'bed');
+});

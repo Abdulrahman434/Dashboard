@@ -13,9 +13,13 @@ import { SortableRows, SortableTr, OrderBadge } from './sortable';
 import { peekPendingCategory, clearPendingCategory } from './caresuiteNav';
 import { SingleSelectDropdown, MultiSelectDropdown } from '../UnifiedDropdown';
 import InlineImageUpload from '../InlineImageUpload';
+import IconPicker from './IconPicker';
+import { CareSuiteIcon } from './careSuiteIcons';
+import { ToneIconTile, toneColor, useBrandPrimary } from './categoryTone';
 
 const blankForm = (categoryId: string | null = null) => ({
   image: '',
+  icon: '',
   nameEn: '',
   nameAr: '',
   categoryId,
@@ -81,6 +85,7 @@ export function ItemFormModal({
     item
       ? {
           image: item.image || '',
+          icon: item.icon || '',
           nameEn: item.nameEn,
           nameAr: item.nameAr,
           categoryId: item.categoryId,
@@ -92,6 +97,11 @@ export function ItemFormModal({
       : blankForm(defaultCategoryId),
   );
   const patchForm = (p: any) => setForm((f: any) => ({ ...f, ...p }));
+  const primary = useBrandPrimary();
+  // the item's category decides whether the patient sees its photo or an icon
+  const formCategory = categories.find((c) => c.id === form.categoryId);
+  const iconStyle = formCategory?.cardStyle === 'icon';
+  const color = toneColor(formCategory?.tone, primary);
 
   const saveItem = () => {
     const nameEn = (form.nameEn || '').trim();
@@ -101,6 +111,7 @@ export function ItemFormModal({
     }
     const payload = {
       image: form.image || undefined,
+      icon: form.icon || undefined,
       nameEn,
       nameAr: (form.nameAr || '').trim(),
       categoryId: form.categoryId || null,
@@ -135,12 +146,14 @@ export function ItemFormModal({
         />
         <div className="p-5">
           <div className="flex gap-4 items-start">
-            <InlineImageUpload
-              imageUrl={form.image}
-              onImageChange={(dataUrl) => patchForm({ image: dataUrl })}
-              altText={form.nameEn || 'Item image'}
-              size="md"
-            />
+            {!iconStyle && (
+              <InlineImageUpload
+                imageUrl={form.image}
+                onImageChange={(dataUrl) => patchForm({ image: dataUrl })}
+                altText={form.nameEn || 'Item image'}
+                size="md"
+              />
+            )}
             <div className="flex-1">
               <label className="block text-[13px] text-[#5d6678] mb-1.5">Name (English)</label>
               <input
@@ -151,6 +164,18 @@ export function ItemFormModal({
               />
             </div>
           </div>
+
+          {iconStyle && (
+            <div className="mt-4">
+              <label className="block text-[13px] text-[#5d6678] mb-1.5" htmlFor="item-icon">
+                Icon
+              </label>
+              <IconPicker id="item-icon" value={form.icon} onChange={(v) => patchForm({ icon: v })} color={color} />
+              <div className="text-[12px] text-[#9099ab] mt-1">
+                “{formCategory?.nameEn}” shows icons to patients, in its {formCategory?.tone === 'alert' ? 'alert red' : 'brand'} colour.
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4 mt-4">
             <div>
@@ -249,6 +274,7 @@ const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every
  */
 export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: number; headerSlot?: HTMLElement | null }) {
   const { categories, library } = useCareSuite();
+  const primary = useBrandPrimary();
 
   const [cat, setCat] = useState<string>(() => peekPendingCategory() ?? ALL);
   useEffect(() => clearPendingCategory(), []);
@@ -418,6 +444,20 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const showOrderCol = !!category;
   const colCount = 8 + (showCategoryCol ? 1 : 0) + (showOrderCol ? 2 : 0);
 
+  /** What the patient sees on the card: the photo, or the icon in the category colour. */
+  const itemVisual = (item: LibraryItem) => {
+    const c = categories.find((x) => x.id === item.categoryId);
+    if (c?.cardStyle !== 'icon') return <ItemThumb src={item.image} alt={item.nameEn} />;
+    const color = toneColor(c.tone, primary);
+    return (
+      <span className="inline-flex w-[72px] h-[48px] rounded-lg items-center justify-center" style={{ background: `linear-gradient(180deg, ${color}1a, ${color}0a)` }}>
+        <ToneIconTile color={color} size={36}>
+          <CareSuiteIcon name={item.icon} size={18} />
+        </ToneIconTile>
+      </span>
+    );
+  };
+
   const checkboxCell = (item: LibraryItem) => (
     <td className={tdCls}>
       <input
@@ -440,7 +480,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
         </td>
       )}
       <td className={tdCls}>
-        <ItemThumb src={item.image} alt={item.nameEn} />
+        {itemVisual(item)}
       </td>
       <td className={`${tdCls} text-[14px] text-[#16274D]`}>{item.nameEn}</td>
       <td className={`${tdCls} text-[14px] text-[#16274D] text-right`} dir="rtl">

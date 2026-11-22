@@ -48,7 +48,23 @@ export interface TeamCategory {
   active?: boolean;
   /** Position on the patient-facing screen (ascending). */
   order?: number;
+  /** Card colour on the patient screen: the client's brand primary (Identity Settings) or alert red. Default primary. */
+  tone?: CategoryTone;
+  /** Photo cards (item image) or icon cards (item icon drawn in the tone colour). Default image. */
+  cardStyle?: CardStyle;
+  /** Patient may pick several items and send them as one request. Default false (tap = send). */
+  allowMultiple?: boolean;
+  /** lucide icon name (kebab-case) shown beside the category in the patient menu. */
+  icon?: string;
+  /** Patient-screen heading and line above the items; heading falls back to the display name. */
+  headingEn?: string;
+  headingAr?: string;
+  subheadingEn?: string;
+  subheadingAr?: string;
 }
+
+export type CategoryTone = 'primary' | 'alert';
+export type CardStyle = 'image' | 'icon';
 
 export interface LibraryItem {
   id: string;
@@ -67,6 +83,8 @@ export interface LibraryItem {
    * existing requests (which reference it by id) stay readable.
    */
   archived?: boolean;
+  /** lucide icon name (kebab-case) for icon-style categories. Kept alongside `image` so switching style loses nothing. */
+  icon?: string;
 }
 
 /** What the patient-facing app reads: active categories in order, each with its visible items in order. */
@@ -74,6 +92,14 @@ export interface PatientMenuCategory {
   id: string;
   displayNameEn: string;
   displayNameAr: string;
+  tone: CategoryTone;
+  cardStyle: CardStyle;
+  allowMultiple: boolean;
+  icon: string;
+  headingEn: string;
+  headingAr: string;
+  subheadingEn: string;
+  subheadingAr: string;
   items: LibraryItem[];
 }
 
@@ -96,7 +122,14 @@ const byOrder = (a: { order?: number }, b: { order?: number }) => (a.order ?? 0)
 /** Defaults for records stored before ordering / Active existed: order = stored position, active = true. */
 function normaliseCategories(cats: TeamCategory[]): TeamCategory[] {
   return cats
-    .map((c, i) => ({ ...c, active: c.active ?? true, order: c.order ?? i }))
+    .map((c, i) => ({
+      ...c,
+      active: c.active ?? true,
+      order: c.order ?? i,
+      tone: c.tone ?? 'primary',
+      cardStyle: c.cardStyle ?? 'image',
+      allowMultiple: c.allowMultiple ?? false,
+    }))
     .sort(byOrder);
 }
 
@@ -199,21 +232,21 @@ function seedIfEmpty(): void {
   if (localStorage.getItem(SEEDED_KEY)) return;
 
   const categories: TeamCategory[] = [
-    { id: 'cat-need', nameEn: 'I Need Something', displayNameEn: 'I Need Something', displayNameAr: 'أحتاج إلى شيء', active: true, order: 0 },
-    { id: 'cat-room-care', nameEn: 'Room Care', displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', active: true, order: 1 },
-    { id: 'cat-issue', nameEn: 'Report an Issue', displayNameEn: 'Report an Issue', displayNameAr: 'أبلغ عن مشكلة', active: true, order: 2 },
+    { id: 'cat-need', nameEn: 'I Need Something', displayNameEn: 'I Need Something', displayNameAr: 'أحتاج إلى شيء', active: true, order: 0, tone: 'primary', cardStyle: 'image', allowMultiple: true, icon: 'hand-helping', headingEn: 'What do you need today?', headingAr: 'ماذا تحتاج اليوم؟', subheadingEn: "Tap what you'd like us to bring.", subheadingAr: 'اختر ما تريد أن نحضره لك.' },
+    { id: 'cat-room-care', nameEn: 'Room Care', displayNameEn: 'Room Care', displayNameAr: 'العناية بالغرفة', active: true, order: 1, tone: 'primary', cardStyle: 'icon', allowMultiple: true, icon: 'sparkles', headingEn: 'Room care request', headingAr: 'طلب العناية بالغرفة', subheadingEn: 'Let us know what your room needs.', subheadingAr: 'أخبرنا بما تحتاجه غرفتك.' },
+    { id: 'cat-issue', nameEn: 'Report an Issue', displayNameEn: 'Report an Issue', displayNameAr: 'أبلغ عن مشكلة', active: true, order: 2, tone: 'alert', cardStyle: 'icon', allowMultiple: false, icon: 'wrench', headingEn: 'Report an issue', headingAr: 'أبلغ عن مشكلة', subheadingEn: 'Tell us what needs attention.', subheadingAr: 'أخبرنا بما يحتاج إلى اهتمام.' },
   ];
 
   const library: LibraryItem[] = [
-    { id: 'lib-towel', nameEn: 'Extra towel', nameAr: 'منشفة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true },
-    { id: 'lib-water', nameEn: 'Water bottle', nameAr: 'زجاجة ماء', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true },
-    { id: 'lib-clean', nameEn: 'Room cleaning', nameAr: 'تنظيف الغرفة', type: 'Service Request', priority: 'Medium', categoryId: 'cat-room-care', active: true },
-    { id: 'lib-pillow', nameEn: 'Extra pillow', nameAr: 'وسادة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true },
-    { id: 'lib-ac', nameEn: 'Air conditioning', nameAr: 'التكييف', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true },
-    { id: 'lib-plumbing', nameEn: 'Toilet / plumbing', nameAr: 'السباكة', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true },
-    { id: 'lib-lights', nameEn: 'Lights', nameAr: 'الإضاءة', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true },
-    { id: 'lib-tv', nameEn: 'TV not working', nameAr: 'التلفاز لا يعمل', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true },
-    { id: 'lib-wifi', nameEn: 'Wi-Fi / tablet issue', nameAr: 'مشكلة في الواي فاي', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true },
+    { id: 'lib-towel', nameEn: 'Extra towel', nameAr: 'منشفة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'shirt' },
+    { id: 'lib-water', nameEn: 'Water bottle', nameAr: 'زجاجة ماء', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'glass-water' },
+    { id: 'lib-clean', nameEn: 'Room cleaning', nameAr: 'تنظيف الغرفة', type: 'Service Request', priority: 'Medium', categoryId: 'cat-room-care', active: true, icon: 'spray-can' },
+    { id: 'lib-pillow', nameEn: 'Extra pillow', nameAr: 'وسادة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'bed' },
+    { id: 'lib-ac', nameEn: 'Air conditioning', nameAr: 'التكييف', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true, icon: 'air-vent' },
+    { id: 'lib-plumbing', nameEn: 'Toilet / plumbing', nameAr: 'السباكة', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true, icon: 'shower-head' },
+    { id: 'lib-lights', nameEn: 'Lights', nameAr: 'الإضاءة', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'lightbulb' },
+    { id: 'lib-tv', nameEn: 'TV not working', nameAr: 'التلفاز لا يعمل', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'tv' },
+    { id: 'lib-wifi', nameEn: 'Wi-Fi / tablet issue', nameAr: 'مشكلة في الواي فاي', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'wifi' },
   ];
 
   const workflow: WorkflowStep[] = [
@@ -273,9 +306,10 @@ export const careSuiteService = {
     seedIfEmpty();
     return normaliseCategories(read<TeamCategory[]>(CATEGORIES_KEY, []));
   },
-  createCategory(input: { nameEn: string; displayNameEn?: string; displayNameAr?: string; active?: boolean }): TeamCategory {
+  createCategory(input: { nameEn: string } & Partial<Omit<TeamCategory, 'id' | 'nameEn' | 'order'>>): TeamCategory {
     const cats = this.listCategories();
     const cat: TeamCategory = {
+      ...input,
       id: makeId('cat'),
       nameEn: input.nameEn.trim(),
       displayNameEn: input.displayNameEn?.trim() || undefined,
@@ -288,7 +322,7 @@ export const careSuiteService = {
   },
   updateCategory(
     id: string,
-    patch: Partial<Pick<TeamCategory, 'nameEn' | 'nameAr' | 'displayNameEn' | 'displayNameAr' | 'active'>>,
+    patch: Partial<Omit<TeamCategory, 'id' | 'order'>>,
   ): void {
     write(CATEGORIES_KEY, this.listCategories().map((c) => (c.id === id ? { ...c, ...patch } : c)));
   },
@@ -356,6 +390,14 @@ export const careSuiteService = {
         id: c.id,
         displayNameEn: categoryDisplayEn(c),
         displayNameAr: categoryDisplayAr(c),
+        tone: c.tone ?? 'primary',
+        cardStyle: c.cardStyle ?? 'image',
+        allowMultiple: c.allowMultiple ?? false,
+        icon: c.icon || '',
+        headingEn: c.headingEn || categoryDisplayEn(c),
+        headingAr: c.headingAr || categoryDisplayAr(c),
+        subheadingEn: c.subheadingEn || '',
+        subheadingAr: c.subheadingAr || '',
         items: this.listCategoryItems(c.id).filter((i) => i.active),
       }));
   },
