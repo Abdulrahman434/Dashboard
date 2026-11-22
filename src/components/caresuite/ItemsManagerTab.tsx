@@ -6,7 +6,7 @@ import { careSuiteService, type LibraryItem, type RequestType, type Priority } f
 import { Btn, Toggle, Note, Card, CardHead, Bar } from './careSuiteAtoms';
 import { ItemThumb, TypePill, CategoryPill, GroupPill, Switch } from './itemTableAtoms';
 import TablePagination from '../TablePagination';
-import { SingleSelectDropdown } from '../UnifiedDropdown';
+import { SingleSelectDropdown, MultiSelectDropdown } from '../UnifiedDropdown';
 import InlineImageUpload from '../InlineImageUpload';
 
 const blankForm = (categoryId: string | null = null) => ({
@@ -217,16 +217,36 @@ export function ItemFormModal({
 }
 
 type SortDir = 'asc' | 'desc' | null;
+type GroupBy = 'none' | 'category' | 'type' | 'group';
 
 const thCls = "py-4 px-4 text-left text-[13.5px] font-medium text-[#16274D] font-['Poppins',sans-serif] whitespace-nowrap";
 const tdCls = 'py-4 px-4 align-middle';
 const checkboxCls = 'w-[18px] h-[18px] rounded border-2 border-gray-300 text-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20 cursor-pointer';
+const COLS = 9;
+
+const UNCATEGORIZED = '__none';
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Active' },
+  { value: 'inactive', label: 'Inactive' },
+];
+const GROUP_BY_OPTIONS = [
+  { value: 'none', label: 'Group by: None' },
+  { value: 'category', label: 'Group by: Category' },
+  { value: 'type', label: 'Group by: Type' },
+  { value: 'group', label: 'Group by: Group' },
+];
+const groupLabel = (g?: string) => (!g || g === 'All' ? 'All Groups' : g);
 
 /** Items Manager tab — the former CareSuite Library (archived items hidden), in the Library table layout. */
 export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
   const { categories, library } = useCareSuite();
 
   const [search, setSearch] = useState('');
+  const [fTypes, setFTypes] = useState<string[]>([]);
+  const [fCats, setFCats] = useState<string[]>([]);
+  const [fGroups, setFGroups] = useState<string[]>([]);
+  const [fStatus, setFStatus] = useState<string[]>([]);
+  const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [sortDir, setSortDir] = useState<SortDir>(null);
@@ -236,23 +256,58 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
 
   useAddSignal(addSignal, () => setEditing(null));
 
+  /** Any change to what's listed resets paging and selection, so a hidden row never stays checked. */
+  const narrow = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    setPage(1);
+    setSelected([]);
+  };
+
   const categoryName = (id: string | null) => categories.find((c) => c.id === id)?.nameEn || '';
+  const categoryRank = (id: string | null) => {
+    const i = categories.findIndex((c) => c.id === id);
+    return i < 0 ? categories.length : i; // uncategorized last
+  };
 
   const q = search.trim().toLowerCase();
-  const filtered = library
-    .filter((item) => !item.archived)
-    .filter((item) =>
-      !q ? true : item.nameEn.toLowerCase().includes(q) || (item.nameAr || '').includes(search.trim()),
-    );
-  const rows = sortDir
-    ? [...filtered].sort((a, b) => {
-        // uncategorized always last
-        const an = categoryName(a.categoryId);
-        const bn = categoryName(b.categoryId);
-        if (!an || !bn) return an ? -1 : bn ? 1 : 0;
-        return sortDir === 'asc' ? an.localeCompare(bn) : bn.localeCompare(an);
-      })
-    : filtered;
+  const hasFilters = !!q || fTypes.length + fCats.length + fGroups.length + fStatus.length > 0;
+  const filtered = library.filter((item) => {
+    if (item.archived) return false;
+    if (q && !item.nameEn.toLowerCase().includes(q) && !(item.nameAr || '').includes(search.trim())) return false;
+    if (fTypes.length && !fTypes.includes(item.type)) return false;
+    if (fCats.length && !fCats.includes(item.categoryId || UNCATEGORIZED)) return false;
+    if (fGroups.length && !fGroups.includes(item.group || 'All')) return false;
+    if (fStatus.length && !fStatus.includes(item.active ? 'active' : 'inactive')) return false;
+    return true;
+  });
+
+  // grouping key + label + rank (rank keeps groups in a meaningful order)
+  const groupOf = (item: LibraryItem): { key: string; label: string; rank: number } => {
+    if (groupBy === 'category')
+      return { key: item.categoryId || UNCATEGORIZED, label: categoryName(item.categoryId) || 'Uncategorized', rank: categoryRank(item.categoryId) };
+    if (groupBy === 'type') return { key: item.type, label: item.type, rank: TYPE_OPTIONS.findIndex((t) => t.value === item.type) };
+    if (groupBy === 'group') {
+      const g = item.group || 'All';
+      return { key: g, label: groupLabel(g), rank: GROUP_OPTIONS.findIndex((o) => o.value === g) };
+    }
+    return { key: '', label: '', rank: 0 };
+  };
+
+  const byCategory = (a: LibraryItem, b: LibraryItem) => {
+    const an = categoryName(a.categoryId);
+    const bn = categoryName(b.categoryId);
+    if (!an || !bn) return an ? -1 : bn ? 1 : 0; // uncategorized always last
+    return sortDir === 'asc' ? an.localeCompare(bn) : bn.localeCompare(an);
+  };
+  const rows = [...filtered].sort((a, b) => {
+    if (groupBy !== 'none') {
+      const d = groupOf(a).rank - groupOf(b).rank;
+      if (d) return d;
+    }
+    return sortDir ? byCategory(a, b) : 0; // stable: keeps stored order otherwise
+  });
+  const groupCounts = new Map<string, number>();
+  if (groupBy !== 'none') rows.forEach((r) => groupCounts.set(groupOf(r).key, (groupCounts.get(groupOf(r).key) || 0) + 1));
 
   const totalPages = Math.max(1, Math.ceil(rows.length / perPage));
   const current = Math.min(page, totalPages);
@@ -270,8 +325,43 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
     setSelected([]);
   };
 
+  const clearFilters = () => {
+    setSearch('');
+    setFTypes([]);
+    setFCats([]);
+    setFGroups([]);
+    setFStatus([]);
+    setPage(1);
+    setSelected([]);
+  };
+
   const cycleSort = () => setSortDir((d) => (d === null ? 'asc' : d === 'asc' ? 'desc' : null));
   const SortIcon = sortDir === 'asc' ? ArrowUp : sortDir === 'desc' ? ArrowDown : ArrowUpDown;
+
+  const pager = (top: boolean) => (
+    <TablePagination
+      alwaysShow
+      className={top ? 'px-5 py-3.5' : 'px-5 py-3.5 border-t border-gray-200 bg-white'}
+      currentPage={current}
+      totalItems={rows.length}
+      itemsPerPage={perPage}
+      onPageChange={setPage}
+      onItemsPerPageChange={setPerPage}
+      itemLabel={rows.length === 1 ? 'item' : 'items'}
+      leftExtra={
+        top &&
+        selected.length > 0 && (
+          <button
+            onClick={deleteSelected}
+            className="ml-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-lg text-[13px] font-medium transition-colors cursor-pointer"
+          >
+            <Trash2 size={14} />
+            Delete ({selected.length})
+          </button>
+        )
+      }
+    />
+  );
 
   return (
     <div className="space-y-4 font-['Poppins',sans-serif]">
@@ -282,57 +372,58 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
         </Note>
       )}
 
-      {/* search */}
-      <div className="relative">
-        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-            setSelected([]);
-          }}
-          placeholder="Search items by name"
-          className="w-full h-[46px] pl-11 pr-10 bg-white border border-gray-300 rounded-xl text-[14px] text-[#19233a] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/40 focus:border-[#4EBEE3] transition-all"
+      {/* search (left) · filters + group by (right) */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[260px]">
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => narrow(setSearch)(e.target.value)}
+            placeholder="Search items by name"
+            className="w-full h-[44px] pl-11 pr-10 bg-white border border-gray-300 rounded-lg text-[14px] text-[#19233a] placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/40 focus:border-[#4EBEE3] transition-all"
+          />
+          {search && (
+            <button
+              onClick={() => narrow(setSearch)('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+              title="Clear search"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
+        <MultiSelectDropdown options={TYPE_OPTIONS} selectedValues={fTypes} onChange={narrow(setFTypes)} placeholder="Type" className="min-w-[150px]" showSelectAll={false} />
+        <MultiSelectDropdown
+          options={[...categories.map((c) => ({ value: c.id, label: c.nameEn })), { value: UNCATEGORIZED, label: 'Uncategorized' }]}
+          selectedValues={fCats}
+          onChange={narrow(setFCats)}
+          placeholder="Category"
+          className="min-w-[170px]"
+          showSelectAll={false}
         />
-        {search && (
-          <button
-            onClick={() => {
-              setSearch('');
-              setPage(1);
-            }}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
-            title="Clear search"
-          >
-            <X size={16} />
-          </button>
-        )}
+        <MultiSelectDropdown
+          options={GROUP_OPTIONS.map((g) => ({ value: g.value, label: groupLabel(g.value) }))}
+          selectedValues={fGroups}
+          onChange={narrow(setFGroups)}
+          placeholder="Group"
+          className="min-w-[140px]"
+          showSelectAll={false}
+        />
+        <MultiSelectDropdown options={STATUS_OPTIONS} selectedValues={fStatus} onChange={narrow(setFStatus)} placeholder="Status" className="min-w-[130px]" showSelectAll={false} />
+        <SingleSelectDropdown
+          options={GROUP_BY_OPTIONS}
+          value={groupBy}
+          onChange={(v: string) => {
+            setGroupBy(v as GroupBy);
+            setPage(1);
+          }}
+          size="md"
+          className="min-w-[190px]"
+        />
       </div>
 
-      {/* summary + pagination */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-        <TablePagination
-          alwaysShow
-          className="px-5 py-3.5"
-          currentPage={current}
-          totalItems={rows.length}
-          itemsPerPage={perPage}
-          onPageChange={setPage}
-          onItemsPerPageChange={setPerPage}
-          itemLabel={rows.length === 1 ? 'item' : 'items'}
-          leftExtra={
-            selected.length > 0 && (
-              <button
-                onClick={deleteSelected}
-                className="ml-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-lg text-[13px] font-medium transition-colors cursor-pointer"
-              >
-                <Trash2 size={14} />
-                Delete ({selected.length})
-              </button>
-            )
-          }
-        />
-      </div>
+      {/* summary + pagination (top) */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">{pager(true)}</div>
 
       {/* table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -341,99 +432,127 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
             <div className="w-14 h-14 rounded-full bg-[#f7f8fb] flex items-center justify-center text-[#9099ab] mb-3">
               <Package size={26} />
             </div>
-            <div className="font-semibold text-[#16274D]">{q ? 'No items match your search' : 'No items yet'}</div>
+            <div className="font-semibold text-[#16274D]">{hasFilters ? 'No items match your filters' : 'No items yet'}</div>
             <div className="text-[13px] text-[#5d6678] mt-1">
-              {q ? 'Try a different name, or clear the search.' : 'Add your first item.'}
+              {hasFilters ? (
+                <>
+                  Try adjusting the filters, or{' '}
+                  <button onClick={clearFilters} className="text-[#1d7da3] underline cursor-pointer">
+                    clear them all
+                  </button>
+                  .
+                </>
+              ) : (
+                'Add your first item.'
+              )}
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="border-b border-gray-200">
-                <tr>
-                  <th className={thCls} style={{ width: 56 }}>
-                    <input type="checkbox" className={checkboxCls} checked={allSelected} onChange={toggleAll} aria-label="Select all items" />
-                  </th>
-                  <th className={thCls} style={{ width: 120 }}>Icon</th>
-                  <th className={thCls}>Item Name (EN)</th>
-                  <th className={thCls}>Item Name (AR)</th>
-                  <th className={thCls}>Type</th>
-                  <th className={thCls}>
-                    <button onClick={cycleSort} className="inline-flex items-center gap-1.5 cursor-pointer hover:text-[#4EBEE3] transition-colors" title="Sort by category">
-                      Category
-                      <SortIcon size={14} className={sortDir ? 'text-[#4EBEE3]' : 'text-gray-400'} />
-                    </button>
-                  </th>
-                  <th className={thCls}>Group</th>
-                  <th className={thCls}>Active</th>
-                  <th className={`${thCls} text-right`} style={{ width: 110 }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {pageRows.map((item) => (
-                  <tr key={item.id} onClick={() => setEditing(item)} className="hover:bg-[#F8FAFC] transition-colors cursor-pointer">
-                    <td className={tdCls}>
-                      <input
-                        type="checkbox"
-                        className={checkboxCls}
-                        checked={selected.includes(item.id)}
-                        onChange={() => toggleOne(item.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        aria-label={`Select ${item.nameEn}`}
-                      />
-                    </td>
-                    <td className={tdCls}>
-                      <ItemThumb src={item.image} alt={item.nameEn} />
-                    </td>
-                    <td className={`${tdCls} text-[14px] text-[#16274D]`}>{item.nameEn}</td>
-                    <td className={`${tdCls} text-[14px] text-[#16274D] text-right`} dir="rtl">
-                      {item.nameAr || <span className="text-gray-400">—</span>}
-                    </td>
-                    <td className={tdCls}>
-                      <TypePill type={item.type} />
-                    </td>
-                    <td className={tdCls}>
-                      <CategoryPill name={categoryName(item.categoryId)} />
-                    </td>
-                    <td className={tdCls}>
-                      <GroupPill group={item.group} />
-                    </td>
-                    <td className={tdCls}>
-                      <Switch
-                        on={item.active}
-                        label={`${item.nameEn} active`}
-                        onChange={() => careSuiteService.updateLibraryItem(item.id, { active: !item.active })}
-                      />
-                    </td>
-                    <td className={tdCls}>
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setEditing(item);
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-[#4EBEE3]/10 transition-colors cursor-pointer"
-                          title="Edit"
-                        >
-                          <Pencil size={18} className="text-[#4EBEE3]" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            confirmRemoveItem(item);
-                          }}
-                          className="p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                          title="Delete"
-                        >
-                          <Trash2 size={18} className="text-red-500" />
-                        </button>
-                      </div>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-gray-200">
+                  <tr>
+                    <th className={thCls} style={{ width: 56 }}>
+                      <input type="checkbox" className={checkboxCls} checked={allSelected} onChange={toggleAll} aria-label="Select all items" />
+                    </th>
+                    <th className={thCls} style={{ width: 120 }}>Icon</th>
+                    <th className={thCls}>Item Name (EN)</th>
+                    <th className={thCls}>Item Name (AR)</th>
+                    <th className={thCls}>Type</th>
+                    <th className={thCls}>
+                      <button onClick={cycleSort} className="inline-flex items-center gap-1.5 cursor-pointer hover:text-[#4EBEE3] transition-colors" title="Sort by category">
+                        Category
+                        <SortIcon size={14} className={sortDir ? 'text-[#4EBEE3]' : 'text-gray-400'} />
+                      </button>
+                    </th>
+                    <th className={thCls}>Group</th>
+                    <th className={thCls}>Active</th>
+                    <th className={`${thCls} text-right`} style={{ width: 110 }}>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {pageRows.map((item, i) => {
+                    const g = groupOf(item);
+                    const startsGroup = groupBy !== 'none' && (i === 0 || groupOf(pageRows[i - 1]).key !== g.key);
+                    return [
+                      startsGroup && (
+                        <tr key={`g-${g.key}`} className="bg-[#F8FAFC]">
+                          <td colSpan={COLS} className="px-4 py-2.5">
+                            <span className="text-[13px] font-semibold text-[#16274D]">{g.label}</span>
+                            <span className="ml-2 text-[12px] text-gray-500">
+                              {groupCounts.get(g.key)} {groupCounts.get(g.key) === 1 ? 'item' : 'items'}
+                            </span>
+                          </td>
+                        </tr>
+                      ),
+                      <tr key={item.id} onClick={() => setEditing(item)} className="hover:bg-[#F8FAFC] transition-colors cursor-pointer">
+                        <td className={tdCls}>
+                          <input
+                            type="checkbox"
+                            className={checkboxCls}
+                            checked={selected.includes(item.id)}
+                            onChange={() => toggleOne(item.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Select ${item.nameEn}`}
+                          />
+                        </td>
+                        <td className={tdCls}>
+                          <ItemThumb src={item.image} alt={item.nameEn} />
+                        </td>
+                        <td className={`${tdCls} text-[14px] text-[#16274D]`}>{item.nameEn}</td>
+                        <td className={`${tdCls} text-[14px] text-[#16274D] text-right`} dir="rtl">
+                          {item.nameAr || <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className={tdCls}>
+                          <TypePill type={item.type} />
+                        </td>
+                        <td className={tdCls}>
+                          <CategoryPill name={categoryName(item.categoryId)} />
+                        </td>
+                        <td className={tdCls}>
+                          <GroupPill group={item.group} />
+                        </td>
+                        <td className={tdCls}>
+                          <Switch
+                            on={item.active}
+                            label={`${item.nameEn} active`}
+                            onChange={() => careSuiteService.updateLibraryItem(item.id, { active: !item.active })}
+                          />
+                        </td>
+                        <td className={tdCls}>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditing(item);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-[#4EBEE3]/10 transition-colors cursor-pointer"
+                              title="Edit"
+                            >
+                              <Pencil size={18} className="text-[#4EBEE3]" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                confirmRemoveItem(item);
+                              }}
+                              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete"
+                            >
+                              <Trash2 size={18} className="text-red-500" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>,
+                    ];
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {/* pagination (bottom) */}
+            {pager(false)}
+          </>
         )}
       </div>
 

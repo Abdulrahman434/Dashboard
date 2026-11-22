@@ -32,15 +32,15 @@ export default function CareSuiteManagerPage({
   return (
     <div className="h-full flex flex-col font-['Poppins',sans-serif]">
       <div className="bg-white border-b border-gray-200">
-        <div className="px-8 pt-8 pb-0">
-          <div className="flex items-start justify-between gap-4 mb-6">
+        <div className="px-6 pt-4 pb-0">
+          <div className="flex items-center justify-between gap-4 mb-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#4EBEE3]/10 rounded-lg flex items-center justify-center">
-                <Layers size={20} className="text-[#4EBEE3]" strokeWidth={2} />
+              <div className="w-9 h-9 bg-[#4EBEE3]/10 rounded-lg flex items-center justify-center">
+                <Layers size={18} className="text-[#4EBEE3]" strokeWidth={2} />
               </div>
               <div>
-                <h1 className="text-[24px] font-semibold text-[#16274D]">CareSuite Manager</h1>
-                <p className="text-[14px] text-[#6B7280]">
+                <h1 className="text-[19px] leading-tight font-semibold text-[#16274D]">CareSuite Manager</h1>
+                <p className="text-[13px] text-[#6B7280]">
                   Manage patient services (amenities and requests) and organize their categories.
                 </p>
               </div>
@@ -58,7 +58,7 @@ export default function CareSuiteManagerPage({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto px-6 py-4">
         {/* key resets each tab's local state (search, open views) when switching */}
         {tab === 'items' ? (
           <ItemsManagerTab key="items" addSignal={addSignal} />
