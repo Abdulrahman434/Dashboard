@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import svgPaths from "./svg-c7usyrwz2w";
 import imgCareInnLogo1 from "figma:asset/1497971121f9fe3238b7a912b02a205098173242.png";
 import imgLoginPic from "figma:asset/WhatsApp_Image_2026-04-05_at_10.57.07-2.jpeg";
+import imgLoginCorridor from "figma:asset/login-corridor.jpg";
 
 interface DashboardLoginProps {
   onLogin: (email: string, name: string) => void;
@@ -33,7 +34,7 @@ export default function DashboardLogin({ onLogin }: DashboardLoginProps) {
           <img 
             alt="Healthcare Redefined" 
             className="w-full h-full object-cover pointer-events-none" 
-            src="../assets/Dallah-Hospital1.jpg" 
+            src={imgLoginCorridor} 
           />
         </div>
       </div>
