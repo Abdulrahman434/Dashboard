@@ -7,6 +7,7 @@ import { Toggle, Note } from './careSuiteAtoms';
 import { useAddSignal } from './ItemsManagerTab';
 import CategoryFormModal from './CategoryFormModal';
 import CategoryItemsView from './CategoryItemsView';
+import DeleteCategoryDialog from './DeleteCategoryDialog';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 
 import { thLeft, thCenter, tdCls, trCls, nameCls } from './tableTokens';
@@ -164,8 +165,9 @@ export default function CategoriesManagerTab({ addSignal }: { addSignal: number 
       </div>
 
       {editing !== undefined && <CategoryFormModal category={editing} onClose={() => setEditing(undefined)} />}
-      {/* Task 6 replaces this with the delete dialog */}
-      {deleting && void setDeleting}
+      {deleting && (
+        <DeleteCategoryDialog category={deleting} onClose={() => setDeleting(null)} onDeleted={() => setDeleting(null)} />
+      )}
     </>
   );
 }
