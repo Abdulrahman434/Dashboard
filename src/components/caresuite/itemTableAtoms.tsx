@@ -7,6 +7,11 @@ import { Package } from 'lucide-react';
 import type { RequestType } from '../../services/careSuiteService';
 import { cx } from './careSuiteAtoms';
 
+/** Display name for a request type. The stored value stays "Service Request" / "Issue". */
+export function typeLabel(type: RequestType): string {
+  return type === 'Service Request' ? 'Service' : type;
+}
+
 const pill = 'inline-flex items-center px-2.5 py-1 rounded-md border text-[11.5px] font-medium whitespace-nowrap';
 
 /** Item image on a warm tile; falls back to a package icon. */
@@ -29,7 +34,7 @@ export function TypePill({ type }: { type: RequestType }) {
           : 'border-[#bfe6f4] bg-[#eef9fd] text-[#1d7da3]',
       )}
     >
-      {type}
+      {typeLabel(type)}
     </span>
   );
 }

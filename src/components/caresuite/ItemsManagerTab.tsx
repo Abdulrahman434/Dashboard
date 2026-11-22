@@ -4,7 +4,7 @@ import { toast } from 'sonner@2.0.3';
 import { useCareSuite } from '../../hooks/useCareSuite';
 import { careSuiteService, type LibraryItem, type RequestType, type Priority } from '../../services/careSuiteService';
 import { Btn, Toggle, Note, Card, CardHead, Bar } from './careSuiteAtoms';
-import { ItemThumb, TypePill, CategoryPill, GroupPill, Switch } from './itemTableAtoms';
+import { ItemThumb, TypePill, CategoryPill, GroupPill, Switch, typeLabel } from './itemTableAtoms';
 import TablePagination from '../TablePagination';
 import { SingleSelectDropdown, MultiSelectDropdown } from '../UnifiedDropdown';
 import InlineImageUpload from '../InlineImageUpload';
@@ -21,7 +21,7 @@ const blankForm = (categoryId: string | null = null) => ({
 });
 
 const TYPE_OPTIONS = [
-  { value: 'Service Request', label: 'Service Request' },
+  { value: 'Service Request', label: typeLabel('Service Request') },
   { value: 'Issue', label: 'Issue' },
 ];
 
@@ -285,7 +285,7 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
   const groupOf = (item: LibraryItem): { key: string; label: string; rank: number } => {
     if (groupBy === 'category')
       return { key: item.categoryId || UNCATEGORIZED, label: categoryName(item.categoryId) || 'Uncategorized', rank: categoryRank(item.categoryId) };
-    if (groupBy === 'type') return { key: item.type, label: item.type, rank: TYPE_OPTIONS.findIndex((t) => t.value === item.type) };
+    if (groupBy === 'type') return { key: item.type, label: typeLabel(item.type), rank: TYPE_OPTIONS.findIndex((t) => t.value === item.type) };
     if (groupBy === 'group') {
       const g = item.group || 'All';
       return { key: g, label: groupLabel(g), rank: GROUP_OPTIONS.findIndex((o) => o.value === g) };
@@ -338,28 +338,16 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
   const cycleSort = () => setSortDir((d) => (d === null ? 'asc' : d === 'asc' ? 'desc' : null));
   const SortIcon = sortDir === 'asc' ? ArrowUp : sortDir === 'desc' ? ArrowDown : ArrowUpDown;
 
-  const pager = (top: boolean) => (
+  const pager = (
     <TablePagination
       alwaysShow
-      className={top ? 'px-5 py-3.5' : 'px-5 py-3.5 border-t border-gray-200 bg-white'}
+      className="px-5 py-3.5 border-t border-gray-200 bg-white"
       currentPage={current}
       totalItems={rows.length}
       itemsPerPage={perPage}
       onPageChange={setPage}
       onItemsPerPageChange={setPerPage}
       itemLabel={rows.length === 1 ? 'item' : 'items'}
-      leftExtra={
-        top &&
-        selected.length > 0 && (
-          <button
-            onClick={deleteSelected}
-            className="ml-3 inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-lg text-[13px] font-medium transition-colors cursor-pointer"
-          >
-            <Trash2 size={14} />
-            Delete ({selected.length})
-          </button>
-        )
-      }
     />
   );
 
@@ -422,8 +410,24 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
         />
       </div>
 
-      {/* summary + pagination (top) */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm">{pager(true)}</div>
+      {/* bulk actions — only while rows are ticked */}
+      {selected.length > 0 && (
+        <div className="flex items-center justify-between gap-3 px-5 py-2.5 rounded-xl border border-[#bfe6f4] bg-[#eef9fd]">
+          <span className="text-[14px] text-[#16274D]">
+            <b className="font-semibold">{selected.length}</b> {selected.length === 1 ? 'item' : 'items'} selected
+            <button onClick={() => setSelected([])} className="ml-3 text-[13px] text-[#1d7da3] underline cursor-pointer">
+              Clear
+            </button>
+          </span>
+          <button
+            onClick={deleteSelected}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#EF4444] hover:bg-[#DC2626] text-white rounded-lg text-[13.5px] font-medium transition-colors cursor-pointer shadow-sm"
+          >
+            <Trash2 size={15} />
+            Delete ({selected.length})
+          </button>
+        </div>
+      )}
 
       {/* table */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -550,8 +554,8 @@ export default function ItemsManagerTab({ addSignal }: { addSignal: number }) {
                 </tbody>
               </table>
             </div>
-            {/* pagination (bottom) */}
-            {pager(false)}
+            {/* pagination */}
+            {pager}
           </>
         )}
       </div>
