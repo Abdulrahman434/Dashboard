@@ -89,7 +89,7 @@ import {
   ChefHat,
   ListTree,
   GitBranch,
-  Tag
+  Package
 } from 'lucide-react';
 import { Fingerprint } from 'lucide-react';
 import imgCareInnLogo from "figma:asset/1527704e7ade377192f897bbb5d87c3293623da3.png";
@@ -183,7 +183,8 @@ const navigationItems: MenuItem[] = [
     label: 'CareSuite Manager',
     icon: ClipboardList,
     subItems: [
-      { id: 'cs-library', label: 'Library', icon: BookOpen },
+      { id: 'cs-library', label: 'Items Manager', icon: Package },
+      { id: 'cs-categories', label: 'Categories Manager', icon: Layers },
       { id: 'cs-workflow', label: 'Workflow', icon: GitBranch },
       { id: 'cs-teams', label: 'Teams Assignment', icon: Users }
     ]
@@ -247,8 +248,7 @@ const navigationItems: MenuItem[] = [
     icon: Settings,
     subItems: [
       { id: 'users', label: 'Users', icon: Users2 },
-      { id: 'users-roles', label: 'Users Roles', icon: UserCircle },
-      { id: 'team-categories', label: 'Team Categories', icon: Tag }
+      { id: 'users-roles', label: 'Users Roles', icon: UserCircle }
     ]
   },
   { 

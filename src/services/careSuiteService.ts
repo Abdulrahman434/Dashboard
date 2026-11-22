@@ -284,9 +284,6 @@ export const careSuiteService = {
   ): void {
     write(CATEGORIES_KEY, this.listCategories().map((c) => (c.id === id ? { ...c, ...patch } : c)));
   },
-  removeCategory(id: string): void {
-    write(CATEGORIES_KEY, this.listCategories().filter((c) => c.id !== id));
-  },
   /**
    * Delete a category. Every mode removes the category and strips it from all
    * teams' `categoryIds`; requests are never modified. Its items are archived

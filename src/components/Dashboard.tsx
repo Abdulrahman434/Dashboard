@@ -53,11 +53,10 @@ import FoodLibraryPage from './food/FoodLibraryPage';
 import MenuSetsPage from './food/MenuSetsPage';
 import PatientKioskPage from './food/PatientKioskPage';
 import KitchenPage from './food/KitchenPage';
-import CareSuiteLibraryPage from './caresuite/CareSuiteLibraryPage';
+import CareSuiteManagerPage from './caresuite/CareSuiteManagerPage';
 import CareSuiteWorkflowPage from './caresuite/CareSuiteWorkflowPage';
 import CareSuiteTeamsPage from './caresuite/CareSuiteTeamsPage';
 import CareSuiteDashboardPage from './caresuite/CareSuiteDashboardPage';
-import TeamCategoriesPage from './caresuite/TeamCategoriesPage';
 import { MultiSelectDropdown } from './UnifiedDropdown';
 import { nurseStationService } from '../services/nurseStationService';
 
@@ -169,16 +168,18 @@ export default function Dashboard({ onLogout }: DashboardProps) {
         return <KitchenPage onNavigate={handleNavigation} />;
 
       case 'cs-library':
-        return <CareSuiteLibraryPage onNavigate={handleNavigation} />;
+        return <CareSuiteManagerPage tab="items" onNavigate={handleNavigation} />;
+
+      // Categories Manager tab; 'team-categories' is the old Control Panel route
+      case 'cs-categories':
+      case 'team-categories':
+        return <CareSuiteManagerPage tab="categories" onNavigate={handleNavigation} />;
 
       case 'cs-workflow':
         return <CareSuiteWorkflowPage onNavigate={handleNavigation} />;
 
       case 'cs-teams':
         return <CareSuiteTeamsPage onNavigate={handleNavigation} />;
-
-      case 'team-categories':
-        return <TeamCategoriesPage />;
 
       // Site Configuration - Main
       case 'asset-manager':
