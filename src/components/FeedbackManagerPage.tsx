@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ListChecks, Plus, Search, Edit2, Trash2, Eye, GripVertical, X, ChevronLeft, ChevronRight, Upload, Image as ImageIcon, Monitor, ArrowUpDown } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import InlineEditCell from './InlineEditCell';
@@ -357,6 +357,9 @@ export default function FeedbackManagerPage() {
   };
 
   // Add question
+  const pendingFocusQuestionId = useRef<string | null>(null);
+  const questionFirstInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
   const addQuestion = () => {
     const newQuestion: Question = {
       id: Date.now().toString(),
@@ -364,11 +367,26 @@ export default function FeedbackManagerPage() {
       questionAr: '',
       answerType: 'satisfaction'
     };
+    pendingFocusQuestionId.current = newQuestion.id;
     setSurveyForm({
       ...surveyForm,
       questions: [...surveyForm.questions, newQuestion]
     });
   };
+
+  // After a question is added: scroll it into view and focus its first field.
+  // (Questions are always rendered expanded, so no expand state is needed.)
+  useEffect(() => {
+    const id = pendingFocusQuestionId.current;
+    if (!id) return;
+    const input = questionFirstInputRefs.current.get(id);
+    if (!input) return;
+    pendingFocusQuestionId.current = null;
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const card = input.closest('[data-question-id]') ?? input;
+    card.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+    input.focus({ preventScroll: true });
+  }, [surveyForm.questions]);
 
   // Update question
   const updateQuestion = (index: number, field: string, value: any) => {
@@ -993,16 +1011,19 @@ export default function FeedbackManagerPage() {
               {/* Step 3: Questions */}
               {currentStep === 3 && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-[16px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
+                  <div className="sticky -top-6 z-10 -mx-6 -mt-6 mb-4 px-6 py-3 bg-white/95 backdrop-blur border-b border-gray-100 flex items-center justify-between gap-3">
+                    <h3 className="text-[16px] font-medium text-[#0f1729] font-['Poppins',sans-serif] min-w-0 truncate">
                       Survey Questions
+                      <span className="ml-2 text-[12px] font-normal text-gray-500">({surveyForm.questions.length})</span>
                     </h3>
                     <button
+                      type="button"
                       onClick={addQuestion}
-                      className="flex items-center gap-2 px-3 py-2 bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[13px] font-medium"
+                      aria-label="Add question"
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[13px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[#16274D] focus-visible:ring-offset-2"
                     >
                       <Plus size={16} strokeWidth={2} />
-                      Add Question
+                      Add question
                     </button>
                   </div>
 
@@ -1017,6 +1038,7 @@ export default function FeedbackManagerPage() {
                       {surveyForm.questions.map((question, index) => (
                         <div
                           key={question.id}
+                          data-question-id={question.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, index)}
                           onDragOver={(e) => handleDragOver(e, index)}
@@ -1040,6 +1062,10 @@ export default function FeedbackManagerPage() {
                                     Question {index + 1} (EN)
                                   </label>
                                   <input
+                                    ref={(el) => {
+                                      if (el) questionFirstInputRefs.current.set(question.id, el);
+                                      else questionFirstInputRefs.current.delete(question.id);
+                                    }}
                                     type="text"
                                     value={question.questionEn}
                                     onChange={(e) =>
