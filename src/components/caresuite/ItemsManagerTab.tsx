@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Package, Search, Pencil, Trash2, X, Info, ArrowUpDown, ArrowUp, ArrowDown, Power, PowerOff, PanelLeftOpen } from 'lucide-react';
+import { Package, Search, Pencil, Trash2, X, Info, ArrowUpDown, ArrowUp, ArrowDown, Power, PowerOff, PanelLeftOpen, ImagePlus, Upload } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useCareSuite } from '../../hooks/useCareSuite';
 import { careSuiteService, type LibraryItem, type RequestType, type Priority } from '../../services/careSuiteService';
-import { Btn, Badge, Toggle, Note, Card, CardHead, Bar } from './careSuiteAtoms';
+import { Btn, Badge, Toggle, Note, Card, CardHead, Bar, cx } from './careSuiteAtoms';
 import { ItemThumb, TypePill, CategoryPill, GroupPill, Switch, typeLabel } from './itemTableAtoms';
 import TablePagination from '../TablePagination';
 import QuickActionsPill from './QuickActionsPill';
@@ -12,10 +12,9 @@ import CategoryPanel, { ALL, UNCATEGORIZED } from './CategoryPanel';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 import { peekPendingCategory, clearPendingCategory } from './caresuiteNav';
 import { SingleSelectDropdown, MultiSelectDropdown } from '../UnifiedDropdown';
-import InlineImageUpload from '../InlineImageUpload';
-import IconPicker from './IconPicker';
-import { CareSuiteIcon } from './careSuiteIcons';
-import { ToneIconTile, toneColor, useBrandPrimary } from './categoryTone';
+import { IconPickerDialog } from './IconPicker';
+import { CareSuiteIcon, iconLabel } from './careSuiteIcons';
+import { ToneIconTile, alpha, toneColor, useBrandPrimary } from './categoryTone';
 
 const blankForm = (categoryId: string | null = null) => ({
   image: '',
@@ -129,9 +128,12 @@ export function ItemFormModal({
     toast('Item saved');
   };
 
+  const fieldCls = 'w-full h-[40px] px-3 border border-[#d6dae6] rounded-[10px] outline-none focus:border-[#4EBEE3] transition-colors text-[13.5px]';
+  const labelCls = 'block text-[13px] text-[#5d6678] mb-1.5';
+
   return (
-    <div className="fixed inset-0 bg-[#16274D]/45 flex items-center justify-center z-40 p-5" onClick={onClose}>
-      <Card className="max-w-[520px] w-full" onClick={(e: any) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-[#16274D]/45 flex items-center justify-center z-40 p-4" onClick={onClose}>
+      <Card className="max-w-[560px] w-full max-h-[90vh] flex flex-col" onClick={(e: any) => e.stopPropagation()}>
         <CardHead
           title={item ? 'Edit item' : 'Add item'}
           right={
@@ -144,88 +146,58 @@ export function ItemFormModal({
             </button>
           }
         />
-        <div className="p-5">
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* picture + names: the same layout for photo and icon categories */}
           <div className="flex gap-4 items-start">
-            {!iconStyle && (
-              <InlineImageUpload
-                imageUrl={form.image}
-                onImageChange={(dataUrl) => patchForm({ image: dataUrl })}
-                altText={form.nameEn || 'Item image'}
-                size="md"
-              />
-            )}
-            <div className="flex-1">
-              <label className="block text-[13px] text-[#5d6678] mb-1.5">Name (English)</label>
-              <input
-                className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[10px] outline-none focus:border-[#4EBEE3] transition-colors"
-                value={form.nameEn}
-                onChange={(e) => patchForm({ nameEn: e.target.value })}
-                placeholder="e.g. Extra towel"
-              />
+            <ItemVisualField
+              iconStyle={iconStyle}
+              image={form.image}
+              icon={form.icon}
+              color={color}
+              alt={form.nameEn || 'Item'}
+              onImage={(image) => patchForm({ image })}
+              onIcon={(icon) => patchForm({ icon })}
+            />
+            <div className="flex-1 min-w-0 space-y-3">
+              <div>
+                <label className={labelCls} htmlFor="item-name-en">Name (English)</label>
+                <input id="item-name-en" className={fieldCls} value={form.nameEn} onChange={(e) => patchForm({ nameEn: e.target.value })} placeholder="e.g. Extra towel" />
+              </div>
+              <div>
+                <label className={labelCls} htmlFor="item-name-ar">Name (Arabic)</label>
+                <input id="item-name-ar" className={fieldCls} dir="rtl" value={form.nameAr} onChange={(e) => patchForm({ nameAr: e.target.value })} placeholder="اسم العنصر" />
+              </div>
             </div>
           </div>
-
-          {iconStyle && (
-            <div className="mt-4">
-              <label className="block text-[13px] text-[#5d6678] mb-1.5" htmlFor="item-icon">
-                Icon
-              </label>
-              <IconPicker id="item-icon" value={form.icon} onChange={(v) => patchForm({ icon: v })} color={color} />
-              <div className="text-[12px] text-[#9099ab] mt-1">
-                “{formCategory?.nameEn}” shows icons to patients, in its {formCategory?.tone === 'alert' ? 'alert red' : 'brand'} colour.
-              </div>
+          {formCategory && (
+            <div className="text-[12px] text-[#9099ab] -mt-1">
+              “{formCategory.nameEn}” shows {iconStyle ? 'an icon' : 'a photo'} for each item to patients
+              {iconStyle ? `, in its ${formCategory.tone === 'alert' ? 'alert red' : 'brand'} colour` : ''}.
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[13px] text-[#5d6678] mb-1.5">Name (Arabic)</label>
-              <input
-                className="w-full h-[38px] px-3 border border-[#d6dae6] rounded-[10px] outline-none focus:border-[#4EBEE3] transition-colors"
-                dir="rtl"
-                value={form.nameAr}
-                onChange={(e) => patchForm({ nameAr: e.target.value })}
-                placeholder="اسم العنصر"
-              />
-            </div>
-            <div>
-              <label className="block text-[13px] text-[#5d6678] mb-1.5">Category</label>
+              <span className={labelCls}>Category</span>
               <SingleSelectDropdown
                 options={categories.map((c) => ({ value: c.id, label: c.nameEn }))}
                 value={form.categoryId || ''}
                 onChange={(v: string) => patchForm({ categoryId: v || null })}
                 placeholder="No category"
+                size="md"
               />
+            </div>
+            <div>
+              <span className={labelCls}>Type</span>
+              <SingleSelectDropdown options={TYPE_OPTIONS} value={form.type} onChange={(v: string) => patchForm({ type: v })} size="md" />
+            </div>
+            <div>
+              <span className={labelCls}>Group Scope</span>
+              <SingleSelectDropdown options={GROUP_OPTIONS} value={form.group || 'All'} onChange={(v: string) => patchForm({ group: v })} size="md" />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="block text-[13px] text-[#5d6678] mb-1.5">Request type</label>
-              <SingleSelectDropdown options={TYPE_OPTIONS} value={form.type} onChange={(v: string) => patchForm({ type: v })} />
-            </div>
-            <div>
-              <label className="block text-[13px] text-[#5d6678] mb-1.5">Priority</label>
-              <SingleSelectDropdown
-                options={PRIORITY_OPTIONS}
-                value={form.priority}
-                onChange={(v: string) => patchForm({ priority: v })}
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="block text-[13px] text-[#5d6678] mb-1.5">Group Scope</label>
-              <SingleSelectDropdown
-                options={GROUP_OPTIONS}
-                value={form.group || 'All'}
-                onChange={(v: string) => patchForm({ group: v })}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 mt-4 pt-4 border-t border-[#e7e9f0]">
+          <div className="flex items-center justify-between gap-3 pt-4 border-t border-[#e7e9f0]">
             <div>
               <div className="font-medium text-[#19233a]">Active</div>
               <div className="text-[13px] text-[#5d6678] mt-0.5">Inactive items are hidden from patients</div>
@@ -242,6 +214,88 @@ export function ItemFormModal({
           </Btn>
         </Bar>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * The item's picture slot: a photo upload for photo categories, an icon choice
+ * for icon categories — same size and place, so both forms look alike.
+ */
+function ItemVisualField({
+  iconStyle,
+  image,
+  icon,
+  color,
+  alt,
+  onImage,
+  onIcon,
+}: {
+  iconStyle: boolean;
+  image?: string;
+  icon?: string;
+  color: string;
+  alt: string;
+  onImage: (dataUrl: string) => void;
+  onIcon: (name: string) => void;
+}) {
+  const [picking, setPicking] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const tile = 'relative w-[104px] h-[104px] rounded-xl overflow-hidden flex items-center justify-center border transition-colors cursor-pointer group';
+  const caption = 'block text-center text-[12px] text-[#1d7da3] mt-1.5';
+
+  if (iconStyle) {
+    return (
+      <div className="shrink-0">
+        <button
+          type="button"
+          onClick={() => setPicking(true)}
+          className={cx(tile, 'border-[#e7e9f0] hover:border-[#4EBEE3]')}
+          style={{ background: `linear-gradient(180deg, ${alpha(color, 0.1)}, ${alpha(color, 0.04)})` }}
+          aria-label={icon ? `Icon: ${iconLabel(icon)}. Change icon` : 'Choose an icon'}
+        >
+          <ToneIconTile color={color} size={60}>
+            <CareSuiteIcon name={icon} size={28} />
+          </ToneIconTile>
+        </button>
+        <span className={caption}>{icon ? 'Change icon' : 'Choose icon'}</span>
+        <IconPickerDialog open={picking} value={icon} color={color} onChange={onIcon} onClose={() => setPicking(false)} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="shrink-0">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onloadend = () => onImage(reader.result as string);
+          reader.readAsDataURL(file);
+          e.target.value = '';
+        }}
+      />
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        className={cx(tile, 'bg-[#F3EEE8] border-[#e7e9f0] hover:border-[#4EBEE3]')}
+        aria-label={image ? 'Change photo' : 'Upload a photo'}
+      >
+        {image ? (
+          <img src={image} alt={alt} className="max-w-full max-h-full object-contain" />
+        ) : (
+          <ImagePlus size={28} className="text-[#b7ab9c]" />
+        )}
+        <span className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <Upload size={18} className="text-white" />
+        </span>
+      </button>
+      <span className={caption}>{image ? 'Change photo' : 'Upload photo'}</span>
     </div>
   );
 }

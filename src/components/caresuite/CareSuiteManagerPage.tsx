@@ -37,13 +37,13 @@ export default function CareSuiteManagerPage({
       <div className="bg-white border-b border-gray-200">
         <div className="px-6 pt-4 pb-0">
           <div className="flex items-center justify-between gap-4 mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-[#4EBEE3]/10 rounded-lg flex items-center justify-center">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 shrink-0 bg-[#4EBEE3]/10 rounded-lg flex items-center justify-center">
                 <Layers size={18} className="text-[#4EBEE3]" strokeWidth={2} />
               </div>
-              <div>
+              <div className="min-w-0">
                 <h1 className="text-[19px] leading-tight font-semibold text-[#16274D]">CareSuite Manager</h1>
-                <p className="text-[13px] text-[#6B7280]">
+                <p className="text-[13px] text-[#6B7280] truncate">
                   Manage patient services (amenities and requests) and organize their categories.
                 </p>
               </div>
@@ -72,6 +72,7 @@ export default function CareSuiteManagerPage({
           <CategoriesManagerTab
             key="categories"
             addSignal={addSignal}
+            headerSlot={headerSlot}
             onManageItems={(id) => {
               openItemsForCategory(id);
               onNavigate(CARESUITE_TAB_ROUTE.items);

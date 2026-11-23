@@ -26,21 +26,27 @@ const OPTIONS: { mode: Mode; title: string; detail: string }[] = [
 ];
 
 /**
- * Delete a category: shows how many items and teams are affected, warns that
+ * Delete one or more categories: shows how many items and teams are affected, warns that
  * team associations are removed, and requires an explicit choice for the
  * category's items before the Delete button enables.
  */
 export default function DeleteCategoryDialog({
-  category,
+  categories,
   onClose,
   onDeleted,
 }: {
-  category: TeamCategory;
+  categories: TeamCategory[];
   onClose: () => void;
   onDeleted: () => void;
 }) {
-  const { items, teams, users } = careSuiteService.categoryUsage(category.id);
-  const others = careSuiteService.listCategories().filter((c) => c.id !== category.id);
+  const ids = categories.map((c) => c.id);
+  const usage = ids.map((id) => careSuiteService.categoryUsage(id));
+  const items = usage.reduce((n, u) => n + u.items, 0);
+  const users = usage.reduce((n, u) => n + u.users, 0); // a user links to one category
+  const teams = careSuiteService.listTeams().filter((t) => t.categoryIds.some((id) => ids.includes(id))).length; // distinct
+  const others = careSuiteService.listCategories().filter((c) => !ids.includes(c.id));
+  const single = categories.length === 1;
+  const noun = single ? 'this category' : 'these categories';
   // with no items there is nothing to decide
   const [mode, setMode] = useState<Mode | null>(items === 0 ? 'uncategorize' : null);
   const [target, setTarget] = useState('');
@@ -51,9 +57,10 @@ export default function DeleteCategoryDialog({
     if (!ready) return;
     const opts: DeleteCategoryMode =
       mode === 'move-items' ? { mode, targetCategoryId: target } : ({ mode } as DeleteCategoryMode);
-    careSuiteService.deleteCategory(category.id, opts);
+    ids.forEach((id) => careSuiteService.deleteCategory(id, opts));
     const moved = mode === 'move-items' ? others.find((c) => c.id === target)?.nameEn : null;
-    toast.success(moved ? `Category deleted — ${items} items moved to ${moved}` : 'Category deleted');
+    const what = single ? 'Category deleted' : `${categories.length} categories deleted`;
+    toast.success(moved && items ? `${what} — ${plural(items, 'item')} moved to ${moved}` : what);
     onDeleted();
   };
 
@@ -63,7 +70,7 @@ export default function DeleteCategoryDialog({
     <div className="fixed inset-0 bg-[#16274D]/45 flex items-center justify-center z-40 p-5" onClick={onClose}>
       <Card className="max-w-[560px] w-full" onClick={(e: any) => e.stopPropagation()} role="dialog" aria-modal="true">
         <CardHead
-          title={`Delete “${category.nameEn}”?`}
+          title={single ? `Delete “${categories[0].nameEn}”?` : `Delete ${categories.length} categories?`}
           right={
             <button
               onClick={onClose}
@@ -78,12 +85,12 @@ export default function DeleteCategoryDialog({
           <div className="text-[14px] text-[#19233a]">
             <span className="font-semibold">{plural(items, 'item')}</span>,{' '}
             <span className="font-semibold">{plural(teams, 'team')}</span> and{' '}
-            <span className="font-semibold">{plural(users, 'user')}</span> are linked to this category.
+            <span className="font-semibold">{plural(users, 'user')}</span> are linked to {noun}.{!single && <span className="block text-[12.5px] text-[#5d6678] mt-1">{categories.map((c) => c.nameEn).join(', ')}</span>}
           </div>
 
           {teams + users > 0 && (
             <Note tone="warn" icon={<AlertTriangle size={16} />}>
-              {[teams > 0 && `the ${plural(teams, 'team')} assigned to it`, users > 0 && `the ${plural(users, 'user')} linked to it`]
+              {[teams > 0 && `the ${plural(teams, 'team')} assigned to ${single ? "it" : "them"}`, users > 0 && `the ${plural(users, 'user')} linked to ${single ? "it" : "them"}`]
                 .filter(Boolean)
                 .join(' and ')
                 .replace(/^t/, 'T')}{' '}
@@ -92,7 +99,7 @@ export default function DeleteCategoryDialog({
           )}
 
           {items > 0 && (
-            <div className="space-y-2" role="radiogroup" aria-label="What happens to this category's items">
+            <div className="space-y-2" role="radiogroup" aria-label="What happens to the items">
               <div className="text-[13px] font-medium text-[#5d6678]">What should happen to its items?</div>
               {OPTIONS.map((o) => {
                 const on = mode === o.mode;

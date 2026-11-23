@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Info, Layers, List, Edit2, Trash2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Info, Layers, List, Edit2, Trash2, Pencil, Power, PowerOff } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useCareSuite } from '../../hooks/useCareSuite';
 import { careSuiteService, categoryDisplayEn, categoryDisplayAr, type TeamCategory } from '../../services/careSuiteService';
@@ -12,19 +13,53 @@ import { SortableRows, SortableTr, OrderBadge } from './sortable';
 import { thLeft, thCenter, tdCls, trCls, nameCls } from './tableTokens';
 import { CareSuiteIcon } from './careSuiteIcons';
 import { ToneIconTile, toneColor, useBrandPrimary } from './categoryTone';
+import QuickActionsPill from './QuickActionsPill';
 
-/** Categories Manager tab — order, Active, Manage Items, Edit, Delete. */
-export default function CategoriesManagerTab({ addSignal, onManageItems }: { addSignal: number; onManageItems: (categoryId: string) => void }) {
+const checkboxCls = 'w-[18px] h-[18px] rounded border-2 border-gray-300 text-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20 cursor-pointer';
+
+/** Categories Manager tab — order, Active, Manage Items, Edit, Delete, and bulk Quick Actions. */
+export default function CategoriesManagerTab({
+  addSignal,
+  onManageItems,
+  headerSlot,
+}: {
+  addSignal: number;
+  onManageItems: (categoryId: string) => void;
+  headerSlot?: HTMLElement | null;
+}) {
   const { categories, library } = useCareSuite();
   const primary = useBrandPrimary();
   // undefined = closed, null = adding, category = editing
   const [editing, setEditing] = useState<TeamCategory | null | undefined>(undefined);
-  const [deleting, setDeleting] = useState<TeamCategory | null>(null);
+  const [deleting, setDeleting] = useState<TeamCategory[] | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
 
   useAddSignal(addSignal, () => setEditing(null));
 
   // counts from the hook's live data (re-render on every store change)
   const itemCount = (id: string) => library.filter((i) => i.categoryId === id && !i.archived).length;
+
+  // a category deleted elsewhere drops out of the selection
+  const picked = categories.filter((c) => selected.includes(c.id));
+  const allSelected = categories.length > 0 && picked.length === categories.length;
+  const toggleOne = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const setActivePicked = (active: boolean) => {
+    picked.forEach((c) => careSuiteService.updateCategory(c.id, { active }));
+    toast.success(`${picked.length} ${picked.length === 1 ? 'category' : 'categories'} ${active ? 'shown to' : 'hidden from'} patients`);
+  };
+  const quickActions = (
+    <QuickActionsPill
+      count={picked.length}
+      noun={['Category', 'Categories']}
+      onDeselect={() => setSelected([])}
+      actions={[
+        ...(picked.length === 1 ? [{ label: 'Edit', icon: <Pencil size={16} />, tone: 'accent' as const, onClick: () => setEditing(picked[0]) }] : []),
+        { label: 'Activate', icon: <Power size={16} />, tone: 'ok', onClick: () => setActivePicked(true) },
+        { label: 'Deactivate', icon: <PowerOff size={16} />, tone: 'mute', onClick: () => setActivePicked(false) },
+        { label: 'Delete', icon: <Trash2 size={16} />, tone: 'danger', onClick: () => setDeleting(picked), separated: true },
+      ]}
+    />
+  );
 
   const saveOrder = (ids: string[]) => {
     careSuiteService.setCategoryOrder(ids);
@@ -33,6 +68,7 @@ export default function CategoriesManagerTab({ addSignal, onManageItems }: { add
 
   return (
     <>
+      {picked.length > 0 && headerSlot && createPortal(quickActions, headerSlot)}
       <Note tone="info" icon={<Info size={16} />} className="mb-4">
         <div className="font-semibold text-[#16274D] text-[14px]">Manage and order categories</div>
         Reorder categories to control how they appear on the patient-facing screen. Click a category to manage its
@@ -54,7 +90,16 @@ export default function CategoriesManagerTab({ addSignal, onManageItems }: { add
             <table className="w-full">
               <thead className="bg-[#F8FAFC] border-b border-[#E5E7EB]">
                 <tr>
-                  <th className={thCenter} style={{ width: 50 }} />
+                  <th className={thCenter} style={{ width: 40 }} />
+                  <th className={thCenter} style={{ width: 44 }}>
+                    <input
+                      type="checkbox"
+                      className={checkboxCls}
+                      checked={allSelected}
+                      onChange={() => setSelected(allSelected ? [] : categories.map((c) => c.id))}
+                      aria-label="Select all categories"
+                    />
+                  </th>
                   <th className={thCenter} style={{ width: 70 }} title="Position on the patient-facing screen">
                     Order
                   </th>
@@ -80,6 +125,16 @@ export default function CategoriesManagerTab({ addSignal, onManageItems }: { add
                         {(handle) => (
                           <>
                             <td className={`${tdCls} text-center`}>{handle}</td>
+                            <td className={`${tdCls} text-center`}>
+                              <input
+                                type="checkbox"
+                                className={checkboxCls}
+                                checked={selected.includes(c.id)}
+                                onChange={() => toggleOne(c.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Select ${c.nameEn}`}
+                              />
+                            </td>
                             <td className={`${tdCls} text-center`}>
                               <OrderBadge n={idx + 1} />
                             </td>
@@ -145,7 +200,7 @@ export default function CategoriesManagerTab({ addSignal, onManageItems }: { add
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setDeleting(c);
+                                    setDeleting([c]);
                                   }}
                                   className="p-1.5 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                                   title="Delete"
@@ -168,7 +223,14 @@ export default function CategoriesManagerTab({ addSignal, onManageItems }: { add
 
       {editing !== undefined && <CategoryFormModal category={editing} onClose={() => setEditing(undefined)} />}
       {deleting && (
-        <DeleteCategoryDialog category={deleting} onClose={() => setDeleting(null)} onDeleted={() => setDeleting(null)} />
+        <DeleteCategoryDialog
+          categories={deleting}
+          onClose={() => setDeleting(null)}
+          onDeleted={() => {
+            setSelected((s) => s.filter((id) => !deleting.some((c) => c.id === id)));
+            setDeleting(null);
+          }}
+        />
       )}
     </>
   );

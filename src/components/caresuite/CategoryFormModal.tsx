@@ -123,7 +123,7 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
 
               <div className={cx(sectionCls, 'pt-3 border-t border-[#e7e9f0]')}>Patient screen</div>
               <div>
-                <label className={labelCls} htmlFor="cat-icon">Menu icon</label>
+                <label className={labelCls} htmlFor="cat-icon">Category icon</label>
                 <IconPicker id="cat-icon" value={icon} onChange={setIcon} color={color} />
               </div>
               <div className="grid grid-cols-2 gap-4">
