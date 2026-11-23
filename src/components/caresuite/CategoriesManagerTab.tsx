@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Info, Layers, List, Edit2, Trash2, Pencil, Power, PowerOff } from 'lucide-react';
+import { Info, Layers, List, Edit2, Trash2, Pencil, Power, PowerOff, ListChecks, MousePointerClick, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useCareSuite } from '../../hooks/useCareSuite';
 import { careSuiteService, categoryDisplayEn, categoryDisplayAr, type TeamCategory } from '../../services/careSuiteService';
@@ -11,9 +11,12 @@ import DeleteCategoryDialog from './DeleteCategoryDialog';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 
 import { thLeft, thCenter, tdCls, trCls, nameCls } from './tableTokens';
-import { CareSuiteIcon } from './careSuiteIcons';
+import { ItemIcon } from './careSuiteIcons';
+import TableSortIcon from '../TableSortIcon';
 import { ToneIconTile, toneColor, useBrandPrimary } from './categoryTone';
 import QuickActionsPill from './QuickActionsPill';
+
+type CatSortKey = 'order' | 'name' | 'displayEn' | 'displayAr' | 'items' | 'card' | 'active';
 
 const checkboxCls = 'w-[18px] h-[18px] rounded border-2 border-gray-300 text-[#4EBEE3] focus:ring-2 focus:ring-[#4EBEE3]/20 cursor-pointer';
 
@@ -33,6 +36,7 @@ export default function CategoriesManagerTab({
   const [editing, setEditing] = useState<TeamCategory | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<TeamCategory[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
+  const [sort, setSort] = useState<{ key: CatSortKey; dir: 'asc' | 'desc' } | null>(null);
 
   useAddSignal(addSignal, () => setEditing(null));
 
@@ -43,6 +47,10 @@ export default function CategoriesManagerTab({
   const picked = categories.filter((c) => selected.includes(c.id));
   const allSelected = categories.length > 0 && picked.length === categories.length;
   const toggleOne = (id: string) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const setMultiplePicked = (allowMultiple: boolean) => {
+    picked.forEach((c) => careSuiteService.updateCategory(c.id, { allowMultiple }));
+    toast.success(`${picked.length} ${picked.length === 1 ? 'category' : 'categories'}: ${allowMultiple ? 'several items per request' : 'one item per request'}`);
+  };
   const setActivePicked = (active: boolean) => {
     picked.forEach((c) => careSuiteService.updateCategory(c.id, { active }));
     toast.success(`${picked.length} ${picked.length === 1 ? 'category' : 'categories'} ${active ? 'shown to' : 'hidden from'} patients`);
@@ -56,9 +64,45 @@ export default function CategoriesManagerTab({
         ...(picked.length === 1 ? [{ label: 'Edit', icon: <Pencil size={16} />, tone: 'accent' as const, onClick: () => setEditing(picked[0]) }] : []),
         { label: 'Activate', icon: <Power size={16} />, tone: 'ok', onClick: () => setActivePicked(true) },
         { label: 'Deactivate', icon: <PowerOff size={16} />, tone: 'mute', onClick: () => setActivePicked(false) },
+        { label: 'Allow several items per request', icon: <ListChecks size={16} />, tone: 'accent', onClick: () => setMultiplePicked(true), separated: true },
+        { label: 'One item per request', icon: <MousePointerClick size={16} />, tone: 'accent', onClick: () => setMultiplePicked(false) },
         { label: 'Delete', icon: <Trash2 size={16} />, tone: 'danger', onClick: () => setDeleting(picked), separated: true },
       ]}
     />
+  );
+
+  // column sort is a view only; the patient order (Order column) is unchanged and dragging is off meanwhile
+  const sortValue = (c: TeamCategory, key: CatSortKey): string | number => {
+    switch (key) {
+      case 'order': return categories.indexOf(c);
+      case 'name': return c.nameEn.toLowerCase();
+      case 'displayEn': return categoryDisplayEn(c).toLowerCase();
+      case 'displayAr': return categoryDisplayAr(c);
+      case 'items': return itemCount(c.id);
+      case 'card': return `${c.cardStyle}-${c.tone}-${c.allowMultiple ? 1 : 0}`;
+      case 'active': return c.active ? 0 : 1;
+    }
+  };
+  const rows = !sort
+    ? categories
+    : [...categories].sort((a, b) => {
+        const va = sortValue(a, sort.key);
+        const vb = sortValue(b, sort.key);
+        const d = typeof va === 'number' ? va - (vb as number) : va.localeCompare(vb as string, 'ar');
+        return sort.dir === 'asc' ? d : -d;
+      });
+  const canDrag = !sort;
+  const sortTh = (label: string, key: CatSortKey, cls = thLeft, style?: React.CSSProperties) => (
+    <th className={cls} style={style}>
+      <button
+        onClick={() => setSort((cur) => (!cur || cur.key !== key ? { key, dir: 'asc' } : cur.dir === 'asc' ? { key, dir: 'desc' } : null))}
+        className="inline-flex items-center gap-1.5 cursor-pointer hover:text-[#4EBEE3] transition-colors"
+        title={`Sort by ${label}`}
+      >
+        {label}
+        <TableSortIcon field={key} currentField={sort?.key ?? ''} direction={sort?.dir ?? 'asc'} />
+      </button>
+    </th>
   );
 
   const saveOrder = (ids: string[]) => {
@@ -100,17 +144,13 @@ export default function CategoriesManagerTab({
                       aria-label="Select all categories"
                     />
                   </th>
-                  <th className={thCenter} style={{ width: 70 }} title="Position on the patient-facing screen">
-                    Order
-                  </th>
-                  <th className={thLeft}>Name</th>
-                  <th className={thLeft}>Display Name (EN)</th>
-                  <th className={thLeft}>Display Name (AR)</th>
-                  <th className={thCenter}>Items</th>
-                  <th className={thLeft} title="How the category looks on the patient screen">
-                    Patient card
-                  </th>
-                  <th className={thCenter}>Active</th>
+                  {sortTh('Order', 'order', thCenter, { width: 80 })}
+                  {sortTh('Name', 'name')}
+                  {sortTh('Display Name (EN)', 'displayEn')}
+                  {sortTh('Display Name (AR)', 'displayAr')}
+                  {sortTh('Items', 'items', thCenter)}
+                  {sortTh('Patient card', 'card')}
+                  {sortTh('Active', 'active', thCenter)}
                   <th className={thCenter} />
                   <th className={thCenter} style={{ width: 96 }}>
                     Actions
@@ -118,10 +158,12 @@ export default function CategoriesManagerTab({
                 </tr>
               </thead>
                 <tbody className="divide-y divide-[#E5E7EB]">
-                  {categories.map((c, idx) => {
+                  {rows.map((c) => {
                     const n = itemCount(c.id);
+                    const idx = categories.indexOf(c);
+                    const missing = c.cardStyle === 'icon' ? careSuiteService.itemsMissingIcon(c.id).length : 0;
                     return (
-                      <SortableTr key={c.id} id={c.id} className={trCls} onClick={() => onManageItems(c.id)}>
+                      <SortableTr key={c.id} id={c.id} disabled={!canDrag} className={trCls} onClick={() => onManageItems(c.id)}>
                         {(handle) => (
                           <>
                             <td className={`${tdCls} text-center`}>{handle}</td>
@@ -151,13 +193,18 @@ export default function CategoriesManagerTab({
                             <td className={tdCls}>
                               <span className="inline-flex items-center gap-2.5">
                                 <ToneIconTile color={toneColor(c.tone, primary)} size={30}>
-                                  <CareSuiteIcon name={c.icon} size={15} />
+                                  <ItemIcon name={c.icon} svg={c.iconSvg} size={15} />
                                 </ToneIconTile>
                                 <span className="text-[12.5px] leading-tight text-[#19233a] whitespace-nowrap">
                                   {c.cardStyle === 'icon' ? 'Icon cards' : 'Photo cards'}
                                   <span className="block text-[11.5px] text-[#9099ab]">
                                     {c.tone === 'alert' ? 'Alert red' : 'Brand'} · {c.allowMultiple ? 'Several items' : 'One item'}
                                   </span>
+                                  {missing > 0 && (
+                                    <span className="flex items-center gap-1 text-[11.5px] text-[#b9770b]">
+                                      <AlertTriangle size={12} /> {missing} {missing === 1 ? 'needs' : 'need'} an icon
+                                    </span>
+                                  )}
                                 </span>
                               </span>
                             </td>

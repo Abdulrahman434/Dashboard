@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Image as ImageIcon, Shapes, Check } from 'lucide-react';
+import { X, Image as ImageIcon, Shapes, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import {
   careSuiteService,
@@ -11,7 +11,8 @@ import {
 } from '../../services/careSuiteService';
 import { Btn, Toggle, Card, CardHead, Bar, cx } from './careSuiteAtoms';
 import IconPicker from './IconPicker';
-import { CareSuiteIcon } from './careSuiteIcons';
+import { ItemIcon } from './careSuiteIcons';
+import InfoTip from './InfoTip';
 import { ALERT_RED, ToneIconTile, alpha, toneColor, useBrandPrimary } from './categoryTone';
 
 const inputCls =
@@ -31,6 +32,7 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
   const [displayAr, setDisplayAr] = useState(category ? categoryDisplayAr(category) : '');
   const [active, setActive] = useState(category?.active ?? true);
   const [icon, setIcon] = useState(category?.icon ?? '');
+  const [iconSvg, setIconSvg] = useState(category?.iconSvg ?? '');
   const [subEn, setSubEn] = useState(category?.subheadingEn ?? '');
   const [subAr, setSubAr] = useState(category?.subheadingAr ?? '');
   const [tone, setTone] = useState<CategoryTone>(category?.tone ?? 'primary');
@@ -39,6 +41,7 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
 
   const color = toneColor(tone, primary);
   const shownName = displayEn.trim() || name.trim() || 'Category';
+  const missingIcons = category ? careSuiteService.itemsMissingIcon(category.id).length : 0;
   const sampleItems: LibraryItem[] = category ? careSuiteService.listCategoryItems(category.id).slice(0, 3) : [];
 
   const save = () => {
@@ -57,6 +60,7 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
       displayNameAr: t(displayAr),
       active,
       icon: icon || undefined,
+      iconSvg: iconSvg || undefined,
       subheadingEn: t(subEn),
       subheadingAr: t(subAr),
       tone,
@@ -99,9 +103,12 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
             <div className="space-y-4 min-w-0">
               <div className={sectionCls}>Details</div>
               <div>
-                <label className={labelCls} htmlFor="cat-name">Name</label>
+                <label className={labelCls} htmlFor="cat-name">
+                  <span className="inline-flex items-center gap-1.5">
+                    Name <InfoTip text="Internal name, used in Team Assignment and Items Manager." />
+                  </span>
+                </label>
                 <input id="cat-name" className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Housekeeping requests" autoFocus />
-                <div className="text-[12px] text-[#9099ab] mt-1">Internal name, used in Team Assignment and Items Manager.</div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -113,18 +120,11 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
                   <input id="cat-display-ar" className={inputCls} dir="rtl" value={displayAr} onChange={(e) => setDisplayAr(e.target.value)} placeholder="مثال: أحتاج إلى شيء" />
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-medium text-[#19233a] text-[14px]">Active</div>
-                  <div className="text-[12.5px] text-[#5d6678]">Inactive categories and their items are hidden from patients. Teams and requests are not affected.</div>
-                </div>
-                <Toggle on={active} onClick={() => setActive(!active)} />
-              </div>
 
               <div className={cx(sectionCls, 'pt-3 border-t border-[#e7e9f0]')}>Patient screen</div>
               <div>
                 <label className={labelCls} htmlFor="cat-icon">Category icon</label>
-                <IconPicker id="cat-icon" value={icon} onChange={setIcon} color={color} />
+                <IconPicker id="cat-icon" value={icon} iconSvg={iconSvg} onChange={(n) => { setIcon(n); setIconSvg(''); }} onUpload={(svg) => setIconSvg(svg)} color={color} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -137,69 +137,81 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
                 </div>
               </div>
 
-              <div>
-                <span className={labelCls}>Colour</span>
-                <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Colour">
-                  {(
-                    [
-                      ['primary', 'Brand primary', primary, "Follows the client's brand colour (Identity Settings)."],
-                      ['alert', 'Alert red', ALERT_RED, 'For problems and urgent reports.'],
-                    ] as const
-                  ).map(([v, label, swatch, hint]) => (
-                    <button key={v} type="button" role="radio" aria-checked={tone === v} onClick={() => setTone(v)} className={choice(tone === v)}>
-                      <span className="w-6 h-6 rounded-full shrink-0 ring-2 ring-white shadow" style={{ background: swatch }} />
-                      <span className="min-w-0">
-                        <span className="block text-[13.5px] font-medium text-[#16274D]">{label}</span>
-                        <span className="block text-[11.5px] text-[#5d6678]">{hint}</span>
-                      </span>
-                      {tone === v && <Check size={16} className="ml-auto text-[#4EBEE3] shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <span className={labelCls}>Item cards</span>
-                <div className="grid grid-cols-2 gap-3" role="radiogroup" aria-label="Item cards">
-                  {(
-                    [
-                      ['image', 'Photo', <ImageIcon size={18} key="i" />, "Each item's uploaded photo."],
-                      ['icon', 'Icon', <Shapes size={18} key="s" />, 'An icon per item, in the category colour.'],
-                    ] as const
-                  ).map(([v, label, ic, hint]) => (
-                    <button key={v} type="button" role="radio" aria-checked={cardStyle === v} onClick={() => setCardStyle(v)} className={choice(cardStyle === v)}>
-                      <span className="text-[#5d6678] shrink-0">{ic}</span>
-                      <span className="min-w-0">
-                        <span className="block text-[13.5px] font-medium text-[#16274D]">{label}</span>
-                        <span className="block text-[11.5px] text-[#5d6678]">{hint}</span>
-                      </span>
-                      {cardStyle === v && <Check size={16} className="ml-auto text-[#4EBEE3] shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <div className="font-medium text-[#19233a] text-[14px]">Allow several items in one request</div>
-                  <div className="text-[12.5px] text-[#5d6678]">
-                    On: patients pick items, then send them together. Off: tapping an item sends the request.
+                  <span className={cx(labelCls, 'inline-flex items-center gap-1.5')}>
+                    Colour <InfoTip text="Brand primary follows the client's colour in Identity Settings. Use alert red for problems and urgent reports." />
+                  </span>
+                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Colour">
+                    {(
+                      [
+                        ['primary', 'Brand', primary],
+                        ['alert', 'Alert red', ALERT_RED],
+                      ] as const
+                    ).map(([v, label, swatch]) => (
+                      <button key={v} type="button" role="radio" aria-checked={tone === v} onClick={() => setTone(v)} className={choice(tone === v)}>
+                        <span className="w-4 h-4 rounded-full shrink-0 ring-2 ring-white shadow" style={{ background: swatch }} />
+                        <span className="text-[13px] font-medium text-[#16274D] whitespace-nowrap">{label}</span>
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <Toggle on={allowMultiple} onClick={() => setAllowMultiple(!allowMultiple)} />
+                <div>
+                  <span className={cx(labelCls, 'inline-flex items-center gap-1.5')}>
+                    Item cards <InfoTip text="Photo shows each item's uploaded picture. Icon shows an icon per item, drawn in the category colour." />
+                  </span>
+                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Item cards">
+                    {(
+                      [
+                        ['image', 'Photo', <ImageIcon size={16} key="i" />],
+                        ['icon', 'Icon', <Shapes size={16} key="s" />],
+                      ] as const
+                    ).map(([v, label, ic]) => (
+                      <button key={v} type="button" role="radio" aria-checked={cardStyle === v} onClick={() => setCardStyle(v)} className={choice(cardStyle === v)}>
+                        <span className="text-[#5d6678] shrink-0">{ic}</span>
+                        <span className="text-[13px] font-medium text-[#16274D]">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {cardStyle === 'icon' && missingIcons > 0 && (
+                <div className="flex items-center gap-2 text-[12.5px] text-[#b9770b] bg-[#fbf1de] rounded-lg px-3 py-2">
+                  <AlertTriangle size={15} className="shrink-0" />
+                  {missingIcons} {missingIcons === 1 ? 'item needs' : 'items need'} an icon. Set them in Items Manager.
+                </div>
+              )}
+
+              <div className="divide-y divide-[#e7e9f0] border-t border-[#e7e9f0]">
+                <div className="flex items-center justify-between gap-3 py-3">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-[#19233a] text-[14px]">
+                    Allow several items in one request
+                    <InfoTip text="On: patients pick items, then send them together. Off: tapping an item sends the request." />
+                  </span>
+                  <Toggle on={allowMultiple} onClick={() => setAllowMultiple(!allowMultiple)} />
+                </div>
+                <div className="flex items-center justify-between gap-3 py-3">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-[#19233a] text-[14px]">
+                    Active
+                    <InfoTip text="Inactive categories and their items are hidden from patients. Teams and requests are not affected." />
+                  </span>
+                  <Toggle on={active} onClick={() => setActive(!active)} />
+                </div>
               </div>
             </div>
 
             {/* live preview */}
             <div className="md:sticky md:top-0 self-start">
-              <div className={cx(sectionCls, 'mb-2')}>Preview</div>
+              <div className={cx(sectionCls, 'mb-2 inline-flex items-center gap-1.5')}>
+                Preview <InfoTip align="right" text="Brand shows this client's colour. The patient app draws the icon circle and card shading from it." />
+              </div>
               <div className="rounded-xl border border-[#e7e9f0] bg-[#f6f7f9] p-3 space-y-3">
                 <div
                   className="flex items-center gap-2 px-3 py-2 rounded-lg text-white text-[13px] font-medium"
                   style={{ background: color }}
                 >
                   <span className="w-6 h-6 rounded-md bg-white/15 flex items-center justify-center">
-                    <CareSuiteIcon name={icon} size={14} />
+                    <ItemIcon name={icon} svg={iconSvg} size={14} />
                   </span>
                   {shownName}
                 </div>
@@ -212,7 +224,7 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
                         {cardStyle === 'icon' ? (
                           <div className="h-[64px] flex items-center justify-center" style={{ background: `linear-gradient(180deg, ${alpha(color, 0.1)}, ${alpha(color, 0.04)})` }}>
                             <ToneIconTile color={color} size={40}>
-                              <CareSuiteIcon name={it?.icon} size={20} />
+                              <ItemIcon name={it?.icon} svg={it?.iconSvg} size={20} />
                             </ToneIconTile>
                           </div>
                         ) : (
@@ -229,9 +241,6 @@ export default function CategoryFormModal({ category, onClose }: { category: Tea
                   </div>
                 </div>
               </div>
-              <p className="text-[11.5px] text-[#9099ab] mt-2">
-                Brand primary shows this client's colour. The patient app draws the icon circle and card shading from it.
-              </p>
             </div>
           </div>
         </div>

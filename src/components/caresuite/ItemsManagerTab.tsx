@@ -1,36 +1,38 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Package, Search, Pencil, Trash2, X, Info, ArrowUpDown, ArrowUp, ArrowDown, Power, PowerOff, PanelLeftOpen, ImagePlus, Upload } from 'lucide-react';
+import { Package, Search, Pencil, Trash2, X, Info, ArrowUpDown, ArrowUp, ArrowDown, Power, PowerOff, PanelLeftOpen, ImagePlus, Upload, Gift, Wrench } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { useCareSuite } from '../../hooks/useCareSuite';
-import { careSuiteService, type LibraryItem, type RequestType, type Priority } from '../../services/careSuiteService';
+import { careSuiteService, PATIENT_GROUPS, type LibraryItem, type RequestType, type Priority } from '../../services/careSuiteService';
 import { Btn, Badge, Toggle, Note, Card, CardHead, Bar, cx } from './careSuiteAtoms';
 import { ItemThumb, TypePill, CategoryPill, GroupPill, Switch, typeLabel } from './itemTableAtoms';
 import TablePagination from '../TablePagination';
+import TableSortIcon from '../TableSortIcon';
 import QuickActionsPill from './QuickActionsPill';
 import CategoryPanel, { ALL, UNCATEGORIZED } from './CategoryPanel';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 import { peekPendingCategory, clearPendingCategory } from './caresuiteNav';
 import { SingleSelectDropdown, MultiSelectDropdown } from '../UnifiedDropdown';
 import { IconPickerDialog } from './IconPicker';
-import { CareSuiteIcon, iconLabel } from './careSuiteIcons';
+import { ItemIcon, iconLabel } from './careSuiteIcons';
 import { ToneIconTile, alpha, toneColor, useBrandPrimary } from './categoryTone';
 
 const blankForm = (categoryId: string | null = null) => ({
   image: '',
   icon: '',
+  iconSvg: '',
   nameEn: '',
   nameAr: '',
   categoryId,
-  type: 'Service Request' as RequestType,
+  type: 'Amenity' as RequestType,
   priority: 'Medium' as Priority,
-  group: 'All',
+  groups: [] as string[],
   active: true,
 });
 
 const TYPE_OPTIONS = [
-  { value: 'Service Request', label: typeLabel('Service Request') },
-  { value: 'Issue', label: 'Issue' },
+  { value: 'Amenity', label: 'Amenity' },
+  { value: 'Service', label: 'Service' },
 ];
 
 const PRIORITY_OPTIONS = [
@@ -85,12 +87,13 @@ export function ItemFormModal({
       ? {
           image: item.image || '',
           icon: item.icon || '',
+          iconSvg: item.iconSvg || '',
           nameEn: item.nameEn,
           nameAr: item.nameAr,
           categoryId: item.categoryId,
           type: item.type,
           priority: item.priority,
-          group: item.group || 'All',
+          groups: item.groups ?? [],
           active: item.active,
         }
       : blankForm(defaultCategoryId),
@@ -111,12 +114,14 @@ export function ItemFormModal({
     const payload = {
       image: form.image || undefined,
       icon: form.icon || undefined,
+      iconSvg: form.iconSvg || undefined,
       nameEn,
       nameAr: (form.nameAr || '').trim(),
       categoryId: form.categoryId || null,
       type: form.type as RequestType,
       priority: form.priority as Priority,
-      group: form.group || 'All',
+      groups: form.groups ?? [],
+      group: undefined, // replaced by groups
       active: !!form.active,
     };
     if (item) {
@@ -153,10 +158,12 @@ export function ItemFormModal({
               iconStyle={iconStyle}
               image={form.image}
               icon={form.icon}
+              iconSvg={form.iconSvg}
               color={color}
               alt={form.nameEn || 'Item'}
               onImage={(image) => patchForm({ image })}
-              onIcon={(icon) => patchForm({ icon })}
+              onIcon={(icon) => patchForm({ icon, iconSvg: '' })}
+              onIconSvg={(iconSvg) => patchForm({ iconSvg })}
             />
             <div className="flex-1 min-w-0 space-y-3">
               <div>
@@ -193,7 +200,14 @@ export function ItemFormModal({
             </div>
             <div>
               <span className={labelCls}>Group Scope</span>
-              <SingleSelectDropdown options={GROUP_OPTIONS} value={form.group || 'All'} onChange={(v: string) => patchForm({ group: v })} size="md" />
+              <MultiSelectDropdown
+                options={PATIENT_GROUPS.map((g) => ({ value: g, label: g }))}
+                selectedValues={form.groups ?? []}
+                onChange={(v: string[]) => patchForm({ groups: v })}
+                placeholder="All Groups"
+                showSelectAll={false}
+                portal
+              />
             </div>
           </div>
 
@@ -226,18 +240,22 @@ function ItemVisualField({
   iconStyle,
   image,
   icon,
+  iconSvg,
   color,
   alt,
   onImage,
   onIcon,
+  onIconSvg,
 }: {
   iconStyle: boolean;
   image?: string;
   icon?: string;
+  iconSvg?: string;
   color: string;
   alt: string;
   onImage: (dataUrl: string) => void;
   onIcon: (name: string) => void;
+  onIconSvg: (dataUrl: string) => void;
 }) {
   const [picking, setPicking] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -252,14 +270,14 @@ function ItemVisualField({
           onClick={() => setPicking(true)}
           className={cx(tile, 'border-[#e7e9f0] hover:border-[#4EBEE3]')}
           style={{ background: `linear-gradient(180deg, ${alpha(color, 0.1)}, ${alpha(color, 0.04)})` }}
-          aria-label={icon ? `Icon: ${iconLabel(icon)}. Change icon` : 'Choose an icon'}
+          aria-label={iconSvg ? 'Uploaded icon. Change icon' : icon ? `Icon: ${iconLabel(icon)}. Change icon` : 'Choose an icon'}
         >
           <ToneIconTile color={color} size={60}>
-            <CareSuiteIcon name={icon} size={28} />
+            <ItemIcon name={icon} svg={iconSvg} size={28} />
           </ToneIconTile>
         </button>
-        <span className={caption}>{icon ? 'Change icon' : 'Choose icon'}</span>
-        <IconPickerDialog open={picking} value={icon} color={color} onChange={onIcon} onClose={() => setPicking(false)} />
+        <span className={caption}>{icon || iconSvg ? 'Change icon' : 'Choose icon'}</span>
+        <IconPickerDialog open={picking} value={iconSvg ? undefined : icon} color={color} onChange={onIcon} onUpload={onIconSvg} onClose={() => setPicking(false)} />
       </div>
     );
   }
@@ -300,7 +318,8 @@ function ItemVisualField({
   );
 }
 
-type SortDir = 'asc' | 'desc' | null;
+type SortKey = 'order' | 'nameEn' | 'nameAr' | 'type' | 'category' | 'groups' | 'active';
+type Sort = { key: SortKey; dir: 'asc' | 'desc' } | null;
 type GroupBy = 'none' | 'type' | 'group';
 
 const thCls = "py-4 px-3 text-left text-[13.5px] font-medium text-[#16274D] font-['Poppins',sans-serif] whitespace-nowrap";
@@ -340,7 +359,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const [groupBy, setGroupBy] = useState<GroupBy>('none');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
-  const [sortDir, setSortDir] = useState<SortDir>(null);
+  const [sort, setSort] = useState<Sort>(null);
   const [selected, setSelected] = useState<string[]>([]);
   /** unsaved item order for the selected category (full id list), null when nothing changed */
   const [draft, setDraft] = useState<string[] | null>(null);
@@ -364,6 +383,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const selectCategory = (id: string) => {
     setCat(id);
     setDraft(null);
+    setSort(null); // Order / Category columns differ between views
     setPage(1);
     setSelected([]);
   };
@@ -392,7 +412,8 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const filtered = inScope.filter((item) => {
     if (q && !item.nameEn.toLowerCase().includes(q) && !(item.nameAr || '').includes(search.trim())) return false;
     if (fTypes.length && !fTypes.includes(item.type)) return false;
-    if (fGroups.length && !fGroups.includes(item.group || 'All')) return false;
+    // "All" in the filter matches items shown to every group (no groups chosen)
+    if (fGroups.length && !(item.groups.length ? item.groups.some((g) => fGroups.includes(g)) : fGroups.includes('All'))) return false;
     if (fStatus.length && !fStatus.includes(item.active ? 'active' : 'inactive')) return false;
     return true;
   });
@@ -401,26 +422,57 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const groupOf = (item: LibraryItem): { key: string; label: string; rank: number } => {
     if (groupBy === 'type') return { key: item.type, label: typeLabel(item.type), rank: TYPE_OPTIONS.findIndex((t) => t.value === item.type) };
     if (groupBy === 'group') {
-      const g = item.group || 'All';
-      return { key: g, label: groupLabel(g), rank: GROUP_OPTIONS.findIndex((o) => o.value === g) };
+      const key = item.groups.length ? [...item.groups].sort().join('+') : 'All';
+      const rank = item.groups.length ? 1 + Math.min(...item.groups.map((g) => PATIENT_GROUPS.indexOf(g as any))) : 0;
+      return { key, label: item.groups.length ? item.groups.join(', ') : 'All Groups', rank };
     }
     return { key: '', label: '', rank: 0 };
   };
 
-  const byCategory = (a: LibraryItem, b: LibraryItem) => {
-    const an = categoryName(a.categoryId);
-    const bn = categoryName(b.categoryId);
-    if (!an || !bn) return an ? -1 : bn ? 1 : 0; // uncategorized always last
-    return sortDir === 'asc' ? an.localeCompare(bn) : bn.localeCompare(an);
+  /** Column sort: blanks (no Arabic name, uncategorized, all groups) always last. */
+  const sortValue = (i: LibraryItem, key: SortKey): string | number => {
+    switch (key) {
+      case 'order': return position.get(i.id) ?? 0;
+      case 'nameEn': return i.nameEn.toLowerCase();
+      case 'nameAr': return i.nameAr || '';
+      case 'type': return i.type;
+      case 'category': return categoryName(i.categoryId).toLowerCase();
+      case 'groups': return i.groups.join(', ');
+      case 'active': return i.active ? 0 : 1;
+    }
   };
+  const bySort = (a: LibraryItem, b: LibraryItem) => {
+    if (!sort) return 0;
+    const va = sortValue(a, sort.key);
+    const vb = sortValue(b, sort.key);
+    if (va === '' || vb === '') return va === vb ? 0 : va === '' ? 1 : -1;
+    const d = typeof va === 'number' ? va - (vb as number) : va.localeCompare(vb as string, 'ar');
+    return sort.dir === 'asc' ? d : -d;
+  };
+  const cycleSort = (key: SortKey) =>
+    setSort((cur) => (!cur || cur.key !== key ? { key, dir: 'asc' } : cur.dir === 'asc' ? { key, dir: 'desc' } : null));
+  const sortTh = (label: string, key: SortKey, extra?: { style?: React.CSSProperties; title?: string }) => (
+    <th className={thCls} style={extra?.style} title={extra?.title}>
+      <button
+        onClick={() => cycleSort(key)}
+        disabled={dirty}
+        className="inline-flex items-center gap-1.5 cursor-pointer hover:text-[#4EBEE3] transition-colors disabled:cursor-not-allowed"
+        title={`Sort by ${label}`}
+      >
+        {label}
+        <TableSortIcon field={key} currentField={sort?.key ?? ''} direction={sort?.dir ?? 'asc'} />
+      </button>
+    </th>
+  );
 
   const rows = [...filtered].sort((a, b) => {
     if (grouping) {
       const d = groupOf(a).rank - groupOf(b).rank;
       if (d) return d;
     }
+    if (sort) return bySort(a, b);
     if (category) return (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0); // patient order
-    return isAll && sortDir ? byCategory(a, b) : 0; // stable: stored order otherwise
+    return 0; // stable: stored order otherwise
   });
   const groupCounts = new Map<string, number>();
   if (grouping) rows.forEach((r) => groupCounts.set(groupOf(r).key, (groupCounts.get(groupOf(r).key) || 0) + 1));
@@ -430,12 +482,12 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage);
 
   // dragging only means one thing when the whole category is listed in patient order
-  const canDrag = !!category && !hasFilters && !grouping;
+  const canDrag = !!category && !hasFilters && !grouping && !sort;
   const dragHint = !category
     ? undefined
     : canDrag
       ? undefined
-      : 'Clear the search, filters and grouping to reorder';
+      : 'Clear the search, filters, grouping and sorting to reorder';
 
   /** A drag on this page: put the page's items into their new order inside the full category order. */
   const reorderPage = (newPageIds: string[]) => {
@@ -461,6 +513,10 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
     toast.success(`${selected.length} item${selected.length === 1 ? '' : 's'} deleted`);
     setSelected([]);
   };
+  const setTypeSelected = (type: RequestType) => {
+    selected.forEach((id) => careSuiteService.updateLibraryItem(id, { type }));
+    toast.success(`${selected.length} item${selected.length === 1 ? '' : 's'} set as ${type}`);
+  };
   const setActiveSelected = (active: boolean) => {
     selected.forEach((id) => careSuiteService.updateLibraryItem(id, { active }));
     toast.success(`${selected.length} item${selected.length === 1 ? '' : 's'} ${active ? 'activated' : 'deactivated'}`);
@@ -475,8 +531,6 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
     setSelected([]);
   };
 
-  const cycleSort = () => setSortDir((d) => (d === null ? 'asc' : d === 'asc' ? 'desc' : null));
-  const SortIcon = sortDir === 'asc' ? ArrowUp : sortDir === 'desc' ? ArrowDown : ArrowUpDown;
 
   const quickActions = (
     <QuickActionsPill
@@ -489,11 +543,14 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
           : []),
         { label: 'Activate', icon: <Power size={16} />, tone: 'ok', onClick: () => setActiveSelected(true) },
         { label: 'Deactivate', icon: <PowerOff size={16} />, tone: 'mute', onClick: () => setActiveSelected(false) },
+        { label: 'Set as Amenity', icon: <Gift size={16} />, tone: 'accent', onClick: () => setTypeSelected('Amenity'), separated: true },
+        { label: 'Set as Service', icon: <Wrench size={16} />, tone: 'accent', onClick: () => setTypeSelected('Service') },
         { label: 'Delete', icon: <Trash2 size={16} />, tone: 'danger', onClick: deleteSelected, separated: true },
       ]}
     />
   );
 
+  const missingIconCount = category ? inScope.filter((i) => !i.icon && !i.iconSvg).length : 0;
   const showCategoryCol = isAll;
   const showOrderCol = !!category;
   const colCount = 8 + (showCategoryCol ? 1 : 0) + (showOrderCol ? 2 : 0);
@@ -503,11 +560,17 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
     const c = categories.find((x) => x.id === item.categoryId);
     if (c?.cardStyle !== 'icon') return <ItemThumb src={item.image} alt={item.nameEn} />;
     const color = toneColor(c.tone, primary);
+    const missing = !item.icon && !item.iconSvg;
     return (
-      <span className="inline-flex w-[72px] h-[48px] rounded-lg items-center justify-center" style={{ background: `linear-gradient(180deg, ${color}1a, ${color}0a)` }}>
+      <span className="relative inline-flex w-[72px] h-[48px] rounded-lg items-center justify-center" style={{ background: `linear-gradient(180deg, ${alpha(color, 0.1)}, ${alpha(color, 0.04)})` }}>
         <ToneIconTile color={color} size={36}>
-          <CareSuiteIcon name={item.icon} size={18} />
+          <ItemIcon name={item.icon} svg={item.iconSvg} size={18} />
         </ToneIconTile>
+        {missing && (
+          <span className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-[#fbf1de] text-[#b9770b] text-[10.5px] font-semibold px-1.5 py-px border border-[#f3dcae]" title="Patients see a placeholder until an icon is chosen">
+            No icon
+          </span>
+        )}
       </span>
     );
   };
@@ -549,7 +612,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
         </td>
       )}
       <td className={tdCls}>
-        <GroupPill group={item.group} />
+        <GroupPill groups={item.groups} />
       </td>
       <td className={tdCls}>
         <Switch
@@ -608,25 +671,14 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
           <th className={thCls} style={{ width: 44 }}>
             <input type="checkbox" className={checkboxCls} checked={allSelected} onChange={toggleAll} aria-label="Select all items" />
           </th>
-          {showOrderCol && (
-            <th className={thCls} style={{ width: 64 }} title="Position on the patient-facing screen">
-              Order
-            </th>
-          )}
+          {showOrderCol && (sortTh('Order', 'order', { style: { width: 80 }, title: 'Position on the patient-facing screen' }))}
           <th className={thCls} style={{ width: 96 }}>Icon</th>
-          <th className={thCls}>Item Name (EN)</th>
-          <th className={thCls}>Item Name (AR)</th>
-          <th className={thCls}>Type</th>
-          {showCategoryCol && (
-            <th className={thCls}>
-              <button onClick={cycleSort} className="inline-flex items-center gap-1.5 cursor-pointer hover:text-[#4EBEE3] transition-colors" title="Sort by category">
-                Category
-                <SortIcon size={14} className={sortDir ? 'text-[#4EBEE3]' : 'text-gray-400'} />
-              </button>
-            </th>
-          )}
-          <th className={thCls}>Group</th>
-          <th className={thCls}>Active</th>
+          {sortTh('Item Name (EN)', 'nameEn')}
+          {sortTh('Item Name (AR)', 'nameAr')}
+          {sortTh('Type', 'type')}
+          {showCategoryCol && sortTh('Category', 'category')}
+          {sortTh('Group', 'groups')}
+          {sortTh('Active', 'active')}
           <th className={`${thCls} text-right`} style={{ width: 92 }}>Actions</th>
         </tr>
       </thead>
@@ -694,6 +746,11 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
               </h2>
               {category && <Badge tone={category.active ? 'ok' : 'mute'}>{category.active ? 'Active' : 'Hidden from patients'}</Badge>}
               {dirty && <Badge tone="warn">Unsaved order</Badge>}
+              {category?.cardStyle === 'icon' && missingIconCount > 0 && (
+                <Badge tone="warn">
+                  {missingIconCount} {missingIconCount === 1 ? 'item needs' : 'items need'} an icon
+                </Badge>
+              )}
             </div>
             <p className="text-[13px] text-[#6B7280]">
               {isAll

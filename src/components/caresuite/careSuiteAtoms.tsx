@@ -54,8 +54,8 @@ export function PriorityPill({ priority }: { priority: Priority }) {
 }
 
 const TYPE_TONE: Record<RequestType, string> = {
-  'Service Request': 'bg-[#eaf7fc] text-[#1d7da3]',
-  Issue: 'bg-[#fcebe9] text-[#c0392b]',
+  Amenity: 'bg-[#eaf7fc] text-[#1d7da3]',
+  Service: 'bg-[#f1edfb] text-[#6a4bb8]',
 };
 
 export function TypeBadge({ type }: { type: RequestType }) {

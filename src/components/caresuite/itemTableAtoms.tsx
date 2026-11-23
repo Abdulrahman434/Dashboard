@@ -7,9 +7,9 @@ import { Package } from 'lucide-react';
 import type { RequestType } from '../../services/careSuiteService';
 import { cx } from './careSuiteAtoms';
 
-/** Display name for a request type. The stored value stays "Service Request" / "Issue". */
+/** Display name for a request type. */
 export function typeLabel(type: RequestType): string {
-  return type === 'Service Request' ? 'Service' : type;
+  return type;
 }
 
 const pill = 'inline-flex items-center px-2.5 py-1 rounded-md border text-[11.5px] font-medium whitespace-nowrap';
@@ -23,14 +23,14 @@ export function ItemThumb({ src, alt }: { src?: string; alt: string }) {
   );
 }
 
-/** Request type — the operational type is unchanged; this is only its look. */
+/** Request type: Amenity (brought to the patient) or Service (done for them). */
 export function TypePill({ type }: { type: RequestType }) {
   return (
     <span
       className={cx(
         pill,
-        type === 'Issue'
-          ? 'border-[#f3c7c1] bg-[#fdf1ef] text-[#c0392b]'
+        type === 'Service'
+          ? 'border-[#d9cff3] bg-[#f6f3fd] text-[#6a4bb8]'
           : 'border-[#bfe6f4] bg-[#eef9fd] text-[#1d7da3]',
       )}
     >
@@ -47,8 +47,9 @@ export function CategoryPill({ name }: { name?: string }) {
   );
 }
 
-export function GroupPill({ group }: { group?: string }) {
-  const label = !group || group === 'All' ? 'All Groups' : group;
+/** Patient groups that see the item; none = every group. */
+export function GroupPill({ groups }: { groups?: string[] }) {
+  const label = groups && groups.length ? groups.join(', ') : 'All Groups';
   return <span className={cx(pill, 'border-[#bfe6f4] bg-[#eef9fd] text-[#1d7da3]')}>{label}</span>;
 }
 

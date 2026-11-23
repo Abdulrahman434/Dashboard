@@ -210,7 +210,7 @@ test('move-items appends to target and keeps other fields', () => {
   const x1 = cs.listLibrary().find((i) => i.id === 'x1')!;
   assert.deepEqual(
     { type: x1.type, priority: x1.priority, active: x1.active, nameEn: x1.nameEn, categoryId: x1.categoryId },
-    { type: 'Issue', priority: 'High', active: false, nameEn: 'x1', categoryId: 'B' },
+    { type: 'Service', priority: 'High', active: false, nameEn: 'x1', categoryId: 'B' },
   );
 });
 
@@ -325,4 +325,44 @@ test('patient menu has no separate heading, even for data saved with one', () =>
 test('items keep an icon name alongside their image', () => {
   cs.updateLibraryItem('x1', { icon: 'bed' });
   assert.equal(cs.listLibrary().find((i) => i.id === 'x1')!.icon, 'bed');
+});
+
+// ---- types: Amenity / Service ----------------------------------------------------
+
+test('legacy types read as Amenity / Service without rewriting storage', () => {
+  put(K.library, [item('a', 'A', { type: 'Service Request' }), item('b', 'A', { type: 'Issue' }), item('c', 'A', { type: 'Service' })]);
+  const before = store.get(K.library);
+  assert.deepEqual(cs.listLibrary().map((i) => i.type), ['Amenity', 'Service', 'Service']);
+  assert.equal(store.get(K.library), before);
+});
+
+test('saving an item stores the converted type', () => {
+  put(K.library, [item('a', 'A', { type: 'Issue' })]);
+  cs.updateLibraryItem('a', { nameEn: 'renamed' });
+  assert.equal(get(K.library)[0].type, 'Service');
+});
+
+// ---- groups: several per item ------------------------------------------------------
+
+test('items read their groups as a list; "All" or none means every group', () => {
+  put(K.library, [item('a', 'A', { group: 'Kids' }), item('b', 'A', { group: 'All' }), item('c', 'A'), item('d', 'A', { groups: ['Kids', 'VIP'] })]);
+  assert.deepEqual(cs.listLibrary().map((i) => i.groups), [['Kids'], [], [], ['Kids', 'VIP']]);
+});
+
+// ---- icons: custom SVG + missing icons ---------------------------------------------
+
+test('itemsMissingIcon lists visible items with neither a library icon nor an uploaded one', () => {
+  put(K.library, [
+    item('a', 'A', { icon: 'bed' }),
+    item('b', 'A', { iconSvg: 'data:image/svg+xml;base64,PHN2Zy8+' }),
+    item('c', 'A'),
+    item('d', 'A', { archived: true }),
+    item('e', 'B'),
+  ]);
+  assert.deepEqual(ids(cs.itemsMissingIcon('A')), ['c']);
+});
+
+test('patient menu items carry the uploaded icon', () => {
+  put(K.library, [item('a', 'A', { iconSvg: 'data:image/svg+xml;base64,PHN2Zy8+' })]);
+  assert.equal(cs.listPatientMenu()[0].items[0].iconSvg, 'data:image/svg+xml;base64,PHN2Zy8+');
 });

@@ -189,6 +189,8 @@ interface MultiSelectDropdownProps {
   className?: string;
   disabled?: boolean;
   showSelectAll?: boolean;
+  /** Float the menu above everything (for use inside modals / scrolling panels). Default off. */
+  portal?: boolean;
 }
 
 export function MultiSelectDropdown({ 
@@ -198,26 +200,49 @@ export function MultiSelectDropdown({
   placeholder = "Select options",
   className = "",
   disabled = false,
-  showSelectAll = true
+  showSelectAll = true,
+  portal = false
 }: MultiSelectDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuRect, setMenuRect] = useState<{ top: number; bottom: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const t = event.target as Node;
+      if (dropdownRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setIsOpen(false);
+    };
+    // a floating menu would detach from its trigger on scroll, so close instead
+    const handleScroll = (e: Event) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setIsOpen(false);
     };
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      if (portal) {
+        window.addEventListener('scroll', handleScroll, true);
+        window.addEventListener('resize', handleScroll);
+      }
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
     };
-  }, [isOpen]);
+  }, [isOpen, portal]);
+
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (!isOpen && portal && dropdownRef.current) {
+      const r = dropdownRef.current.getBoundingClientRect();
+      setMenuRect({ top: r.top, bottom: r.bottom, left: r.left, width: r.width });
+    }
+    setIsOpen(!isOpen);
+  };
 
   const normalizedOptions = options.map(opt => 
     typeof opt === 'string' ? { value: opt, label: opt } : opt
@@ -250,12 +275,20 @@ export function MultiSelectDropdown({
   const allSelected = selectedValues.length === normalizedOptions.length && normalizedOptions.length > 0;
   const compact = className.includes('text-[12px]');
 
+  const wrapMenu = (menu: React.ReactNode) => (portal ? createPortal(menu, document.body) : menu);
+  // open upwards when there is no room below
+  const floatStyle = (r: { top: number; bottom: number; left: number; width: number }): React.CSSProperties => {
+    const below = window.innerHeight - r.bottom - 8;
+    const up = below < 200 && r.top > below;
+    return { position: 'fixed', left: r.left, width: r.width, ...(up ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }) };
+  };
+
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
       {/* Trigger Button */}
       <button
         type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={toggleOpen}
         disabled={disabled}
         className={`w-full ${compact ? 'px-2.5 py-1 text-[11.5px] h-[32px]' : 'px-4 py-2.5 text-[14px]'} border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4EBEE3]/50 focus:border-[#4EBEE3] transition-all bg-white flex items-center justify-between font-['Poppins',sans-serif] ${
           disabled ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'cursor-pointer hover:border-gray-400'
@@ -268,9 +301,13 @@ export function MultiSelectDropdown({
         />
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-[280px] overflow-hidden font-['Poppins',sans-serif]">
+      {/* Dropdown Menu — inline, or floating above modals when `portal` */}
+      {isOpen && (!portal || menuRect) && wrapMenu(
+        <div
+          ref={menuRef}
+          style={portal && menuRect ? floatStyle(menuRect) : undefined}
+          className={`${portal ? 'z-[60]' : 'absolute z-50 w-full mt-1'} bg-white border border-gray-200 rounded-lg shadow-lg max-h-[280px] overflow-hidden font-['Poppins',sans-serif]`}
+        >
           <div className="overflow-y-auto max-h-[280px]">
             {/* Select All Option */}
             {showSelectAll && normalizedOptions.length > 1 && (

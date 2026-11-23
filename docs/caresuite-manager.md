@@ -66,7 +66,8 @@ careSuiteService.listPatientMenu(): {
   icon: string;                // menu icon, lucide name ('' = none)
   subheadingEn: string; subheadingAr: string; // line under the heading, '' when not set
                                               // (the heading is always displayNameEn / displayNameAr)
-  items: LibraryItem[];    // active, non-archived items, in saved order (item.icon = lucide name)
+  iconSvg: string;             // uploaded single-colour SVG (data URL), '' if none; wins over `icon`
+  items: LibraryItem[];    // active, non-archived items, in saved order
 }[]                        // active categories only, in saved order
 ```
 
@@ -77,7 +78,14 @@ Rules it applies (the patient app should apply the same if it reads raw data):
 - **Item visible**: `categoryId` points to a visible category, `active === true`, `archived !== true`.
   Uncategorized items (`categoryId: null`) are never shown.
 - **Item order**: ascending `order` within its category; missing `order` falls back to stored position.
-- Items show `nameEn` / `nameAr` / `image`; `type` and `priority` drive request handling, unchanged.
+- Items show `nameEn` / `nameAr` and, by the category's card style, `image` or the icon
+  (`iconSvg` if set, else `icon`, a lucide name).
+- `type` is `Amenity` (brought to the patient) or `Service` (done for them: cleaning,
+  repairs). Data saved before this change says `Service Request` / `Issue`; read those as
+  Amenity / Service (`listPatientMenu()` already does). Whether something is a problem is
+  shown by its category (e.g. Report an Issue, alert red), not by its type.
+- `groups` lists the patient groups that see the item (`Kids`, `Adults`, `VIP`); an empty
+  list means every group. Older data has a single `group` (`All` = every group).
 - An active category with no visible items is still returned (with `items: []`); the patient
   app decides whether to hide it.
 - Stored records written before this change have none of the new fields until an admin edits
@@ -100,7 +108,10 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
 | Category | `cardStyle` | `image` |
 | Category | `allowMultiple` | `false` |
 | Category | `icon`, `subheadingEn/Ar` | none |
-| Item | `icon` | none |
+| Item | `icon`, `iconSvg` | none |
+| Item | `groups` | from legacy `group`; empty = every group |
+| Item | `type` | `Service Request` → `Amenity`, `Issue` → `Service` |
+| Category | `iconSvg` | none |
 
 ### Drawing categories on the patient screen
 
@@ -109,9 +120,17 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
   category: a rebrand must not need category edits. `alert` is a fixed red (`#E5484D` in
   the dashboard previews).
 - **Icons** are lucide names in kebab-case (`air-vent`, `shower-head`, …,
-  https://lucide.dev/icons/). The dashboard offers a curated set in
-  `src/components/caresuite/careSuiteIcons.tsx`. Unknown or empty names should fall back to
-  a neutral icon (the dashboard uses `circle-help`).
+  https://lucide.dev/icons/). Admins pick from a suggested set or search the whole library
+  (~1,500 icons). Use the same lucide version as the dashboard (`lucide-react` 0.487) so
+  every saved name exists. Unknown or empty names fall back to a neutral icon (`circle-help`).
+- **Uploaded icons** (`iconSvg`) cover anything lucide lacks (e.g. slippers, wheelchair):
+  a single-colour SVG, 20 KB max, rejected if it contains scripts, event handlers or external
+  content. Draw it as a **mask filled with the tone colour** (CSS `mask`, or the platform's
+  equivalent), never by inserting the SVG markup, so it gets the same colour and shading as
+  library icons.
+- **Missing icons** are flagged in the dashboard (Items Manager "No icon" and "N items need
+  an icon", Categories Manager "N need an icon", and in the category form). The app should
+  still show a neutral placeholder rather than an empty card.
 - **Shading is drawn by the app, not baked into icons.** Icon cards: the icon in the tone
   colour, inside a circle filled with the tone colour at ~12% opacity (with a faint ~6%
   ring), on a card top washed with the tone colour at ~10% → 4%. The selected menu row uses
@@ -144,6 +163,9 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
 
 ## Behaviour to be aware of
 
+- **Types are Amenity / Service.** Existing Service Request items read as Amenity and Issue
+  items as Service; switch any that are really tasks (e.g. Room cleaning) with Quick Actions →
+  Set as Service. The CareSuite Admin dashboard's Type filter uses the new names.
 - **Deleting an item now archives it** — in Items Manager (single or bulk) and the category
   "delete items" option alike. It disappears everywhere admins and patients look, but
   existing requests keep showing its name. There is no restore screen yet.
@@ -157,7 +179,7 @@ Storage today (localStorage, `// TODO(backend)` in `src/services/careSuiteServic
 
 ## How it was tested
 
-- `npm test` (Node 22.18+) — 29 unit tests on the store rules: legacy data defaults,
+- `npm test` (Node 22.18+) — 40 unit tests on the store rules: legacy data defaults,
   category and item ordering scoped per category, moving items between categories, Active
   hide/restore, the patient menu, item archiving, and all three delete options (teams and
   users updated, requests byte-identical, archived items still resolvable).

@@ -272,6 +272,7 @@ Switching tabs clears selection, search, filters, and any open editor.
 
 ## Checklist
 
+- [ ] Every column that can be sorted is sortable (click the header; `TableSortIcon`). Images, checkboxes, drag handles and actions are not. If the table also drag-reorders, dragging is off while a sort is active.
 - [ ] Header: h1 + count sub-line, bulk-delete left of the primary button
 - [ ] Search left, `flex-1` spacer, filters right — one row
 - [ ] A filter for every column whose values are bounded; none rendered where it can't apply

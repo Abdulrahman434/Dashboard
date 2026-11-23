@@ -185,8 +185,8 @@ export default function CareSuiteDashboardPage({ scope, onNavigate, restrictToRo
 
         <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="bg-white border border-[#d6dae6] rounded-lg px-3 py-1.5 text-[13px] text-[#16274D] focus:outline-none focus:border-[#4EBEE3]">
           <option value="All">All Types</option>
-          <option value="Service Request">Service Request</option>
-          <option value="Issue">Issue</option>
+          <option value="Amenity">Amenity</option>
+          <option value="Service">Service</option>
         </select>
 
         <select value={dateFilter} onChange={(e) => setDateFilter(e.target.value)} className="bg-white border border-[#d6dae6] rounded-lg px-3 py-1.5 text-[13px] text-[#16274D] focus:outline-none focus:border-[#4EBEE3]">
@@ -253,7 +253,7 @@ export default function CareSuiteDashboardPage({ scope, onNavigate, restrictToRo
                       </div>
 
                       <div className="w-[130px] flex-shrink-0">
-                        <TypeBadge type={item?.type ?? 'Service Request'} />
+                        <TypeBadge type={item?.type ?? 'Service'} />
                       </div>
                       <div className="w-[120px] flex-shrink-0">
                         <StatusPill status={r.status} />

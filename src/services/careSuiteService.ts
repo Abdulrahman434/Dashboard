@@ -27,7 +27,11 @@ const USER_EVENT = 'careinn:users-changed'; // mirrors userService.USER_EVENT
 /** Custom event so the sidebar / User Roles / dashboards re-read after a write. */
 export const CARESUITE_EVENT = 'careinn:caresuite-changed';
 
-export type RequestType = 'Service Request' | 'Issue';
+/** Amenity = something brought to the patient; Service = something done (cleaning, repairs). */
+export type RequestType = 'Amenity' | 'Service';
+/** Types stored before the Amenity / Service change, converted when read. */
+const LEGACY_TYPES: Record<string, RequestType> = { 'Service Request': 'Amenity', Issue: 'Service' };
+export const PATIENT_GROUPS = ['Kids', 'Adults', 'VIP'] as const;
 export type Priority = 'High' | 'Medium' | 'Low';
 
 /**
@@ -54,6 +58,8 @@ export interface TeamCategory {
   cardStyle?: CardStyle;
   /** Patient may pick several items and send them as one request. Default false (tap = send). */
   allowMultiple?: boolean;
+  /** Uploaded single-colour SVG (data URL); used instead of `icon` when set. */
+  iconSvg?: string;
   /** lucide icon name (kebab-case) shown beside the category in the patient menu. */
   icon?: string;
   /** Line under the category's display name on the patient screen (the display name is the heading). */
@@ -73,6 +79,9 @@ export interface LibraryItem {
   priority: Priority;
   categoryId: string | null; // -> TeamCategory.id
   active: boolean;
+  /** Patient groups that see this item; empty = every group. */
+  groups: string[];
+  /** Legacy single group, read into `groups`. */
   group?: string;
   /** Position within its own category (ascending). Never affects routing. */
   order?: number;
@@ -81,6 +90,8 @@ export interface LibraryItem {
    * existing requests (which reference it by id) stay readable.
    */
   archived?: boolean;
+  /** Uploaded single-colour SVG (data URL) for icon-style categories; used instead of `icon` when set. */
+  iconSvg?: string;
   /** lucide icon name (kebab-case) for icon-style categories. Kept alongside `image` so switching style loses nothing. */
   icon?: string;
 }
@@ -94,6 +105,7 @@ export interface PatientMenuCategory {
   cardStyle: CardStyle;
   allowMultiple: boolean;
   icon: string;
+  iconSvg: string;
   subheadingEn: string;
   subheadingAr: string;
   items: LibraryItem[];
@@ -130,7 +142,12 @@ function normaliseCategories(cats: TeamCategory[]): TeamCategory[] {
 }
 
 function normaliseItems(items: LibraryItem[]): LibraryItem[] {
-  return items.map((it, i) => ({ ...it, order: it.order ?? i }));
+  return items.map((it, i) => ({
+    ...it,
+    order: it.order ?? i,
+    type: LEGACY_TYPES[it.type as string] ?? it.type,
+    groups: Array.isArray(it.groups) ? it.groups : it.group && it.group !== 'All' ? [it.group] : [],
+  }));
 }
 
 /** Next free position at the end of a category's items. */
@@ -234,15 +251,15 @@ function seedIfEmpty(): void {
   ];
 
   const library: LibraryItem[] = [
-    { id: 'lib-towel', nameEn: 'Extra towel', nameAr: 'منشفة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'shirt' },
-    { id: 'lib-water', nameEn: 'Water bottle', nameAr: 'زجاجة ماء', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'glass-water' },
-    { id: 'lib-clean', nameEn: 'Room cleaning', nameAr: 'تنظيف الغرفة', type: 'Service Request', priority: 'Medium', categoryId: 'cat-room-care', active: true, icon: 'spray-can' },
-    { id: 'lib-pillow', nameEn: 'Extra pillow', nameAr: 'وسادة إضافية', type: 'Service Request', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'bed' },
-    { id: 'lib-ac', nameEn: 'Air conditioning', nameAr: 'التكييف', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true, icon: 'air-vent' },
-    { id: 'lib-plumbing', nameEn: 'Toilet / plumbing', nameAr: 'السباكة', type: 'Issue', priority: 'High', categoryId: 'cat-issue', active: true, icon: 'shower-head' },
-    { id: 'lib-lights', nameEn: 'Lights', nameAr: 'الإضاءة', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'lightbulb' },
-    { id: 'lib-tv', nameEn: 'TV not working', nameAr: 'التلفاز لا يعمل', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'tv' },
-    { id: 'lib-wifi', nameEn: 'Wi-Fi / tablet issue', nameAr: 'مشكلة في الواي فاي', type: 'Issue', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'wifi' },
+    { id: 'lib-towel', nameEn: 'Extra towel', nameAr: 'منشفة إضافية', type: 'Amenity', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'shirt' },
+    { id: 'lib-water', nameEn: 'Water bottle', nameAr: 'زجاجة ماء', type: 'Amenity', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'glass-water' },
+    { id: 'lib-clean', nameEn: 'Room cleaning', nameAr: 'تنظيف الغرفة', type: 'Service', priority: 'Medium', categoryId: 'cat-room-care', active: true, icon: 'spray-can' },
+    { id: 'lib-pillow', nameEn: 'Extra pillow', nameAr: 'وسادة إضافية', type: 'Amenity', priority: 'Low', categoryId: 'cat-need', active: true, icon: 'bed' },
+    { id: 'lib-ac', nameEn: 'Air conditioning', nameAr: 'التكييف', type: 'Service', priority: 'High', categoryId: 'cat-issue', active: true, icon: 'air-vent' },
+    { id: 'lib-plumbing', nameEn: 'Toilet / plumbing', nameAr: 'السباكة', type: 'Service', priority: 'High', categoryId: 'cat-issue', active: true, icon: 'shower-head' },
+    { id: 'lib-lights', nameEn: 'Lights', nameAr: 'الإضاءة', type: 'Service', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'lightbulb' },
+    { id: 'lib-tv', nameEn: 'TV not working', nameAr: 'التلفاز لا يعمل', type: 'Service', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'tv' },
+    { id: 'lib-wifi', nameEn: 'Wi-Fi / tablet issue', nameAr: 'مشكلة في الواي فاي', type: 'Service', priority: 'Medium', categoryId: 'cat-issue', active: true, icon: 'wifi' },
   ];
 
   const workflow: WorkflowStep[] = [
@@ -390,6 +407,7 @@ export const careSuiteService = {
         cardStyle: c.cardStyle ?? 'image',
         allowMultiple: c.allowMultiple ?? false,
         icon: c.icon || '',
+        iconSvg: c.iconSvg || '',
         subheadingEn: c.subheadingEn || '',
         subheadingAr: c.subheadingAr || '',
         items: this.listCategoryItems(c.id).filter((i) => i.active),
@@ -406,6 +424,10 @@ export const careSuiteService = {
     return normaliseItems(read<LibraryItem[]>(LIBRARY_KEY, []));
   },
   /** One category's non-archived items in their saved order. */
+  /** Visible items in a category with no library icon and no uploaded icon. */
+  itemsMissingIcon(categoryId: string): LibraryItem[] {
+    return this.listCategoryItems(categoryId).filter((i) => !i.icon && !i.iconSvg);
+  },
   listCategoryItems(categoryId: string): LibraryItem[] {
     return this.listLibrary()
       .filter((i) => i.categoryId === categoryId && !i.archived)
