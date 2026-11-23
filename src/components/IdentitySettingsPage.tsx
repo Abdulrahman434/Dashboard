@@ -1,34 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Fingerprint, Upload, X, Palette, Type, Building2, Check, RotateCcw, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-
-interface IdentitySettings {
-  logo: string | null;
-  logoName: string;
-  hospitalName: string;
-  hospitalNameAr: string;
-  hospitalShortName: string;
-  hospitalImage: string | null;
-  hospitalImageName: string;
-  primaryColor: string;
-  secondaryColor: string;
-  englishFont: string;
-  arabicFont: string;
-}
-
-const defaultSettings: IdentitySettings = {
-  logo: null,
-  logoName: '',
-  hospitalName: 'Dr. Soliman Fakeeh Hospital',
-  hospitalNameAr: 'مستشفى الدكتور سليمان فقيه',
-  hospitalShortName: 'DSFH',
-  hospitalImage: null,
-  hospitalImageName: '',
-  primaryColor: '#4EBEE3',
-  secondaryColor: '#16274D',
-  englishFont: 'Poppins',
-  arabicFont: 'Baloo Bhaijaan 2',
-};
+import { IdentitySettings, defaultIdentitySettings as defaultSettings, readIdentitySettings, pickLogo } from '../services/identitySettings';
 
 const googleFontsEnglish = [
   'Poppins', 'Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Lato', 'Nunito',
@@ -53,7 +26,7 @@ function loadGoogleFont(fontName: string) {
   document.head.appendChild(link);
 }
 
-function ImageUploadArea({ label, image, imageName, onUpload, onRemove, aspectHint, required }: {
+function ImageUploadArea({ label, image, imageName, onUpload, onRemove, aspectHint, required, optional, hint, darkThumb }: {
   label: string;
   image: string | null;
   imageName: string;
@@ -61,6 +34,10 @@ function ImageUploadArea({ label, image, imageName, onUpload, onRemove, aspectHi
   onRemove: () => void;
   aspectHint: string;
   required?: boolean;
+  optional?: boolean;
+  hint?: string;
+  /** show the thumbnail on a dark surface (logo for dark backgrounds) */
+  darkThumb?: boolean;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -77,10 +54,12 @@ function ImageUploadArea({ label, image, imageName, onUpload, onRemove, aspectHi
       <label className="text-[13px] font-medium text-[#16274D] font-['Poppins',sans-serif] flex items-center gap-1.5">
         {label}
         {required && <span className="text-[#EF4444] text-[11px]">*</span>}
+        {optional && <span className="text-[11px] font-normal text-[#16274D]/40">Optional</span>}
       </label>
+      {hint && <p className="text-[11px] text-[#16274D]/50 -mt-1">{hint}</p>}
       {image ? (
         <div className="relative group rounded-xl border-2 border-[#4EBEE3]/20 bg-[#4EBEE3]/5 p-4 flex items-center gap-4">
-          <div className="w-[100px] h-[68px] rounded-lg overflow-hidden bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+          <div className={`w-[100px] h-[68px] rounded-lg overflow-hidden border flex items-center justify-center flex-shrink-0 ${darkThumb ? 'bg-[#16274D] border-[#16274D]' : 'bg-white border-gray-200'}`}>
             <img src={image} alt={label} className="max-w-full max-h-full object-contain" />
           </div>
           <div className="flex-1 min-w-0">
@@ -192,10 +171,7 @@ function FontSelector({ label, value, onChange, options, language }: {
 }
 
 export default function IdentitySettingsPage() {
-  const [settings, setSettings] = useState<IdentitySettings>(() => {
-    const saved = localStorage.getItem('careinn-identity-settings');
-    return saved ? { ...defaultSettings, ...JSON.parse(saved) } : defaultSettings;
-  });
+  const [settings, setSettings] = useState<IdentitySettings>(() => readIdentitySettings());
   const [hasChanges, setHasChanges] = useState(false);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
@@ -217,7 +193,7 @@ export default function IdentitySettingsPage() {
     setValidationErrors([]);
   };
 
-  const handleImageUpload = (field: 'logo' | 'hospitalImage', file: File) => {
+  const handleImageUpload = (field: 'logo' | 'logoDark' | 'hospitalImage', file: File) => {
     if (file.size > 5 * 1024 * 1024) {
       toast.error('File too large', { description: 'Maximum file size is 5MB' });
       return;
@@ -226,7 +202,7 @@ export default function IdentitySettingsPage() {
     reader.onload = e => {
       update({
         [field]: e.target?.result as string,
-        [field === 'logo' ? 'logoName' : 'hospitalImageName']: file.name,
+        [field === 'logo' ? 'logoName' : field === 'logoDark' ? 'logoDarkName' : 'hospitalImageName']: file.name,
       });
     };
     reader.readAsDataURL(file);
@@ -380,6 +356,44 @@ export default function IdentitySettingsPage() {
                 onRemove={() => update({ hospitalImage: null, hospitalImageName: '' })}
                 aspectHint="Recommended: 1920×600px, used behind welcome card"
               />
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <ImageUploadArea
+                label="Logo for dark background"
+                image={settings.logoDark}
+                imageName={settings.logoDarkName}
+                onUpload={f => handleImageUpload('logoDark', f)}
+                onRemove={() => update({ logoDark: null, logoDarkName: '' })}
+                darkThumb
+                aspectHint="Light or white version, transparent PNG"
+                optional
+                hint="Used in dark mode. If empty, the default logo is used."
+              />
+              <div className="flex flex-col gap-2 min-w-0">
+                <span className="text-[13px] font-medium text-[#16274D]">Logo preview</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {(['light', 'dark'] as const).map(theme => {
+                    const src = pickLogo(settings, theme);
+                    const fallback = theme === 'dark' && !settings.logoDark && !!settings.logo;
+                    return (
+                      <div key={theme} className="min-w-0">
+                        <div
+                          className={`h-[88px] rounded-xl border flex items-center justify-center p-3 overflow-hidden ${theme === 'dark' ? 'bg-[#16274D] border-[#16274D]' : 'bg-white border-gray-200'}`}
+                        >
+                          {src ? (
+                            <img src={src} alt={`${theme} mode logo preview`} className="max-w-full max-h-full object-contain" />
+                          ) : (
+                            <span className={`text-[11px] ${theme === 'dark' ? 'text-white/50' : 'text-[#16274D]/40'}`}>No logo</span>
+                          )}
+                        </div>
+                        <p className="text-[12px] font-medium text-[#16274D] mt-1.5">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</p>
+                        {fallback && <p className="text-[11px] text-[#16274D]/60">Using the default logo</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </div>
 
