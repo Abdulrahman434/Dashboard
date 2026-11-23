@@ -16,6 +16,7 @@ import DeleteCategoryDialog from './DeleteCategoryDialog';
 import ContentEditor from './ContentEditor';
 import { VisibilityModal, mockTerminals } from './TerminalVisibilityModals';
 import { contentKind, visibilityLabel } from './CategoriesTab';
+import { attempt } from './attempt';
 
 function SortableCategory({ c, on, locked, kindLabel, empty, onSelect }: { c: ProfileCategory; on: boolean; locked: boolean; kindLabel: string; empty: boolean; onSelect: () => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: c.id, disabled: locked });
@@ -65,7 +66,7 @@ function AttachmentSummary({ a, lang }: { a: Attachment; lang: 'en' | 'ar' }) {
 }
 
 /** Content tab: categories on the left, the selected category's content (or its editor) on the right. */
-export default function ContentTab({ addSignal, focusId, onFocusUsed }: { addSignal: number; focusId: string | null; onFocusUsed: () => void }) {
+export default function ContentTab({ addSignal, focusId, onFocusUsed, onDirtyChange }: { addSignal: number; focusId: string | null; onFocusUsed: () => void; onDirtyChange?: (dirty: boolean) => void }) {
   const { categories, content } = useProfile();
   const brand = useBrandPrimary();
   const [selectedId, setSelectedId] = useState<string | null>(focusId ?? categories[0]?.id ?? null);
@@ -88,8 +89,7 @@ export default function ContentTab({ addSignal, focusId, onFocusUsed }: { addSig
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
     const ids = categories.map((c) => c.id);
-    profileService.setCategoryOrder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id))));
-    toast.success('Category order saved');
+    attempt(() => profileService.setCategoryOrder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)))), 'Category order saved');
   };
 
   const afterDelete = (ids: string[]) => {
@@ -150,13 +150,13 @@ export default function ContentTab({ addSignal, focusId, onFocusUsed }: { addSig
             <div className="text-[13px] text-[#5d6678] mt-1">Add a category to start the About Us menu.</div>
           </div>
         ) : editingContent ? (
-          <ContentEditor key={category.id} category={category} categories={categories} initial={current} onClose={() => setEditingContent(false)} />
+          <ContentEditor key={category.id} category={category} categories={categories} initial={current} onClose={() => setEditingContent(false)} onDirtyChange={onDirtyChange} />
         ) : (
           <div className="space-y-4">
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  <h2 className="text-[20px] font-semibold text-[#16274D]">{category.nameEn}</h2>
+                  <h2 className="text-[20px] font-semibold text-[#16274D] [overflow-wrap:anywhere]">{category.nameEn}</h2>
                   <span className="text-[16px] text-[#5d6678]" dir="rtl">{category.nameAr}</span>
                   <Badge tone={category.active ? 'ok' : 'mute'}>{category.active ? 'Active' : 'Hidden from patients'}</Badge>
                 </div>
@@ -222,8 +222,7 @@ export default function ContentTab({ addSignal, focusId, onFocusUsed }: { addSig
           terminals={mockTerminals}
           onClose={() => setVisibility(null)}
           onSave={(t) => {
-            profileService.updateCategory(visibility.id, { visibleTerminals: t });
-            setVisibility(null);
+            if (attempt(() => profileService.updateCategory(visibility.id, { visibleTerminals: t }))) setVisibility(null);
           }}
         />
       )}

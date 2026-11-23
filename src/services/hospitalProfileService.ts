@@ -104,20 +104,29 @@ function cleanInline(nodes: unknown): RichInline[] {
 
 const INLINE_TYPES = new Set(['text', 'hardBreak']);
 
-function cleanBlocks(nodes: unknown): RichBlock[] {
+function cleanBlocks(nodes: unknown, inListItem = false): RichBlock[] {
   if (!Array.isArray(nodes)) return [];
   const out: RichBlock[] = [];
   for (const n of nodes) {
     if (!isObj(n)) continue;
     if (n.type === 'paragraph') {
       const attrs = cleanBlockAttrs(n.attrs);
+      // spacing inside a list belongs to the list, never to its item paragraphs
+      if (inListItem && attrs) {
+        delete attrs.spacing;
+        if (!Object.keys(attrs).length) {
+          const content = cleanInline(n.content);
+          out.push({ type: 'paragraph', ...(content.length ? { content } : {}) });
+          continue;
+        }
+      }
       const content = cleanInline(n.content);
       out.push({ type: 'paragraph', ...(attrs ? { attrs } : {}), ...(content.length ? { content } : {}) });
     } else if (n.type === 'bulletList' || n.type === 'orderedList') {
       const items = (Array.isArray(n.content) ? n.content : [])
         .filter((li: unknown) => isObj(li) && li.type === 'listItem')
         .map((li: any): RichListItem => {
-          const inner = cleanBlocks(li.content);
+          const inner = cleanBlocks(li.content, true);
           return { type: 'listItem', content: inner.length ? inner : [{ type: 'paragraph' }] };
         });
       if (!items.length) continue;
@@ -129,15 +138,19 @@ function cleanBlocks(nodes: unknown): RichBlock[] {
       if (inlineOnly) {
         const content = cleanInline(n.content);
         if (content.length) out.push({ type: 'paragraph', content });
-      } else out.push(...cleanBlocks(n.content));
+      } else out.push(...cleanBlocks(n.content, inListItem));
     }
   }
   return out;
 }
 
 /** Keep only the allowed nodes, marks and preset attributes. Always returns a valid doc. */
+const isEmptyParagraph = (b: RichBlock) => b.type === 'paragraph' && !(b.content ?? []).some((i) => i.type === 'text' && i.text.trim());
+
 export function sanitizeDoc(input: unknown): RichDoc {
   const blocks = isObj(input) && input.type === 'doc' ? cleanBlocks(input.content) : [];
+  // trailing blank lines are never shown on purpose (and editors add one after a list)
+  while (blocks.length > 1 && isEmptyParagraph(blocks[blocks.length - 1])) blocks.pop();
   return { type: 'doc', content: blocks.length ? blocks : [{ type: 'paragraph' }] };
 }
 
@@ -208,10 +221,23 @@ function read<T>(key: string, fallback: T): T {
   }
 }
 
+/** Raised when a change cannot be stored (browser storage full or disabled). */
+export class ProfileStorageError extends Error {
+  constructor(cause: unknown) {
+    super('Hospital Profile could not be saved: browser storage is full or unavailable.');
+    this.name = 'ProfileStorageError';
+    (this as any).cause = cause;
+  }
+}
+
 function write<T>(key: string, value: T): void {
   if (typeof window === 'undefined') return;
   // TODO(backend): replace with the appropriate POST/PUT/DELETE call
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    throw new ProfileStorageError(e);
+  }
   window.dispatchEvent(new CustomEvent(PROFILE_EVENT));
 }
 
@@ -223,6 +249,14 @@ const pDoc = (...blocks: RichBlock[]): RichDoc => ({ type: 'doc', content: block
 
 function seedIfEmpty(): void {
   if (typeof window === 'undefined' || localStorage.getItem(SEEDED_KEY)) return;
+  try {
+    seed();
+  } catch {
+    // demo seed only; an empty profile is still usable
+  }
+}
+
+function seed(): void {
   const cats: [string, string, string][] = [
     ['prof-vision', 'Vision', 'الرؤية'],
     ['prof-mission', 'Mission', 'الرسالة'],
@@ -310,10 +344,14 @@ export const profileService = {
       .map(({ c }, order) => ({ ...c, order }));
     write(CATEGORIES_KEY, sorted);
   },
-  /** Deletes the category and its content. */
+  /** Deletes the category and its content (content first, so a failure leaves a category that can be deleted again). */
   deleteCategory(id: string): void {
-    write(CATEGORIES_KEY, this.listCategories().filter((c) => c.id !== id));
     write(CONTENT_KEY, read<ProfileContent[]>(CONTENT_KEY, []).filter((c) => c.categoryId !== id));
+    write(CATEGORIES_KEY, this.listCategories().filter((c) => c.id !== id));
+  },
+  /** Same change to several categories, stored in one write. */
+  updateCategories(ids: string[], patch: Partial<Omit<ProfileCategory, 'id' | 'order'>>): void {
+    write(CATEGORIES_KEY, this.listCategories().map((c) => (ids.includes(c.id) ? { ...c, ...patch } : c)));
   },
 
   getContent(categoryId: string): ProfileContent | null {

@@ -64,6 +64,7 @@ export const profileExtensions = [
     strike: false,
     horizontalRule: false,
     link: false,
+    trailingNode: false, // would add a blank line after a final list on every click
   }),
   SizeMark,
   ToneMark,

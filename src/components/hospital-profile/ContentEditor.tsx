@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Monitor, Tablet } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { emptyDoc, isDocEmpty, profileService, type Attachment, type ProfileCategory, type ProfileContent, type RichDoc } from '../../services/hospitalProfileService';
@@ -6,6 +6,7 @@ import { Btn, cx } from '../caresuite/careSuiteAtoms';
 import { useBrandPrimary } from '../caresuite/categoryTone';
 import AttachmentField, { attachmentProblem } from './AttachmentField';
 import PatientPreview, { DEVICES, type Device } from './PatientPreview';
+import { attempt } from './attempt';
 
 const RichTextEditor = lazy(() => import('./richText/RichTextEditor'));
 
@@ -35,11 +36,13 @@ export default function ContentEditor({
   categories,
   initial,
   onClose,
+  onDirtyChange,
 }: {
   category: ProfileCategory;
   categories: ProfileCategory[];
   initial: ProfileContent | null;
   onClose: () => void;
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const brand = useBrandPrimary();
   const [bodyEn, setBodyEn] = useState<RichDoc>(initial?.bodyEn ?? emptyDoc());
@@ -50,6 +53,10 @@ export default function ContentEditor({
 
   const start = useMemo(() => JSON.stringify([initial?.bodyEn ?? emptyDoc(), initial?.bodyAr ?? emptyDoc(), initial?.attachment ?? null]), [initial]);
   const dirty = JSON.stringify([bodyEn, bodyAr, attachment]) !== start;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
   const enEmpty = isDocEmpty(bodyEn);
   const arEmpty = isDocEmpty(bodyAr);
 
@@ -61,12 +68,8 @@ export default function ContentEditor({
     const problem = attachmentProblem(attachment);
     if (problem) return toast.error(problem);
     if (!attachment && enEmpty && arEmpty) return toast.error('Add text in English or Arabic, or choose an attachment.');
-    try {
-      profileService.saveContent(category.id, { bodyEn, bodyAr, attachment });
-    } catch {
-      return toast.error('Not saved: the files are too large for this demo’s browser storage. Use a smaller image or PDF.');
-    }
-    toast.success('Content saved');
+    if (!attempt(() => profileService.saveContent(category.id, { bodyEn, bodyAr, attachment }), 'Content saved')) return;
+    onDirtyChange?.(false);
     onClose();
   };
 

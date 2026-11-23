@@ -12,7 +12,7 @@ const store = new Map<string, string>();
   clear: () => store.clear(),
 };
 
-import { profileService as ps, sanitizeDoc, isDocEmpty, docToPlainText, type RichDoc } from './hospitalProfileService.ts';
+import { profileService as ps, sanitizeDoc, isDocEmpty, docToPlainText, ProfileStorageError, type RichDoc } from './hospitalProfileService.ts';
 
 const K = { seeded: 'careinn_profile_seeded_v1', categories: 'careinn_profile_categories', content: 'careinn_profile_content' };
 const put = (k: string, v: unknown) => store.set(k, JSON.stringify(v));
@@ -152,4 +152,72 @@ test('default presets are not stored (md size, text tone, start align, normal li
   assert.deepEqual(d.content[0], { type: 'paragraph', content: [{ type: 'text', text: 'x' }] });
   const none = sanitizeDoc(doc({ type: 'paragraph', attrs: { spacing: 'none' }, content: [{ type: 'text', text: 'y' }] }));
   assert.deepEqual((none.content[0] as any).attrs, { spacing: 'none' });
+});
+
+// ---- review fixes ------------------------------------------------------------------------
+
+test('trailing empty paragraphs are trimmed (a doc ending in a list stays a list)', () => {
+  const d = sanitizeDoc(doc({ type: 'bulletList', content: [{ type: 'listItem', content: [para('a')] }] }, { type: 'paragraph' }, { type: 'paragraph', content: [{ type: 'hardBreak' }] }));
+  assert.deepEqual(d.content.map((n) => n.type), ['bulletList']);
+  assert.deepEqual(sanitizeDoc(doc({ type: 'paragraph' })).content, [{ type: 'paragraph' }]); // never empty
+});
+
+test('paragraphs inside list items never carry spacing (spacing belongs to the list)', () => {
+  const d = sanitizeDoc(doc({ type: 'bulletList', attrs: { spacing: 'lg' }, content: [{ type: 'listItem', content: [para('a', { attrs: { spacing: 'lg', align: 'center' } })] }] }));
+  const list = d.content[0] as any;
+  assert.deepEqual(list.attrs, { spacing: 'lg' });
+  assert.deepEqual(list.content[0].content[0].attrs, { align: 'center' });
+});
+
+const failingStorage = (failKey: string) => {
+  const real = (globalThis as any).localStorage.setItem;
+  (globalThis as any).localStorage.setItem = (k: string, v: string) => {
+    if (k === failKey) throw Object.assign(new Error('QuotaExceededError'), { name: 'QuotaExceededError' });
+    real(k, v);
+  };
+  return () => ((globalThis as any).localStorage.setItem = real);
+};
+
+test('a failed write raises ProfileStorageError', () => {
+  const restore = failingStorage(K.categories);
+  try {
+    assert.throws(() => ps.createCategory({ nameEn: 'X', nameAr: 'س' }), (e: any) => e instanceof ProfileStorageError);
+  } finally {
+    restore();
+  }
+});
+
+test('deleteCategory removes content first, so a failure leaves a retryable category', () => {
+  const restore = failingStorage(K.categories);
+  try {
+    assert.throws(() => ps.deleteCategory('v'));
+  } finally {
+    restore();
+  }
+  assert.ok(ps.listCategories().some((c) => c.id === 'v'));
+  ps.deleteCategory('v');
+  assert.ok(!ps.listCategories().some((c) => c.id === 'v'));
+});
+
+test('updateCategories applies a bulk change in one write', () => {
+  let writes = 0;
+  const real = (globalThis as any).localStorage.setItem;
+  (globalThis as any).localStorage.setItem = (k: string, v: string) => { if (k === K.categories) writes++; real(k, v); };
+  try {
+    ps.updateCategories(['v', 'h'], { active: false });
+  } finally {
+    (globalThis as any).localStorage.setItem = real;
+  }
+  assert.equal(writes, 1);
+  assert.deepEqual(ps.listCategories().map((c) => c.active), [false, true, false]);
+});
+
+test('seeding never throws even if storage is full', () => {
+  store.clear();
+  const restore = failingStorage(K.categories);
+  try {
+    assert.doesNotThrow(() => ps.listCategories());
+  } finally {
+    restore();
+  }
 });

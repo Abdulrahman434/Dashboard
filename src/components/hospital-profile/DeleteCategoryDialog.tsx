@@ -3,6 +3,7 @@ import { AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { ATTACHMENT_LABEL, profileService, type ProfileCategory } from '../../services/hospitalProfileService';
 import { Btn, Card, CardHead, Bar, cx } from '../caresuite/careSuiteAtoms';
+import { attempt } from './attempt';
 
 /**
  * Delete one or more profile categories. Lists what will be lost (text,
@@ -16,9 +17,9 @@ export default function DeleteCategoryDialog({ categories, onClose, onDeleted }:
 
   const del = () => {
     if (!ack) return;
-    categories.forEach((c) => profileService.deleteCategory(c.id));
-    toast.success(single ? 'Category deleted' : `${categories.length} categories deleted`);
-    onDeleted(categories.map((c) => c.id));
+    const done: string[] = [];
+    const ok = attempt(() => categories.forEach((c) => (profileService.deleteCategory(c.id), done.push(c.id))), single ? 'Category deleted' : `${categories.length} categories deleted`);
+    if (ok || done.length) onDeleted(done);
   };
 
   const lost = (s: { hasText: boolean; attachment: keyof typeof ATTACHMENT_LABEL | null }) =>

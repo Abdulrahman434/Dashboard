@@ -149,7 +149,7 @@ export default function PatientPreview({
             {/* content panel */}
             <div className="relative flex-1 min-w-0 rounded-[1.4em] bg-white">
               <div ref={panel} className="absolute inset-0 overflow-y-auto" style={{ padding: '2em 2.2em' }}>
-                <div className="font-bold text-[#16274D]" style={{ fontSize: '1.6em', marginBottom: '0.6em' }}>
+                <div className="font-bold text-[#16274D] [overflow-wrap:anywhere]" style={{ fontSize: '1.6em', marginBottom: '0.6em' }}>
                   {title}
                 </div>
                 <RichTextView doc={body} dir={rtl ? 'rtl' : 'ltr'} brand={brand} />

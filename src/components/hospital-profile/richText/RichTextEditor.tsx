@@ -20,13 +20,15 @@ function editorCss(scope: string, brand: string) {
     `${scope} .ProseMirror p{margin:0 0 ${SPACING_EM.md}}`,
     `${scope} .ProseMirror ul{list-style:disc;padding-inline-start:1.4em;margin:0 0 ${SPACING_EM.md}}`,
     `${scope} .ProseMirror ol{list-style:decimal;padding-inline-start:1.4em;margin:0 0 ${SPACING_EM.md}}`,
+    `${scope} .ProseMirror li{margin-bottom:0.25em}`,
     `${scope} .ProseMirror li p{margin:0}`,
   ];
   SIZES.forEach((s) => r.push(`${scope} [data-size="${s}"]{font-size:${SIZE_EM[s]}}`));
   TONES.forEach((t) => r.push(`${scope} [data-tone="${t}"]{color:${toneColor(t, brand)}}`));
   (['start', 'center', 'end'] as const).forEach((a) => r.push(`${scope} [data-align="${a}"]{text-align:${a}}`));
   LINE_HEIGHTS.forEach((l) => r.push(`${scope} [data-line-height="${l}"],${scope} [data-lineheight="${l}"]{line-height:${LINE_HEIGHT[l]}}`));
-  SPACINGS.forEach((s) => r.push(`${scope} .ProseMirror [data-spacing="${s}"]{margin-bottom:${SPACING_EM[s]}}`));
+  // spacing applies to top-level paragraphs and lists only (never to paragraphs inside list items)
+  SPACINGS.forEach((s) => r.push(`${scope} .ProseMirror > [data-spacing="${s}"]{margin-bottom:${SPACING_EM[s]}}`));
   return r.join('\n');
 }
 
@@ -84,7 +86,7 @@ function Toolbar({ editor, dir, brand }: { editor: Editor; dir: 'ltr' | 'rtl'; b
       tone: (e.getAttributes('tone').tone as Tone) || 'text',
       align: (e.getAttributes('paragraph').align as Align) || 'start',
       lineHeight: (e.getAttributes('paragraph').lineHeight as LineHeight) || 'normal',
-      spacing: (e.getAttributes('paragraph').spacing as Spacing) || 'md',
+      spacing: ((e.isActive('orderedList') ? e.getAttributes('orderedList') : e.isActive('bulletList') ? e.getAttributes('bulletList') : e.getAttributes('paragraph')).spacing as Spacing) || 'md',
       canUndo: e.can().undo(),
       canRedo: e.can().redo(),
     }),
@@ -93,8 +95,12 @@ function Toolbar({ editor, dir, brand }: { editor: Editor; dir: 'ltr' | 'rtl'; b
   const chain = () => editor.chain().focus();
   const setPreset = (mark: 'size' | 'tone', value: string, fallback: string) =>
     value === fallback ? chain().unsetMark(mark).run() : chain().setMark(mark, { [mark]: value }).run();
-  const setBlock = (attr: 'align' | 'lineHeight' | 'spacing', value: string | null) =>
-    chain().updateAttributes('paragraph', { [attr]: value }).updateAttributes('bulletList', attr === 'spacing' ? { spacing: value } : {}).updateAttributes('orderedList', attr === 'spacing' ? { spacing: value } : {}).run();
+  const setBlock = (attr: 'align' | 'lineHeight' | 'spacing', value: string | null) => {
+    if (attr !== 'spacing') return chain().updateAttributes('paragraph', { [attr]: value }).run();
+    // space after a list is set on the list; elsewhere on the paragraph
+    const list = editor.isActive('orderedList') ? 'orderedList' : editor.isActive('bulletList') ? 'bulletList' : null;
+    return chain().updateAttributes(list ?? 'paragraph', { spacing: value }).run();
+  };
 
   // logical alignment: in Arabic "start" is the right edge
   const StartIcon = dir === 'rtl' ? AlignRight : AlignLeft;
@@ -151,7 +157,7 @@ function Toolbar({ editor, dir, brand }: { editor: Editor; dir: 'ltr' | 'rtl'; b
       <Select title="Line spacing" value={s.lineHeight} options={LINE_HEIGHTS} labels={LINE_HEIGHT_LABEL} onChange={(v) => setBlock('lineHeight', v === 'normal' ? null : v)} width={88} />
       <Select title="Space after paragraph" value={s.spacing} options={SPACINGS} labels={SPACING_LABEL} onChange={(v) => setBlock('spacing', v === 'md' ? null : v)} width={86} />
       <Sep />
-      <Btn title="Clear formatting" onClick={() => chain().unsetAllMarks().updateAttributes('paragraph', { align: null, lineHeight: null, spacing: null }).run()}>
+      <Btn title="Clear formatting" onClick={() => chain().unsetAllMarks().updateAttributes('paragraph', { align: null, lineHeight: null, spacing: null }).updateAttributes('bulletList', { spacing: null }).updateAttributes('orderedList', { spacing: null }).run()}>
         <RemoveFormatting size={16} />
       </Btn>
       <Btn title="Undo" disabled={!s.canUndo} onClick={() => chain().undo().run()}>

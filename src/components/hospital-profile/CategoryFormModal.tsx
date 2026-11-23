@@ -4,6 +4,7 @@ import { toast } from 'sonner@2.0.3';
 import { profileService, type ProfileCategory } from '../../services/hospitalProfileService';
 import { Btn, Toggle, Card, CardHead, Bar } from '../caresuite/careSuiteAtoms';
 import InfoTip from '../caresuite/InfoTip';
+import { attempt } from './attempt';
 
 const inputCls = 'w-full h-[40px] px-3 border border-[#d6dae6] rounded-[10px] outline-none focus:border-[#4EBEE3] transition-colors text-[13.5px]';
 
@@ -22,14 +23,12 @@ export default function CategoryFormModal({ category, onClose, onCreated }: { ca
       toast.error('A category with this name already exists');
       return;
     }
-    if (category) {
-      profileService.updateCategory(category.id, { nameEn: nameEn.trim(), nameAr: nameAr.trim(), active });
-      toast.success('Category updated');
-    } else {
-      const c = profileService.createCategory({ nameEn, nameAr, active });
-      toast.success('Category added');
-      onCreated?.(c.id);
-    }
+    let createdId = '';
+    const ok = category
+      ? attempt(() => profileService.updateCategory(category.id, { nameEn: nameEn.trim(), nameAr: nameAr.trim(), active }), 'Category updated')
+      : attempt(() => (createdId = profileService.createCategory({ nameEn, nameAr, active }).id), 'Category added');
+    if (!ok) return;
+    if (createdId) onCreated?.(createdId);
     onClose();
   };
 
@@ -48,11 +47,11 @@ export default function CategoryFormModal({ category, onClose, onCreated }: { ca
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-[13px] text-[#5d6678] mb-1.5" htmlFor="pc-name-en">Name (English)</label>
-              <input id="pc-name-en" className={inputCls} value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="e.g. Services" autoFocus />
+              <input id="pc-name-en" className={inputCls} value={nameEn} onChange={(e) => setNameEn(e.target.value)} placeholder="e.g. Services" maxLength={60} autoFocus />
             </div>
             <div>
               <label className="block text-[13px] text-[#5d6678] mb-1.5" htmlFor="pc-name-ar">Name (Arabic)</label>
-              <input id="pc-name-ar" className={inputCls} dir="rtl" value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="مثال: الخدمات" />
+              <input id="pc-name-ar" className={inputCls} dir="rtl" value={nameAr} onChange={(e) => setNameAr(e.target.value)} placeholder="مثال: الخدمات" maxLength={60} />
             </div>
           </div>
           <div className="flex items-center justify-between gap-3 pt-3 border-t border-[#e7e9f0]">

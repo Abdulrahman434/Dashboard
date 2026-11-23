@@ -16,14 +16,14 @@ const CHOICES: { id: Choice; label: string; icon: typeof Type; hint: string }[] 
 
 // localStorage in this demo holds a few MB in total; a backend removes this limit
 const MAX_BYTES: Partial<Record<AttachmentKind, number>> = { image: 1.5 * 1024 * 1024, pdf: 2 * 1024 * 1024 };
-const URL_RULES: Partial<Record<AttachmentKind, RegExp>> = { link: /^https?:\/\/\S+\.\S+/i, stream: /^(https?|rtsp|rtmp):\/\/\S+/i };
+const URL_RULES: Partial<Record<AttachmentKind, RegExp>> = { link: /^https?:\/\/[^\s.]+\.[^\s]+$/i, stream: /^(https?|rtsp|rtmp):\/\/\S+$/i };
 
 export const attachmentProblem = (a: Attachment | null): string | null => {
   if (!a) return null;
   const check = (r: AttachmentRef | undefined, where: string) => {
     if (!r?.url) return a.kind === 'image' || a.kind === 'pdf' ? `Upload the ${where}${a.kind === 'pdf' ? 'PDF' : 'image'}.` : `Enter the ${where}link.`;
     const rule = URL_RULES[a.kind];
-    if (rule && !rule.test(r.url)) return a.kind === 'stream' ? `The ${where}stream link must start with https://, rtsp:// or rtmp://.` : `The ${where}link must start with https://.`;
+    if (rule && !rule.test(r.url)) return a.kind === 'stream' ? `The ${where}stream link must start with https://, rtsp:// or rtmp://.` : `The ${where}link must be a web address starting with http:// or https://.`;
     return null;
   };
   return check(a.en, '') ?? (a.ar ? check(a.ar, 'Arabic ') : null);
@@ -80,7 +80,7 @@ function UrlSlot({ kind, value, onChange, label, id }: { kind: 'stream' | 'link'
         dir="ltr"
         className={cx('w-full h-[40px] px-3 border rounded-[10px] outline-none transition-colors text-[13.5px]', bad ? 'border-[#EF4444] focus:border-[#EF4444]' : 'border-[#d6dae6] focus:border-[#4EBEE3]')}
       />
-      {bad && <div className="text-[12px] text-[#c0392b] mt-1">{kind === 'stream' ? 'Use a link starting with https://, rtsp:// or rtmp://.' : 'Use a link starting with https://.'}</div>}
+      {bad && <div className="text-[12px] text-[#c0392b] mt-1">{kind === 'stream' ? 'Use a link starting with https://, rtsp:// or rtmp://.' : 'Use a web address starting with http:// or https://.'}</div>}
     </div>
   );
 }

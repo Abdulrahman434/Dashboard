@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Building2, Plus } from 'lucide-react';
 import PillTabs from './PillTabs';
 import { Btn } from './caresuite/careSuiteAtoms';
@@ -17,6 +17,19 @@ export default function HospitalProfilePage() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [addSignal, setAddSignal] = useState(0);
   const [headerSlot, setHeaderSlot] = useState<HTMLDivElement | null>(null);
+  // unsaved content edits: guard tab switches, Add Category and page reloads
+  const [dirty, setDirty] = useState(false);
+  const onDirtyChange = useCallback((d: boolean) => setDirty(d), []);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+  const okToLeave = () => !dirty || confirm('Discard your unsaved content changes?');
 
   const openContent = (id: string) => {
     setFocusId(id);
@@ -39,7 +52,7 @@ export default function HospitalProfilePage() {
             </div>
             <div className="flex items-center gap-3 shrink-0">
               <div ref={setHeaderSlot} className="contents" />
-              <Btn variant="primary" onClick={() => setAddSignal((n) => n + 1)} className="shrink-0">
+              <Btn variant="primary" onClick={() => okToLeave() && setAddSignal((n) => n + 1)} className="shrink-0">
                 <Plus size={16} />
                 Add Category
               </Btn>
@@ -51,7 +64,7 @@ export default function HospitalProfilePage() {
               { id: 'content', label: 'Content' },
             ]}
             activeTab={tab}
-            onChange={(id) => setTab(id as Tab)}
+            onChange={(id) => id !== tab && okToLeave() && setTab(id as Tab)}
           />
         </div>
       </div>
@@ -60,7 +73,7 @@ export default function HospitalProfilePage() {
         {tab === 'categories' ? (
           <CategoriesTab key="categories" addSignal={addSignal} headerSlot={headerSlot} onOpenContent={openContent} />
         ) : (
-          <ContentTab key="content" addSignal={addSignal} focusId={focusId} onFocusUsed={() => setFocusId(null)} />
+          <ContentTab key="content" addSignal={addSignal} focusId={focusId} onFocusUsed={() => setFocusId(null)} onDirtyChange={onDirtyChange} />
         )}
       </div>
     </div>

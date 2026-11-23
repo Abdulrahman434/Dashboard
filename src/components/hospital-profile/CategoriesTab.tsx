@@ -11,6 +11,7 @@ import QuickActionsPill from '../caresuite/QuickActionsPill';
 import TableSortIcon from '../TableSortIcon';
 import { useAddSignal } from '../caresuite/ItemsManagerTab';
 import { useProfile } from './useProfile';
+import { attempt } from './attempt';
 import CategoryFormModal from './CategoryFormModal';
 import DeleteCategoryDialog from './DeleteCategoryDialog';
 import { VisibilityModal, BulkVisibilityModal, mockTerminals } from './TerminalVisibilityModals';
@@ -80,8 +81,7 @@ export default function CategoriesTab({ addSignal, headerSlot, onOpenContent }: 
   );
 
   const setActivePicked = (active: boolean) => {
-    picked.forEach((c) => profileService.updateCategory(c.id, { active }));
-    toast.success(`${picked.length} ${picked.length === 1 ? 'category' : 'categories'} ${active ? 'shown to' : 'hidden from'} patients`);
+    attempt(() => profileService.updateCategories(picked.map((c) => c.id), { active }), `${picked.length} ${picked.length === 1 ? 'category' : 'categories'} ${active ? 'shown to' : 'hidden from'} patients`);
   };
 
   const quickActions = (
@@ -105,8 +105,7 @@ export default function CategoriesTab({ addSignal, headerSlot, onOpenContent }: 
   );
 
   const saveOrder = (ids: string[]) => {
-    profileService.setCategoryOrder(ids);
-    toast.success('Category order saved');
+    attempt(() => profileService.setCategoryOrder(ids), 'Category order saved');
   };
 
   return (
@@ -154,8 +153,10 @@ export default function CategoriesTab({ addSignal, headerSlot, onOpenContent }: 
                         {(handle) => (
                           <>
                             <td className={`${tdCls} text-center`}>{handle}</td>
-                            <td className={`${tdCls} text-center`}>
-                              <input type="checkbox" className={checkboxCls} checked={selected.includes(c.id)} onChange={() => toggleOne(c.id)} onClick={(e) => e.stopPropagation()} aria-label={`Select ${c.nameEn}`} />
+                            <td className="p-0 text-center">
+                              <label className="flex items-center justify-center py-3.5 px-4 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                <input type="checkbox" className={checkboxCls} checked={selected.includes(c.id)} onChange={() => toggleOne(c.id)} aria-label={`Select ${c.nameEn}`} />
+                              </label>
                             </td>
                             <td className={`${tdCls} text-center`}>
                               <OrderBadge n={categories.indexOf(c) + 1} />
@@ -174,7 +175,7 @@ export default function CategoriesTab({ addSignal, headerSlot, onOpenContent }: 
                             <td className={`${tdCls} text-[13px] text-[#5d6678] whitespace-nowrap`}>{updatedLabel(content[c.id]?.updatedAt)}</td>
                             <td className={`${tdCls} text-center`}>
                               <span className="inline-flex">
-                                <Switch on={c.active} label={`${c.nameEn} active`} onChange={() => profileService.updateCategory(c.id, { active: !c.active })} />
+                                <Switch on={c.active} label={`${c.nameEn} active`} onChange={() => attempt(() => profileService.updateCategory(c.id, { active: !c.active }))} />
                               </span>
                             </td>
                             <td className={tdCls}>
@@ -229,8 +230,7 @@ export default function CategoriesTab({ addSignal, headerSlot, onOpenContent }: 
           terminals={mockTerminals}
           onClose={() => setVisibility(null)}
           onSave={(t) => {
-            profileService.updateCategory(visibility.id, { visibleTerminals: t });
-            setVisibility(null);
+            if (attempt(() => profileService.updateCategory(visibility.id, { visibleTerminals: t }))) setVisibility(null);
           }}
         />
       )}
@@ -240,8 +240,7 @@ export default function CategoriesTab({ addSignal, headerSlot, onOpenContent }: 
           terminals={mockTerminals}
           onClose={() => setBulkVisibility(false)}
           onSave={(t) => {
-            picked.forEach((c) => profileService.updateCategory(c.id, { visibleTerminals: t }));
-            setBulkVisibility(false);
+            if (attempt(() => profileService.updateCategories(picked.map((c) => c.id), { visibleTerminals: t }))) setBulkVisibility(false);
           }}
         />
       )}

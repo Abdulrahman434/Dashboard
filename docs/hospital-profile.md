@@ -49,6 +49,8 @@ A TipTap/ProseMirror JSON document restricted to:
 | Marks | `bold`, `italic`, `underline`, `size` (`sm` `lg` `xl`; none = normal), `tone` (`muted` `brand` `alert` `success`; none = text colour) |
 | Block attrs | `align` (`center` `end`; none = start), `lineHeight` (`tight` `relaxed`; none = normal), `spacing` after the block (`none` `sm` `lg`; none = medium) |
 
+Spacing belongs to top-level paragraphs and lists only: paragraphs inside list items never carry it, and list items are 0.25em apart. Trailing empty paragraphs are never stored.
+
 Nothing else is ever stored. `sanitizeDoc()` enforces it on every save, and the editor's
 schema already drops pasted fonts, colours, links and images.
 
@@ -91,7 +93,7 @@ dashboard preview uses these (a renderer: `hospital-profile/richText/RichTextVie
 
 ## Tests
 
-`npm test`: 13 tests on the service: ordering, delete removes only that category's
+`npm test`: 19 tests on the service: ordering, delete removes only that category's
 content, delete summary, save sanitizes, the sanitizer keeps allowed presets and drops
 unknown nodes, marks, raw values and junk, empty detection, and seeding.
 Checked in headless Chrome: reorder in both tabs (persists), formatting and Arabic RTL,
