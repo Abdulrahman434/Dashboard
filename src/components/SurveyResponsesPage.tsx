@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
-import { ClipboardList, Search, Filter, Eye, Download, Calendar, Star, MessageSquare, ChevronDown, X, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ClipboardList, Search, Filter, Eye, Download, Calendar, Star, MessageSquare, ChevronDown, X, ArrowUpDown, ArrowUp, ArrowDown, User, BedDouble, FileText, Clock } from 'lucide-react';
+import { toast } from 'sonner@2.0.3';
 import TablePagination from './TablePagination';
+import { downloadCsv, localDateStamp, localDateTime, slugForFile } from '../utils/exportFiles';
 
 interface Question {
   id: string;
@@ -170,6 +172,24 @@ export default function SurveyResponsesPage() {
   const itemsPerPage = 10;
   const [sortColumn, setSortColumn] = useState<'patient' | 'survey' | 'date' | 'rating' | 'room' | 'type' | 'comment' | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exportScope, setExportScope] = useState<'filtered' | 'all'>('filtered');
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close the export menu on outside click / Escape
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) setShowExportMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowExportMenu(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showExportMenu]);
 
   // Load surveys and generate responses
   useEffect(() => {
@@ -325,6 +345,80 @@ export default function SurveyResponsesPage() {
     return options[answer.answer - 1] || `Rating: ${answer.answer}`;
   };
 
+  // Human-readable description of the active filters
+  const activeFilterParts: string[] = [];
+  if (selectedSurvey !== 'all') activeFilterParts.push(`Survey: ${surveys.find(s => s.id === selectedSurvey)?.nameEn ?? selectedSurvey}`);
+  if (selectedRating !== 'all') activeFilterParts.push(`Rating: ${selectedRating} star${selectedRating === '1' ? '' : 's'}`);
+  if (searchQuery.trim()) activeFilterParts.push(`Search: "${searchQuery.trim()}"`);
+  const hasActiveFilters = activeFilterParts.length > 0;
+  const filterSummary = activeFilterParts.join(' · ');
+
+  const formatLongDateTime = (dateString: string) => {
+    const d = new Date(dateString);
+    const date = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+    return `${date.replace(/^(\w+)\s/, '$1, ')} · ${time}`;
+  };
+
+  const formatRelative = (dateString: string) => {
+    const diffMs = Date.now() - new Date(dateString).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins} min ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days} day${days === 1 ? '' : 's'} ago`;
+  };
+
+  const handleExport = () => {
+    const scope = hasActiveFilters ? exportScope : 'all';
+    const rows = scope === 'filtered' ? sortedResponses : [...responses].sort(
+      (a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+    );
+    if (rows.length === 0) {
+      toast.error('Nothing to export', { description: 'There are no responses to export.', duration: 3000 });
+      return;
+    }
+
+    // One column per distinct question text (in order of first appearance)
+    const questionCols: string[] = [];
+    rows.forEach(r => r.answers.forEach(a => {
+      if (!questionCols.includes(a.questionText)) questionCols.push(a.questionText);
+    }));
+
+    const header = [
+      'Response ID', 'Patient MRN', 'Room', 'Patient Type', 'Survey',
+      'Submitted (local, YYYY-MM-DD HH:mm)', 'Submitted (readable)', 'Average Rating',
+      ...questionCols, 'Comment'
+    ];
+    const data = rows.map(r => {
+      const survey = getSurveyForResponse(r);
+      const d = new Date(r.completedAt);
+      const cols = questionCols.map(q => {
+        const parts = r.answers
+          .filter(a => a.questionText === q)
+          .map(a => `${getAnswerText(a, survey)} (${a.answer})`);
+        return parts.join('; ');
+      });
+      return [
+        r.id, r.patientId || '', r.roomNumber || '', r.patientType || '', r.surveyName,
+        localDateTime(d), formatLongDateTime(r.completedAt), getAverageRating(r),
+        ...cols, r.comment || ''
+      ];
+    });
+
+    const surveyName = scope === 'filtered' && selectedSurvey !== 'all'
+      ? surveys.find(s => s.id === selectedSurvey)?.nameEn : undefined;
+    const name = `survey-responses${surveyName ? '_' + slugForFile(surveyName) : ''}${scope === 'filtered' && hasActiveFilters && !surveyName ? '_filtered' : ''}_${localDateStamp()}.csv`;
+    downloadCsv(name, [header, ...data]);
+    setShowExportMenu(false);
+    toast.success(`Exported ${rows.length} ${rows.length === 1 ? 'response' : 'responses'}`, {
+      description: scope === 'filtered' && hasActiveFilters ? filterSummary : 'All responses',
+      duration: 3000
+    });
+  };
+
   return (
     <div className="flex-1 bg-white overflow-auto">
       <div className="p-8">
@@ -467,6 +561,71 @@ export default function SurveyResponsesPage() {
             {/* Results Count */}
             <div className="text-[14px] text-[#0f1729]/60 font-['Poppins',sans-serif]">
               {filteredResponses.length} {filteredResponses.length === 1 ? 'response' : 'responses'}
+            </div>
+
+            {/* Export */}
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => {
+                  setShowExportMenu(!showExportMenu);
+                  setShowSurveyDropdown(false);
+                  setShowRatingDropdown(false);
+                  setExportScope('filtered');
+                }}
+                disabled={responses.length === 0}
+                className="flex items-center gap-2 px-4 py-2 bg-[#4EBEE3] hover:bg-[#3da9cc] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[14px] font-medium"
+              >
+                <Download size={16} strokeWidth={2} />
+                Export
+                <ChevronDown size={16} strokeWidth={2} />
+              </button>
+
+              {showExportMenu && (
+                <div className="absolute top-full right-0 mt-2 w-[340px] bg-white border border-gray-200 rounded-lg shadow-lg z-20 p-4">
+                  <p className="text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif] mb-1">
+                    Export responses to CSV
+                  </p>
+                  <p className="text-[13px] text-[#0f1729]/70 font-['Poppins',sans-serif] mb-3">
+                    {hasActiveFilters && exportScope === 'filtered'
+                      ? `Export ${filteredResponses.length} ${filteredResponses.length === 1 ? 'response' : 'responses'} matching your filters (${filterSummary})`
+                      : `Export all ${responses.length} responses (no filters applied)`}
+                  </p>
+                  {hasActiveFilters && (
+                    <div className="space-y-2 mb-3">
+                      {([
+                        ['filtered', `Filtered results (${filteredResponses.length})`],
+                        ['all', `All responses (${responses.length})`]
+                      ] as const).map(([value, label]) => (
+                        <label
+                          key={value}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-[14px] font-['Poppins',sans-serif] ${
+                            exportScope === value ? 'border-[#4EBEE3] bg-[#4EBEE3]/10 text-[#16274D]' : 'border-gray-200 text-[#0f1729] hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="export-scope"
+                            checked={exportScope === value}
+                            onChange={() => setExportScope(value)}
+                            className="accent-[#4EBEE3]"
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[12px] text-[#0f1729]/50 font-['Poppins',sans-serif] mb-3">
+                    Excel-compatible UTF-8 CSV, one row per response, one column per question.
+                  </p>
+                  <button
+                    onClick={handleExport}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-[#4EBEE3] hover:bg-[#3da9cc] text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[14px] font-medium"
+                  >
+                    <Download size={16} strokeWidth={2} />
+                    Download CSV
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -672,7 +831,7 @@ export default function SurveyResponsesPage() {
                   Response Details
                 </h3>
                 <p className="text-[13px] text-[#0f1729]/60 font-['Poppins',sans-serif] mt-0.5">
-                  {selectedResponse.patientId || 'Anonymous'} • {formatDateTime(selectedResponse.completedAt)}
+                  {selectedResponse.surveyName}
                 </p>
               </div>
               <button
@@ -686,13 +845,45 @@ export default function SurveyResponsesPage() {
             {/* Modal Content */}
             <div className="flex-1 overflow-auto p-6">
               <div className="space-y-6">
-                {/* Patient Info */}
+                {/* Patient & submission info */}
                 <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-start gap-3 pb-4 mb-4 border-b border-gray-200">
+                    <div className="w-10 h-10 rounded-full bg-[#4EBEE3]/10 flex items-center justify-center shrink-0">
+                      <User size={20} className="text-[#4EBEE3]" strokeWidth={2} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif]">Patient (MRN)</p>
+                      <p className="text-[16px] font-semibold text-[#16274D] font-['Poppins',sans-serif] break-all">
+                        {selectedResponse.patientId || 'Anonymous'}
+                      </p>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif] mb-1">Survey</p>
+                      <p className="flex items-center gap-1 text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif] mb-1"><Clock size={12} strokeWidth={2} />Submitted</p>
+                      <p className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
+                        {formatLongDateTime(selectedResponse.completedAt)}
+                      </p>
+                      <p className="text-[12px] text-[#0f1729]/50 font-['Poppins',sans-serif]">
+                        {formatRelative(selectedResponse.completedAt)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="flex items-center gap-1 text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif] mb-1"><FileText size={12} strokeWidth={2} />Survey</p>
                       <p className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
                         {selectedResponse.surveyName}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="flex items-center gap-1 text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif] mb-1"><BedDouble size={12} strokeWidth={2} />Room</p>
+                      <p className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
+                        {selectedResponse.roomNumber || '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif] mb-1">Patient Type</p>
+                      <p className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
+                        {selectedResponse.patientType || '-'}
                       </p>
                     </div>
                     <div>
@@ -705,18 +896,6 @@ export default function SurveyResponsesPage() {
                           {getAverageRating(selectedResponse)}
                         </span>
                       </div>
-                    </div>
-                    <div>
-                      <p className="text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif] mb-1">Room Number</p>
-                      <p className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
-                        {selectedResponse.roomNumber || '-'}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-[12px] text-[#0f1729]/60 font-['Poppins',sans-serif] mb-1">Patient Type</p>
-                      <p className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
-                        {selectedResponse.patientType}
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -731,14 +910,14 @@ export default function SurveyResponsesPage() {
                       const survey = getSurveyForResponse(selectedResponse);
                       return (
                         <div key={index} className="border border-gray-200 rounded-lg p-4">
-                          <p className="text-[13px] text-[#0f1729]/80 font-['Poppins',sans-serif] mb-2">
+                          <p dir="auto" className="text-[13px] text-[#0f1729]/80 font-['Poppins',sans-serif] mb-2 break-words">
                             {answer.questionText}
                           </p>
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-0.5">
                               {getRatingStars(answer.answer)}
                             </div>
-                            <span className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
+                            <span dir="auto" className="text-[14px] font-medium text-[#0f1729] font-['Poppins',sans-serif]">
                               {getAnswerText(answer, survey)}
                             </span>
                           </div>
@@ -757,7 +936,7 @@ export default function SurveyResponsesPage() {
                         Additional Comment
                       </h4>
                     </div>
-                    <p className="text-[14px] text-[#0f1729]/80 font-['Poppins',sans-serif] leading-relaxed">
+                    <p dir="auto" className="text-[14px] text-[#0f1729]/80 font-['Poppins',sans-serif] leading-relaxed whitespace-pre-wrap break-words text-start">
                       {selectedResponse.comment}
                     </p>
                   </div>

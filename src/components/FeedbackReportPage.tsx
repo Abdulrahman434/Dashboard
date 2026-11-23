@@ -1,5 +1,9 @@
-import { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, Users, Clock, Download, Calendar, Star, ChevronDown, PieChart as PieChartIcon } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
+import { toast } from 'sonner@2.0.3';
+import { downloadCsv, localDateStamp, localDateTime, slugForFile } from '../utils/exportFiles';
+import { BarChart3, TrendingUp, Users, Clock, Download, Calendar, Star, ChevronDown, PieChart as PieChartIcon, FileText, Table2, Loader2 } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 // Custom Tooltip Component
@@ -134,6 +138,25 @@ export default function FeedbackReportPage() {
   const [selectedSurveyId, setSelectedSurveyId] = useState<string>('all');
   const [dateRange, setDateRange] = useState<'7' | '30' | '90'>('30');
   const [showSurveyDropdown, setShowSurveyDropdown] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  // Close the export menu on outside click / Escape
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) setShowExportMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowExportMenu(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showExportMenu]);
 
   // Load surveys and generate mock responses
   useEffect(() => {
@@ -301,22 +324,105 @@ export default function FeedbackReportPage() {
     }).length
   }));
 
-  const handleExportData = () => {
-    const dataStr = JSON.stringify({
-      survey: selectedSurvey?.nameEn || 'All Surveys',
-      dateRange: dateRange,
-      totalResponses,
-      averageScore,
-      responses: filteredResponses
-    }, null, 2);
-    
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `feedback-report-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+  // ---- Export ----
+  const surveyLabel = selectedSurvey?.nameEn || 'All Surveys';
+  const rangeStart = new Date();
+  rangeStart.setDate(rangeStart.getDate() - parseInt(dateRange));
+  const rangeLabel = `Last ${dateRange} days (${localDateStamp(rangeStart)} to ${localDateStamp()})`;
+  const exportBaseName = () =>
+    `survey-report_${slugForFile(surveyLabel)}_last-${dateRange}-days_${localDateStamp()}`;
+
+  /** CSV of the aggregated numbers behind the report, for the current filters. */
+  const handleExportCsv = () => {
+    const pct = (n: number, total: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
+    const rows: (string | number | null)[][] = [
+      ['Section', 'Question / Group', 'Option / Metric', 'Count', 'Percentage (%)', 'Average score'],
+      ['Report info', 'Report', 'Survey Report', null, null, null],
+      ['Report info', 'Filter: Survey', surveyLabel, null, null, null],
+      ['Report info', 'Filter: Date range', rangeLabel, null, null, null],
+      ['Report info', 'Generated at', localDateTime(new Date()), null, null, null],
+      ['Summary', 'All questions', 'Total responses', totalResponses, null, null],
+      ['Summary', 'All questions', 'Average score (1-5)', null, null, Math.round(averageScore * 100) / 100],
+    ];
+    scoreDistribution.forEach(d => rows.push(['Overall score distribution', 'Average score per response (rounded)', d.score, d.count, pct(d.count, totalResponses), null]));
+    patientTypeData.forEach(d => rows.push(['Responses by patient type', 'Patient type', d.name, d.value, pct(d.value, totalResponses), null]));
+    questionAnalytics.forEach(qa => {
+      qa.distribution.forEach(d => rows.push([
+        'Question analytics', qa.question.questionEn, d.label, d.count, pct(d.count, qa.totalAnswers), null
+      ]));
+      rows.push(['Question analytics', qa.question.questionEn, 'Total answers / average', qa.totalAnswers, null, Math.round(qa.average * 100) / 100]);
+    });
+    trendData.forEach(d => rows.push(['Response trend (last 30 days, ignores range)', d.date, 'Responses / average score', d.responses, null, Math.round(d.avgScore * 100) / 100]));
+
+    downloadCsv(`${exportBaseName()}.csv`, rows);
+    setShowExportMenu(false);
+    toast.success('Report data exported (CSV)', { description: `${surveyLabel} · ${rangeLabel}`, duration: 3000 });
+  };
+
+  /** PDF of the report as shown (A4, multi-page), via html2canvas + jsPDF. */
+  const handleExportPdf = async () => {
+    const element = reportRef.current;
+    if (!element) return;
+    setShowExportMenu(false);
+    setExporting(true);
+    const loadingId = toast.loading('Generating PDF...');
+    try {
+      await new Promise(r => setTimeout(r, 100));
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#f8f9fb',
+        onclone: (clonedDoc) => {
+          clonedDoc.querySelectorAll<HTMLElement>('[data-export-only]').forEach(el => { el.style.display = 'block'; });
+          // html2canvas cannot parse oklab/oklch colors: replace with rgb fallbacks
+          clonedDoc.querySelectorAll('*').forEach((el) => {
+            const h = el as HTMLElement;
+            try {
+              const cs = clonedDoc.defaultView?.getComputedStyle(el);
+              if (!cs) return;
+              if (/okl(ab|ch)/.test(cs.backgroundColor)) h.style.backgroundColor = 'rgb(255, 255, 255)';
+              if (/okl(ab|ch)/.test(cs.color)) h.style.color = 'rgb(22, 39, 77)';
+              if (/okl(ab|ch)/.test(cs.borderColor)) h.style.borderColor = 'rgb(226, 232, 240)';
+            } catch { /* ignore */ }
+          });
+        }
+      });
+
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 12;
+      const imgW = pageW - margin * 2;
+      const usableH = pageH - margin * 2;
+      const pxPerMm = canvas.width / imgW;
+      const sliceHpx = Math.floor(usableH * pxPerMm);
+
+      let y = 0;
+      let page = 0;
+      while (y < canvas.height) {
+        const h = Math.min(sliceHpx, canvas.height - y);
+        const slice = document.createElement('canvas');
+        slice.width = canvas.width;
+        slice.height = h;
+        const ctx = slice.getContext('2d')!;
+        ctx.fillStyle = '#f8f9fb';
+        ctx.fillRect(0, 0, slice.width, slice.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+        if (page > 0) pdf.addPage();
+        pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', margin, margin, imgW, h / pxPerMm);
+        y += h;
+        page++;
+      }
+
+      pdf.save(`${exportBaseName()}.pdf`);
+      toast.success('Report exported (PDF)', { id: loadingId, description: `${surveyLabel} · ${rangeLabel}`, duration: 3000 });
+    } catch (err) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to generate PDF', { id: loadingId, duration: 5000 });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -420,15 +526,58 @@ export default function FeedbackReportPage() {
               <option value="90">Last 90 Days</option>
             </select>
 
-            {/* Export Button */}
-            <button
-              onClick={handleExportData}
-              className="flex items-center gap-2 px-5 py-2.5 bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[14px] font-medium shadow-sm"
-            >
-              <Download size={16} strokeWidth={2} />
-              Export Data
-            </button>
+            {/* Export Menu */}
+            <div className="relative" ref={exportMenuRef}>
+              <button
+                onClick={() => { setShowExportMenu(!showExportMenu); setShowSurveyDropdown(false); }}
+                disabled={exporting || surveys.length === 0}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#4EBEE3] hover:bg-[#3DA5CA] disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[14px] font-medium shadow-sm"
+              >
+                {exporting ? <Loader2 size={16} className="animate-spin" strokeWidth={2} /> : <Download size={16} strokeWidth={2} />}
+                Export
+                <ChevronDown size={16} strokeWidth={2} />
+              </button>
+
+              {showExportMenu && (
+                <div className="absolute top-full right-0 mt-2 w-[320px] bg-white border-2 border-gray-200 rounded-lg shadow-lg z-20 overflow-hidden">
+                  <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+                    <div className="text-[12px] text-gray-500 font-['Poppins',sans-serif]">Exports use the current filters</div>
+                    <div className="text-[13px] font-medium text-[#16274D] font-['Poppins',sans-serif]">{surveyLabel} · Last {dateRange} days</div>
+                  </div>
+                  <button
+                    onClick={handleExportPdf}
+                    className="w-full flex items-start gap-3 text-left px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100"
+                  >
+                    <FileText size={18} className="text-[#4EBEE3] mt-0.5 shrink-0" strokeWidth={2} />
+                    <div>
+                      <div className="text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif]">PDF report</div>
+                      <div className="text-[12px] text-gray-500 font-['Poppins',sans-serif]">The report as shown, with charts, for sharing or printing</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={handleExportCsv}
+                    className="w-full flex items-start gap-3 text-left px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <Table2 size={18} className="text-[#4EBEE3] mt-0.5 shrink-0" strokeWidth={2} />
+                    <div>
+                      <div className="text-[14px] font-medium text-[#16274D] font-['Poppins',sans-serif]">CSV data</div>
+                      <div className="text-[12px] text-gray-500 font-['Poppins',sans-serif]">Aggregated numbers (counts, percentages) for Excel</div>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+        </div>
+
+        {/* Exported area (PDF) */}
+        <div ref={reportRef} className="bg-[#f8f9fb]">
+        {/* Report header: only rendered in the PDF */}
+        <div data-export-only style={{ display: 'none' }} className="mb-6 pb-4 border-b-2 border-[#4EBEE3]">
+          <h1 className="text-[26px] font-semibold text-[#16274D] font-['Poppins',sans-serif]">Survey Report</h1>
+          <p className="text-[14px] text-[#16274D] font-['Poppins',sans-serif] mt-1">Survey: {surveyLabel}</p>
+          <p className="text-[13px] text-[#6B7280] font-['Poppins',sans-serif]">Date range: {rangeLabel}</p>
+          <p className="text-[13px] text-[#6B7280] font-['Poppins',sans-serif]">Generated: {localDateTime(new Date())}</p>
         </div>
 
         {/* Key Metrics */}
@@ -700,6 +849,8 @@ export default function FeedbackReportPage() {
             </div>
           </div>
         )}
+
+        </div>
 
         {/* No Data State */}
         {surveys.length === 0 && (
