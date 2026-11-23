@@ -12,6 +12,7 @@ import QuickActionsPill from './QuickActionsPill';
 import CategoryPanel, { ALL, UNCATEGORIZED } from './CategoryPanel';
 import { SortableRows, SortableTr, OrderBadge } from './sortable';
 import { peekPendingCategory, clearPendingCategory } from './caresuiteNav';
+import CategoryFormModal from './CategoryFormModal';
 import { SingleSelectDropdown, MultiSelectDropdown } from '../UnifiedDropdown';
 import { IconPickerDialog } from './IconPicker';
 import { ItemIcon, iconLabel } from './careSuiteIcons';
@@ -363,6 +364,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
   const [selected, setSelected] = useState<string[]>([]);
   /** unsaved item order for the selected category (full id list), null when nothing changed */
   const [draft, setDraft] = useState<string[] | null>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
   // undefined = closed, null = adding, item = editing
   const [editing, setEditing] = useState<LibraryItem | null | undefined>(undefined);
 
@@ -725,6 +727,11 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
           selected={current}
           onSelect={selectCategory}
           onCollapse={() => setPanelOpen(false)}
+          onReorder={(ids) => {
+            careSuiteService.setCategoryOrder(ids);
+            toast.success('Category order saved');
+          }}
+          onAdd={() => setAddingCategory(true)}
           locked={dirty}
         />
       )}
@@ -883,6 +890,7 @@ export default function ItemsManagerTab({ addSignal, headerSlot }: { addSignal: 
       {editing !== undefined && (
         <ItemFormModal item={editing} defaultCategoryId={category ? category.id : null} onClose={() => setEditing(undefined)} />
       )}
+      {addingCategory && <CategoryFormModal category={null} onClose={() => setAddingCategory(false)} />}
     </div>
   );
 }

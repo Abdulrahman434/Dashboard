@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, Edit3, X, Upload, Tv, Info, ArrowUpDown, Eye } from 'lucide-react';
+import { Plus, Search, Trash2, Edit3, X, Upload, Tv, Info, ArrowUpDown, Eye, LayoutList, PanelLeftOpen } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { SingleSelectDropdown } from './UnifiedDropdown';
 import InlineInput from './InlineInput';
 import InlineImageUpload from './InlineImageUpload';
 import InlineSelect from './InlineSelect';
 import TablePagination from './TablePagination';
+import CategorySidebar from './CategorySidebar';
 import { UnifiedVisibilityModal } from './UnifiedVisibilityModal';
 
 interface Channel {
@@ -251,6 +252,7 @@ export default function ChannelManagerPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [filterChannelType, setFilterChannelType] = useState<string>('All');
+  const [typePanelOpen, setTypePanelOpen] = useState(true);
   const [visibilityModalChannelId, setVisibilityModalChannelId] = useState<string | null>(null);
 
   // Form fields
@@ -590,7 +592,22 @@ export default function ChannelManagerPage() {
           </div>
         </div>
       ) : (
-        <>
+        <div className="flex gap-4 items-start">
+          {typePanelOpen && (
+            <CategorySidebar
+              title="Channel types"
+              selectedId={filterChannelType}
+              onSelect={(id) => {
+                setFilterChannelType(id);
+                setCurrentPage(1);
+                setSelectedRows([]);
+              }}
+              onCollapse={() => setTypePanelOpen(false)}
+              allRow={{ id: 'All', label: 'All channels', icon: <LayoutList size={17} />, count: channels.length }}
+              items={channelTypes.map((t) => ({ id: t, label: t, icon: <Tv size={17} />, count: channels.filter((c) => c.channelType === t).length }))}
+            />
+          )}
+          <div className="flex-1 min-w-0">
           {/* Top Bar */}
           <div className="flex items-center justify-between mb-6 gap-4">
             <div className="flex items-center gap-3 flex-1">
@@ -610,13 +627,17 @@ export default function ChannelManagerPage() {
                 />
               </div>
 
-              {/* Filter */}
-              <SingleSelectDropdown
-                options={[{ value: 'All', label: 'All Types' }, ...channelTypes.map(type => ({ value: type, label: type }))]}
-                value={filterChannelType}
-                onChange={(value) => setFilterChannelType(value)}
-                className="min-w-[180px]"
-              />
+              {/* type filter lives in the Channel types panel; this reopens it when hidden */}
+              {!typePanelOpen && (
+                <button
+                  onClick={() => setTypePanelOpen(true)}
+                  className="inline-flex items-center gap-2 h-[44px] px-3.5 bg-white border border-gray-300 rounded-lg text-[14px] text-[#16274D] hover:border-gray-400 cursor-pointer font-['Poppins',sans-serif] whitespace-nowrap"
+                  title="Show channel types"
+                >
+                  <PanelLeftOpen size={17} className="text-[#4EBEE3]" />
+                  {filterChannelType === 'All' ? 'All channels' : filterChannelType}
+                </button>
+              )}
             </div>
 
             {/* Action Buttons */}
@@ -804,7 +825,8 @@ export default function ChannelManagerPage() {
               showRowsPerPage={true}
             />
           </div>
-        </>
+          </div>
+        </div>
       )}
 
       {/* Add Channel Modal */}

@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
-import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Pencil, Trash2, Monitor, FilePen, Plus, FileText, ExternalLink, Play, Layers } from 'lucide-react';
+import { Pencil, Trash2, Monitor, FilePen, Plus, FileText, ExternalLink, Play, Layers, PanelLeftOpen } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { isDocEmpty, profileService, type Attachment, type ProfileCategory, type ProfileContent } from '../../services/hospitalProfileService';
 import { Badge, Btn, cx } from '../caresuite/careSuiteAtoms';
-import { restrictToVerticalAxis } from '../caresuite/restrictToVerticalAxis';
 import { useBrandPrimary } from '../caresuite/categoryTone';
 import { useAddSignal } from '../caresuite/ItemsManagerTab';
 import { useProfile } from './useProfile';
+import CategorySidebar from '../CategorySidebar';
 import RichTextView from './richText/RichTextView';
 import CategoryFormModal from './CategoryFormModal';
 import DeleteCategoryDialog from './DeleteCategoryDialog';
@@ -17,36 +14,6 @@ import ContentEditor from './ContentEditor';
 import { VisibilityModal, mockTerminals } from './TerminalVisibilityModals';
 import { contentKind, visibilityLabel } from './CategoriesTab';
 import { attempt } from './attempt';
-
-function SortableCategory({ c, on, locked, kindLabel, empty, onSelect }: { c: ProfileCategory; on: boolean; locked: boolean; kindLabel: string; empty: boolean; onSelect: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: c.id, disabled: locked });
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform), transition, zIndex: isDragging ? 10 : undefined, position: 'relative' }}
-      className={cx('flex items-center gap-1 rounded-lg border transition-colors', on ? 'bg-[#eaf7fc] border-[#4EBEE3]' : 'border-transparent hover:bg-[#f7f8fb]', isDragging && 'bg-white shadow-lg')}
-    >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        disabled={locked}
-        className="p-1.5 text-[#9099ab] rounded-md cursor-grab active:cursor-grabbing hover:text-[#16274D] disabled:opacity-30 disabled:cursor-not-allowed"
-        title={locked ? 'Finish editing first' : 'Drag to reorder'}
-        aria-label={`Reorder ${c.nameEn}`}
-      >
-        <GripVertical size={15} />
-      </button>
-      <button type="button" onClick={onSelect} disabled={locked && !on} className="flex-1 min-w-0 text-left py-2 pr-2 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50">
-        <span className={cx('block text-[13.5px] leading-snug', on ? 'font-semibold text-[#16274D]' : 'text-[#19233a]')}>{c.nameEn}</span>
-        <span className={cx('block text-[12px]', empty ? 'text-[#b9770b]' : 'text-[#9099ab]')}>
-          {kindLabel}
-          {!c.active && ' · hidden'}
-        </span>
-      </button>
-    </div>
-  );
-}
 
 function AttachmentSummary({ a, lang }: { a: Attachment; lang: 'en' | 'ar' }) {
   const ref = (lang === 'ar' && a.ar) || a.en;
@@ -74,6 +41,7 @@ export default function ContentTab({ addSignal, focusId, onFocusUsed, onDirtyCha
   const [renaming, setRenaming] = useState<ProfileCategory | null | undefined>(undefined);
   const [deleting, setDeleting] = useState<ProfileCategory | null>(null);
   const [visibility, setVisibility] = useState<ProfileCategory | null>(null);
+  const [panelOpen, setPanelOpen] = useState(true);
 
   useEffect(() => {
     if (focusId) onFocusUsed();
@@ -85,12 +53,6 @@ export default function ContentTab({ addSignal, focusId, onFocusUsed, onDirtyCha
   const category = categories.find((c) => c.id === selectedId) ?? categories[0] ?? null;
   const current: ProfileContent | null = category ? content[category.id] : null;
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
-  const onDragEnd = ({ active, over }: DragEndEvent) => {
-    if (!over || active.id === over.id) return;
-    const ids = categories.map((c) => c.id);
-    attempt(() => profileService.setCategoryOrder(arrayMove(ids, ids.indexOf(String(active.id)), ids.indexOf(String(over.id)))), 'Category order saved');
-  };
 
   const afterDelete = (ids: string[]) => {
     setDeleting(null);
@@ -105,41 +67,22 @@ export default function ContentTab({ addSignal, focusId, onFocusUsed, onDirtyCha
 
   return (
     <div className="flex gap-4 items-start">
-      {/* category list */}
-      <div className="w-[230px] shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden self-start">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-          <span className="font-semibold text-[14px] text-[#16274D]">Categories</span>
-          <span className="text-[12px] text-[#9099ab]">Patient order</span>
-        </div>
-        <div className="p-2 space-y-0.5">
-          <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis]} onDragEnd={onDragEnd}>
-            <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-              {categories.map((c) => {
-                const k = contentKind(content[c.id]);
-                return (
-                  <SortableCategory
-                    key={c.id}
-                    c={c}
-                    on={c.id === category?.id}
-                    locked={editingContent}
-                    kindLabel={k.label}
-                    empty={k.empty}
-                    onSelect={() => setSelectedId(c.id)}
-                  />
-                );
-              })}
-            </SortableContext>
-          </DndContext>
-          <button
-            type="button"
-            onClick={() => setRenaming(null)}
-            disabled={editingContent}
-            className="w-full mt-1 flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-medium text-[#1d7da3] hover:bg-[#eaf7fc] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <Plus size={15} /> Add category
-          </button>
-        </div>
-      </div>
+      {panelOpen && (
+        <CategorySidebar
+          title="Categories"
+          selectedId={category?.id ?? null}
+          onSelect={setSelectedId}
+          onCollapse={() => setPanelOpen(false)}
+          onReorder={(ids) => attempt(() => profileService.setCategoryOrder(ids), 'Category order saved')}
+          onAdd={() => setRenaming(null)}
+          locked={editingContent}
+          lockedReason="Save or cancel the content you're editing first"
+          items={categories.map((c) => {
+            const k = contentKind(content[c.id]);
+            return { id: c.id, label: c.nameEn, icon: k.icon, sublabel: k.label + (c.active ? '' : ' · hidden'), sublabelTone: k.empty ? 'warn' : 'muted' };
+          })}
+        />
+      )}
 
       {/* selected category */}
       <div className="flex-1 min-w-0">
@@ -156,6 +99,11 @@ export default function ContentTab({ addSignal, focusId, onFocusUsed, onDirtyCha
             <div className="flex items-start justify-between gap-3 flex-wrap">
               <div className="min-w-0">
                 <div className="flex items-center gap-2.5 flex-wrap">
+                  {!panelOpen && (
+                    <button onClick={() => setPanelOpen(true)} className="p-1.5 rounded-lg border border-gray-300 text-[#4EBEE3] hover:border-gray-400 cursor-pointer" title="Show categories" aria-label="Show categories">
+                      <PanelLeftOpen size={17} />
+                    </button>
+                  )}
                   <h2 className="text-[20px] font-semibold text-[#16274D] [overflow-wrap:anywhere]">{category.nameEn}</h2>
                   <span className="text-[16px] text-[#5d6678]" dir="rtl">{category.nameAr}</span>
                   <Badge tone={category.active ? 'ok' : 'mute'}>{category.active ? 'Active' : 'Hidden from patients'}</Badge>
