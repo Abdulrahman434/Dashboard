@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Trash2, Edit3, X, Upload, Tv, Info, ArrowUpDown, Eye, LayoutList, PanelLeftOpen } from 'lucide-react';
+import { Plus, Search, Trash2, Edit3, X, Upload, Tv, Info, ArrowUpDown, Eye, LayoutList, PanelLeftOpen, ListOrdered } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
 import { SingleSelectDropdown } from './UnifiedDropdown';
 import InlineInput from './InlineInput';
@@ -7,6 +7,7 @@ import InlineImageUpload from './InlineImageUpload';
 import InlineSelect from './InlineSelect';
 import TablePagination from './TablePagination';
 import CategorySidebar from './CategorySidebar';
+import ChannelOrderModal from './ChannelOrderModal';
 import { UnifiedVisibilityModal } from './UnifiedVisibilityModal';
 
 interface Channel {
@@ -253,6 +254,7 @@ export default function ChannelManagerPage() {
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [filterChannelType, setFilterChannelType] = useState<string>('All');
   const [typePanelOpen, setTypePanelOpen] = useState(true);
+  const [isOrderOpen, setIsOrderOpen] = useState(false);
   const [visibilityModalChannelId, setVisibilityModalChannelId] = useState<string | null>(null);
 
   // Form fields
@@ -652,6 +654,13 @@ export default function ChannelManagerPage() {
                 </button>
               )}
               <button
+                onClick={() => setIsOrderOpen(true)}
+                className="flex items-center gap-2 px-5 py-3 bg-white border border-[#4EBEE3] text-[#1d7da3] hover:bg-[#eaf7fc] rounded-lg transition-colors font-['Poppins',sans-serif] text-[14px] font-medium"
+              >
+                <ListOrdered size={18} strokeWidth={2} />
+                Order Channels
+              </button>
+              <button
                 onClick={() => setIsAddModalOpen(true)}
                 className="flex items-center gap-2 px-5 py-3 bg-[#4EBEE3] hover:bg-[#3DA5CA] text-white rounded-lg transition-colors font-['Poppins',sans-serif] text-[14px] font-medium shadow-sm"
               >
@@ -660,6 +669,7 @@ export default function ChannelManagerPage() {
               </button>
             </div>
           </div>
+          {isOrderOpen && <ChannelOrderModal channels={channels} onClose={() => setIsOrderOpen(false)} />}
 
           {/* Table */}
           <div className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden shadow-sm">
