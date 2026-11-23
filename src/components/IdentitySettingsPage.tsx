@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Fingerprint, Upload, X, Palette, Type, Building2, Check, RotateCcw, AlertCircle } from 'lucide-react';
+import { Fingerprint, Upload, X, Palette, Type, Building2, Check, RotateCcw, AlertCircle, FileText } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
-import { IdentitySettings, defaultIdentitySettings as defaultSettings, readIdentitySettings, pickLogo } from '../services/identitySettings';
+import CustomRadio from './CustomRadio';
+import { IdentitySettings, defaultIdentitySettings as defaultSettings, readIdentitySettings, pickLogo, isWebUrl } from '../services/identitySettings';
 
 const googleFontsEnglish = [
   'Poppins', 'Inter', 'Roboto', 'Open Sans', 'Montserrat', 'Lato', 'Nunito',
@@ -208,10 +209,27 @@ export default function IdentitySettingsPage() {
     reader.readAsDataURL(file);
   };
 
+  const termsPdfRef = useRef<HTMLInputElement>(null);
+  const termsUrlError = settings.termsType === 'link' && !!settings.termsUrl.trim() && !isWebUrl(settings.termsUrl);
+  const handleTermsPdf = (file: File) => {
+    if (!(file.type === 'application/pdf' || /\.pdf$/i.test(file.name))) {
+      toast.error('Choose a PDF file');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File too large', { description: 'Maximum file size is 5MB' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => update({ termsPdf: e.target?.result as string, termsPdfName: file.name });
+    reader.readAsDataURL(file);
+  };
+
   const handleSave = () => {
     const errors: string[] = [];
     if (!settings.hospitalName.trim()) errors.push('Hospital Name is required');
     if (!settings.logo) errors.push('Hospital Logo is required');
+    if (settings.termsType === 'link' && settings.termsUrl.trim() && !isWebUrl(settings.termsUrl)) errors.push('Terms & Conditions page URL must start with http:// or https://');
     if (errors.length > 0) {
       setValidationErrors(errors);
       toast.error('Please fix the errors', { description: errors.join(', '), duration: 4000 });
@@ -349,7 +367,7 @@ export default function IdentitySettingsPage() {
                 )}
               </div>
               <ImageUploadArea
-                label="Hospital Cover Image"
+                label="Background Image"
                 image={settings.hospitalImage}
                 imageName={settings.hospitalImageName}
                 onUpload={f => handleImageUpload('hospitalImage', f)}
@@ -394,6 +412,57 @@ export default function IdentitySettingsPage() {
                   })}
                 </div>
               </div>
+            </div>
+
+            {/* Terms & Conditions */}
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <div className="text-[13px] font-medium text-[#16274D]">Terms &amp; Conditions</div>
+              <p className="text-[12px] text-[#16274D]/60 mt-0.5">Choose one: an external page or a PDF. The bedside reader shows it in the same preview.</p>
+              <div className="flex flex-col gap-2.5 mt-3" role="radiogroup" aria-label="Terms & Conditions source">
+                <CustomRadio name="terms-type" label="External link" checked={settings.termsType === 'link'} onChange={() => update({ termsType: 'link' })} />
+                <CustomRadio name="terms-type" label="PDF document" checked={settings.termsType === 'pdf'} onChange={() => update({ termsType: 'pdf' })} />
+              </div>
+              {settings.termsType === 'link' ? (
+                <div className="mt-4">
+                  <label htmlFor="terms-url" className="block text-[13px] font-medium text-[#16274D] mb-1.5">Page URL</label>
+                  <input
+                    id="terms-url"
+                    type="url"
+                    dir="ltr"
+                    value={settings.termsUrl}
+                    onChange={e => update({ termsUrl: e.target.value })}
+                    placeholder="https://hospital.example/legal/terms.html"
+                    className={`w-full h-[46px] px-4 border rounded-xl text-[14px] text-[#16274D] placeholder:text-[#16274D]/35 outline-none transition-colors ${termsUrlError ? 'border-[#EF4444] focus:border-[#EF4444]' : 'border-gray-200 focus:border-[#4EBEE3]'}`}
+                  />
+                  {termsUrlError ? (
+                    <p className="text-[11px] text-[#EF4444] flex items-center gap-1 mt-1.5"><AlertCircle className="w-3 h-3" /> Use a web address starting with http:// or https://</p>
+                  ) : (
+                    <p className="text-[12px] text-[#16274D]/60 mt-1.5">Bedside preferences setup — patients open this page and must scroll to the end before accepting.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <input ref={termsPdfRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleTermsPdf(f); }} />
+                  <span className="block text-[13px] font-medium text-[#16274D] mb-1.5">PDF document</span>
+                  {settings.termsPdf ? (
+                    <div className="flex items-center gap-3 rounded-xl border border-[#4EBEE3]/30 bg-[#4EBEE3]/5 p-3">
+                      <span className="w-11 h-11 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-[#16274D] shrink-0"><FileText className="w-5 h-5" /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13px] font-medium text-[#16274D] truncate">{settings.termsPdfName || 'Terms & Conditions.pdf'}</div>
+                        <div className="text-[11px] text-[#16274D]/60">Patients must scroll to the end before accepting.</div>
+                      </div>
+                      <button type="button" onClick={() => termsPdfRef.current?.click()} className="h-8 px-3 rounded-lg text-[12px] font-medium text-[#16274D] border border-gray-200 bg-white hover:bg-gray-50 cursor-pointer">Replace</button>
+                      <button type="button" onClick={() => update({ termsPdf: null, termsPdfName: '' })} className="w-8 h-8 rounded-lg flex items-center justify-center text-[#EF4444] border border-gray-200 bg-white hover:bg-red-50 cursor-pointer" title="Remove PDF" aria-label="Remove PDF"><X className="w-4 h-4" /></button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => termsPdfRef.current?.click()} className="w-full flex flex-col items-center justify-center gap-1.5 h-[96px] rounded-xl border-2 border-dashed border-gray-200 hover:border-[#4EBEE3] text-[12px] text-[#16274D]/60 transition-colors cursor-pointer">
+                      <Upload className="w-4 h-4 text-[#4EBEE3]" />
+                      <span><span className="text-[#4EBEE3] font-medium">Upload a PDF</span> · up to 5MB</span>
+                    </button>
+                  )}
+                  <p className="text-[12px] text-[#16274D]/60 mt-1.5">Bedside preferences setup — patients open this document and must scroll to the end before accepting.</p>
+                </div>
+              )}
             </div>
           </div>
 

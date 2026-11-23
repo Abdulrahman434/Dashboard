@@ -9,8 +9,14 @@ export interface IdentitySettings {
   hospitalName: string;
   hospitalNameAr: string;
   hospitalShortName: string;
+  /** Background image (shown behind the welcome card). Stored under its original key. */
   hospitalImage: string | null;
   hospitalImageName: string;
+  /** Terms & Conditions shown in bedside preferences: an external page or a PDF. */
+  termsType: 'link' | 'pdf';
+  termsUrl: string;
+  termsPdf: string | null;
+  termsPdfName: string;
   primaryColor: string;
   secondaryColor: string;
   englishFont: string;
@@ -27,6 +33,10 @@ export const defaultIdentitySettings: IdentitySettings = {
   hospitalShortName: 'DSFH',
   hospitalImage: null,
   hospitalImageName: '',
+  termsType: 'link',
+  termsUrl: '',
+  termsPdf: null,
+  termsPdfName: '',
   primaryColor: '#4EBEE3',
   secondaryColor: '#16274D',
   englishFont: 'Poppins',
@@ -59,4 +69,17 @@ export function pickLogo(s: Pick<IdentitySettings, 'logo' | 'logoDark'>, theme: 
  */
 export function logoFor(theme: 'light' | 'dark'): string | null {
   return pickLogo(readIdentitySettings(), theme);
+}
+
+/** Accepts http(s) web addresses only. */
+export const isWebUrl = (v: string) => /^https?:\/\/[^\s/.]+\.[^\s]+$/i.test(v.trim());
+
+/**
+ * The Terms & Conditions document for bedside preferences, or null when not
+ * set. The bedside reader shows either kind in the same preview and requires
+ * scrolling to the end before the patient can accept.
+ */
+export function termsFor(s: IdentitySettings = readIdentitySettings()): { kind: 'link'; url: string } | { kind: 'pdf'; url: string; name: string } | null {
+  if (s.termsType === 'pdf') return s.termsPdf ? { kind: 'pdf', url: s.termsPdf, name: s.termsPdfName } : null;
+  return s.termsUrl && isWebUrl(s.termsUrl) ? { kind: 'link', url: s.termsUrl.trim() } : null;
 }
