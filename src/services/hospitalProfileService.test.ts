@@ -79,13 +79,13 @@ test('sanitizer keeps allowed marks and preset attrs', () => {
   const d = sanitizeDoc(
     doc({
       type: 'paragraph',
-      attrs: { align: 'center', lineHeight: 'relaxed', spacing: 'md' },
+      attrs: { align: 'center', lineHeight: 'relaxed', spacing: 'lg' },
       content: [{ type: 'text', text: 'Hi', marks: [{ type: 'bold' }, { type: 'size', attrs: { size: 'lg' } }, { type: 'tone', attrs: { tone: 'brand' } }] }],
     }),
   );
   assert.deepEqual(d.content[0], {
     type: 'paragraph',
-    attrs: { align: 'center', lineHeight: 'relaxed', spacing: 'md' },
+    attrs: { align: 'center', lineHeight: 'relaxed', spacing: 'lg' },
     content: [{ type: 'text', text: 'Hi', marks: [{ type: 'bold' }, { type: 'size', attrs: { size: 'lg' } }, { type: 'tone', attrs: { tone: 'brand' } }] }],
   });
 });
@@ -139,4 +139,17 @@ test('fresh install seeds the production categories', () => {
     ps.listCategories().map((c) => c.nameEn),
     ['Vision', 'Mission', 'Values', 'Rights & Responsibilities', 'Evacuation map', 'Hotlines'],
   );
+});
+
+test('default presets are not stored (md size, text tone, start align, normal line height, md spacing)', () => {
+  const d = sanitizeDoc(
+    doc({
+      type: 'paragraph',
+      attrs: { align: 'start', lineHeight: 'normal', spacing: 'md' },
+      content: [{ type: 'text', text: 'x', marks: [{ type: 'size', attrs: { size: 'md' } }, { type: 'tone', attrs: { tone: 'text' } }] }],
+    }),
+  );
+  assert.deepEqual(d.content[0], { type: 'paragraph', content: [{ type: 'text', text: 'x' }] });
+  const none = sanitizeDoc(doc({ type: 'paragraph', attrs: { spacing: 'none' }, content: [{ type: 'text', text: 'y' }] }));
+  assert.deepEqual((none.content[0] as any).attrs, { spacing: 'none' });
 });

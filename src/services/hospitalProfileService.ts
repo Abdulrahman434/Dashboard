@@ -69,7 +69,7 @@ function cleanBlockAttrs(a: unknown, list = false): (BlockAttrs & { start?: numb
   // defaults are not stored
   if (out.align === 'start') delete out.align;
   if (out.lineHeight === 'normal') delete out.lineHeight;
-  if (out.spacing === 'none') delete out.spacing;
+  if (out.spacing === 'md') delete out.spacing;
   return Object.keys(out).length ? out : undefined;
 }
 
