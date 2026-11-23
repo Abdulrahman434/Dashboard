@@ -183,8 +183,8 @@ const navigationItems: MenuItem[] = [
     label: 'CareSuite Manager',
     icon: ClipboardList,
     subItems: [
-      { id: 'cs-library', label: 'Items Manager', icon: Package },
       { id: 'cs-categories', label: 'Categories Manager', icon: Layers },
+      { id: 'cs-library', label: 'Items Manager', icon: Package },
       { id: 'cs-workflow', label: 'Workflow', icon: GitBranch },
       { id: 'cs-teams', label: 'Teams Assignment', icon: Users }
     ]

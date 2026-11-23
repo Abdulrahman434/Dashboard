@@ -15,8 +15,8 @@ export const CARESUITE_TAB_ROUTE: Record<CareSuiteManagerTab, string> = {
 };
 
 const TABS = [
-  { id: 'items', label: 'Items Manager' },
   { id: 'categories', label: 'Categories Manager' },
+  { id: 'items', label: 'Items Manager' },
 ];
 
 /** CareSuite Manager — Items Manager and Categories Manager tabs (Channels page layout). */
