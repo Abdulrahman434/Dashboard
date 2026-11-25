@@ -388,25 +388,27 @@ export default function IdentitySettingsPage() {
                 optional
                 hint="Used in dark mode. If empty, the default logo is used."
               />
+              {/* mirrors the upload field beside it (label, hint, box) so tops and bottoms line up */}
               <div className="flex flex-col gap-2 min-w-0">
                 <span className="text-[13px] font-medium text-[#16274D]">Logo preview</span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <p className="text-[11px] text-[#16274D]/50 -mt-1">How the logo looks on light and dark screens.</p>
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 min-h-[96px]">
                   {(['light', 'dark'] as const).map(theme => {
                     const src = pickLogo(settings, theme);
                     const fallback = theme === 'dark' && !settings.logoDark && !!settings.logo;
+                    const dark = theme === 'dark';
                     return (
-                      <div key={theme} className="min-w-0">
-                        <div
-                          className={`h-[88px] rounded-xl border flex items-center justify-center p-3 overflow-hidden ${theme === 'dark' ? 'bg-[#16274D] border-[#16274D]' : 'bg-white border-gray-200'}`}
-                        >
-                          {src ? (
-                            <img src={src} alt={`${theme} mode logo preview`} className="max-w-full max-h-full object-contain" />
-                          ) : (
-                            <span className={`text-[11px] ${theme === 'dark' ? 'text-white/50' : 'text-[#16274D]/40'}`}>No logo</span>
-                          )}
-                        </div>
-                        <p className="text-[12px] font-medium text-[#16274D] mt-1.5">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</p>
-                        {fallback && <p className="text-[11px] text-[#16274D]/60">Using the default logo</p>}
+                      <div
+                        key={theme}
+                        className={`relative min-w-0 h-full min-h-[96px] rounded-xl border flex items-center justify-center px-4 pt-7 pb-5 overflow-hidden ${dark ? 'bg-[#16274D] border-[#16274D]' : 'bg-white border-gray-200'}`}
+                      >
+                        <span className={`absolute top-2.5 left-3 text-[11px] font-medium ${dark ? 'text-white/70' : 'text-[#16274D]/60'}`}>{dark ? 'Dark mode' : 'Light mode'}</span>
+                        {src ? (
+                          <img src={src} alt={`${theme} mode logo preview`} className="max-w-full max-h-[44px] object-contain" />
+                        ) : (
+                          <span className={`text-[11px] ${dark ? 'text-white/50' : 'text-[#16274D]/40'}`}>No logo</span>
+                        )}
+                        {fallback && <span className="absolute bottom-2 left-3 text-[11px] text-white/60">Using the default logo</span>}
                       </div>
                     );
                   })}
